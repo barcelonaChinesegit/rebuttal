@@ -1,0 +1,217 @@
+\begin{table*}[ht]
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+ & VQ-APC & Future-VPC & Masked-NCE & HuBERT & Masked-VPC\\
+\midrule
+PC/ASR & 8      & 8          & 9           & 8      & 8       \\
+f0 & 3      & 3          & 2           & 2      & 3       \\
+SV & 4      & 3          & 3           & 3      & 3       \\
+\bottomrule
+\end{tabular}
+\caption{Layers selected for downstream experiments for each model variant.}
+\label{tab:layers}
+\end{table*}
+
+\section{Appendix}
+
+\subsection{Negative Free Energy of Predictive Coding}
+\label{appendix:proof}
+
+The proof of equation \ref{eq:vlb} mirrors those in variational autoencoders \citep{Kingma2014}.
+We start with the KL divergence between the posterior distribution $p(z|x_A, x_B)$
+and the auxiliary distribution $q(z|x_B)$,
+\begin{align}
+&\KL\big[q(z|x_B)\|p(z|x_A,x_B)\big] \\
+&\quad = \mathbb{E}_{z \sim q} \left[\log \frac{q(z | x_B)}{p(x_B | z) p(z | x_A)} \right] + \log p(x_B|x_A) \notag
+\label{eq:proof}
+\end{align}
+where we assume $x_B \ind x_A \mid z$ or $p(x_B|x_A, z) = p(x_B|z)$.
+Because the KL divergence is always positive, we obtain
+\begin{align}
+&-\log p(x_B | x_A) \\
+&\quad \leq \KL \big[q(z|x_B)\|p(z|x_A)\big] - \mathbb{E}_{z \sim q}[\log p(x_B | z)] \notag
+\end{align}
+
+\subsection{Future Prediction}
+
+The proof of equation \ref{eq:vlb-ar} involves unrolling $p(x_B, z | x_A)$ or $p(x_{\geq t}, z_{\geq t} | x_{< t})$, where $x_B = x_{\geq t}$ and $x_A = x_{< t}$.
+Based on the definition of conditional probability, we have
+\begin{align}
+&p(x_{\geq t}, z_{\geq t} | x_{< t}) = \prod_{i=t}^T p(x_i, z_i | x_{< i}, z_{t:i-1}) \\
+&\quad = \prod_{i=t}^T p(x_i | x_{< i}, z_{t:i}) p(z_i | x_{< i}, z_{t:i-1}) \\
+&\quad = \prod_{i=t}^T p(x_i | z_i) p(z_i | x_{< i}),
+\end{align}
+where the last line makes two reasonable assumptions, $x_i \ind z_{t:i-1} \mid z_i$ and $z_i \ind z_{t:i-1} \mid x_{< i}$.
+The variable $z_i$ should represent $x_i$ well without relying on previous latent variables $z_{t:i-1}$.
+Given the history $x_{< i}$, computing the representation $z_i$ should not depend on the previous latent variables $z_{t:i-1}$.
+
+%
+%
+
+%
+%
+%
+%
+%
+%
+%
+
+%
+
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+
+%
+%
+%
+%
+
+\subsection{Pre-Training Recipes}
+\label{appendix:recipe}
+
+%
+%
+%
+%
+We set a maximum length of 1400 frames per utterance, 
+corresponding to about 28 seconds. The learning rate is fixed to $10^{-4}$ under the Adam optimizer,
+no learning rate schedule is applied.
+We pre-train
+\textsc{Base} models on a single A40 with a batch size of 16 for 150 epochs. 
+We set model dimension to 768, with inner dimension of feedforward netowrks being 3072.
+A dropout probability of 0.1 is applied.
+
+The temperature is set to 1 without annealing for variational training.
+In wav2vec 2.0, the similarity value is re-scaled by dividing it with 0.1, 
+the temperature for Gumbel-Softmax \citep{jang2016categorical} is annealed from 2 to a minimum of 0.5 by a decay rate of 0.999995,
+i.e., the $\tau$ in \Eqref{eq:softmax-q}.
+We use 100 negative samples following \citet{baevski2020wav2vec}.
+
+There are a few architectural differences between our setting and \citet{baevski2020wav2vec}.
+%
+%
+We employ a single codebook in our wav2vec 2.0 for quantization.
+%
+%
+%
+Rather than Post-LN Transformers, 
+we use Pre-LN Transformers for pre-training
+and remove the warm-up stage \citep{geiping2023cramming,xiong2020layer}.
+We use sinusoidal positional embeddings rather than relative position embeddings used in 
+\citet{baevski2020wav2vec}.
+
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+
+\subsection{Downstream Evaluation}
+\label{appendix:downstream}
+
+We provide additional details on the experimental setups of downstream tasks. 
+The layers chosen for each task is noted in Table~\ref{tab:layers}.
+
+\paragraph{Phone Classification (PC)}
+We freeze the pre-trained model and only train a linear layer with a learning rate of $10^{-3}$ for 10 epochs.
+
+\paragraph{Speaker Verification (SV)}
+
+We average frame representations to obtain utterance-level representations, and simply
+employ two linear layers to predict 1251 speakers following \citep{Fan2020ExploringW2}. 
+The linear classifier is optimized with a learning rate of $10^{-3}$ for 10 epochs.
+After training, we take the output of the first linear layer as speaker vectors for speaker verification.
+We set the dimension of speaker vectors to 512.
+
+\paragraph{F0 Tracking (F0)}
+We train a linear regression layer with a learning rate of $10^{-3}$ for 10 epochs.
+We set the minimum and maximum frequency to 50 Hz and 600 Hz respectively.
+
+\paragraph{Automatic Speech Recognition (ASR)}
+
+We use a lightweight sequence-to-sequence encoder for downstream ASR.
+The encoder contains two convolutional layers with $(32, 32)$ channels and $(2, 1)$ strides,
+and a 4-layer, 256-dimensional bidirectional GRU. The decoder is a unidirectional 256-dimensional GRU.
+
+We adopt a fixed scheduled sampling probability of 0.4 during training. 
+We use Adam with learning rates of $10^{-4}$ for all s2s models. 
+We employ a dropout rate of 0.2, and a label smoothing rate of 0.1 for regularization. 
+%
+%
+%
+We train seq2seq models for 100 epochs, 
+and lower the learning rate with a factor of 0.1 for another 20 epochs.
+
+%
+%
+%
+%
+%
+
+%
+%
+%
+%
+%
+%
+
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%

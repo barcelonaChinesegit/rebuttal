@@ -1,0 +1,66 @@
+\section{Background and Related Work}
+
+\subsection{Loop Invariants}
+
+\noindent
+A \textit{loop invariant} is a logical assertion $I$ that characterizes a property 
+holding throughout the execution of a loop.  
+In the Hoare triple
+\[
+\frac{
+   P \Rightarrow I 
+   \quad 
+   \{\, I \wedge B \,\}\; S \;\{\, I \,\} 
+   \quad 
+   (I \wedge \lnot B) \Rightarrow Q
+}{
+   \{\, P \,\}\;\;\textbf{while } B \;\textbf{ do } S\;\;\{\, Q \,\}
+}
+\]
+
+the components are defined as follows:
+\begin{itemize}
+    \item $P$: the \textbf{precondition}, describing the initial program state before the loop.
+    \item $B$: the \textbf{loop guard}, a Boolean condition controlling loop execution.
+    \item $S$: the \textbf{loop body}, the statement(s) executed when $B$ holds.
+    \item $I$: the \textbf{loop invariant}, which must hold before and after each iteration.
+    \item $Q$: the \textbf{postcondition}, describing the state after loop termination.
+\end{itemize}
+
+\noindent
+The invariant $I$ must satisfy three fundamental conditions:
+\begin{enumerate}
+    \item \textbf{Initialization:} The precondition establishes the invariant ($P \Rightarrow I$).  
+    \item \textbf{Preservation:} If $I$ holds and the guard $B$ is true, executing $S$ preserves $I$ ($\{ I \wedge B \} S \{ I \}$).  
+    \item \textbf{Termination:} If $I$ holds and the guard $B$ is false, the postcondition follows ($(I \wedge \lnot B) \Rightarrow Q$).  
+\end{enumerate}
+
+\noindent
+Thus, proving loop correctness reduces to finding an invariant $I$ that is 
+\textit{established} by $P$, \textit{maintained} by $S$, and \textit{sufficient} to imply $Q$ when $B$ is false.
+
+\subsection{State-of-the-Art Work}
+
+Recent advances in invariant generation have explored leveraging large language models (LLMs) to automatically infer logical invariants. One of the most influential works in this direction is \textsc{Clause2Inv}~\cite{cao2025clause2inv}, which replaces the traditional \textit{guess–and–check} paradigm with a more systematic \textit{generate–combine–check} framework.
+
+At a high level, \textsc{Clause2Inv} aims to generate an invariant $I$ that satisfies the three fundamental properties of loop correctness—\textit{Initialization}, \textit{Preservation}, and \textit{Termination}—by using an LLM to generate atomic clauses, the \texttt{Combinor} to combine them into candidate invariants, and an SMT solver to verify them. When any of these properties are violated, the system responds accordingly:
+
+\begin{itemize}
+    \item \textbf{If Initialization fails:} the generated invariant $I$ is not implied by the precondition $P$ ($P \nRightarrow I$).  
+    In this case, the LLM is prompted to regenerate clauses that better align with the initial program state.
+
+    \item \textbf{If Preservation fails:} executing the loop body $S$ under $I \wedge B$ does not maintain $I$ ($\{I \wedge B\} S \{\lnot I\}$).  
+    Here, an SMT solver identifies counterexamples—specific program states where $I$ is broken.  
+    These counterexamples are stored in a counterexample set (\texttt{ceSet}) and fed back to the LLM to refine its next generation.
+
+    \item \textbf{If Termination fails:} the invariant $I$ is too weak to imply the postcondition $Q$ once the loop guard $B$ becomes false ($(I \wedge \lnot B) \nRightarrow Q$).  
+    In this scenario, the system instructs the LLM to produce stronger invariants that can ensure the desired post-state.
+\end{itemize}
+
+To support this process, \textsc{Clause2Inv} first generates \textit{atomic clauses}—simple expressions such as $(a > 1)$ that exclude logical connectives like \texttt{\&\&} and \texttt{||}.  
+These clauses are stored in an \texttt{exprStore}, and a dedicated \texttt{Combinor} component systematically combines them into more complex candidate invariants.  
+Each candidate is formally verified using an SMT solver. Verified and sufficiently strong invariants are accepted; otherwise, the feedback loop described above is triggered.  
+This iterative process continues until a valid invariant is found or the computation times out.
+
+In this work, we adopt \textsc{Clause2Inv}~\cite{cao2025clause2inv} as our baseline and extend it by incorporating structural information from the program’s control-flow graph.  
+By integrating control-flow relationships into the generation stage, our method guides the LLM toward producing invariants that are not only syntactically correct but also semantically aligned with the program’s execution structure.

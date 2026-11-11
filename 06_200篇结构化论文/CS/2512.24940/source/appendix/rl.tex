@@ -1,0 +1,258 @@
+\subsection{Proofs}
+\label{appendix:proofs}
+
+In this section we present the proofs for our the theoretical results of
+Section~\ref{sec:rl}. We use the same notation and terminology from the paper.
+
+\setcounter{proposition}{0}
+
+\begin{proposition}
+The update directions of the gradients for SFT using only
+valid traces and REINFORCE with binary rewards are identical.
+\end{proposition}
+
+\begin{proof}
+Let $x$ denote an input (e.g., a prompt), and let $y = (y_1,\dots,y_T)$ denote a
+complete trace produced by a policy $\pi_\theta(y \mid x)$ with parameters
+$\theta$ (e.g.\ the LLM above).
+
+We assume a binary reward function $R(x,y) \in \{0,1\}$, where $R(x,y) = 1$ if
+$y$ is a valid trace for $x$, and 0 otherwise.
+
+The learning objective of REINFORCE is the expected reward:
+\begin{align*}
+J(\theta) = \mathbb{E}_{x \sim \mu} \, \mathbb{E}_{y \sim \pi_\theta(\cdot\mid x)}[R(x,y)].
+\end{align*}
+The gradient $\nabla_\theta J(\theta)$ is
+\begin{align*}
+\nabla_\theta J(\theta)
+= \mathbb{E}_{x,y}
+\big[ R(x,y)\,\nabla_\theta \log \pi_\theta(y\mid x) \big].
+\end{align*}
+
+Using the factorization
+\[
+\log \pi_\theta(y\mid x)
+= \sum_{t=1}^T \log \pi_\theta(y_t \mid y_{<t}, x),
+\]
+we obtain
+\[
+\nabla_\theta \log \pi_\theta(y\mid x)
+= \sum_{t=1}^T
+\nabla_\theta \log \pi_\theta(y_t \mid y_{<t}, x).
+\]
+
+Thus, we can rewrite $\nabla_\theta J(\theta)$ as
+\[
+\nabla_\theta J(\theta)
+=
+\mathbb{E}_{x,y}
+\left[
+R(x,y) \sum_{t=1}^T
+\nabla_\theta
+\log \pi_\theta(y_t \mid y_{<t}, x)
+\right].
+\]
+
+Suppose we sample a dataset $\mathcal{D} = \{(x_i, y_i, R_i)\}_{i=1}^N$ for $N \in \mathbb{N}$ with $R_i \in \{0,1\}$.
+A Monte Carlo estimate of the REINFORCE gradient is
+\begin{align*}
+\widehat{\nabla_\theta J} = \frac{1}{N} \sum_{i=1}^N R_i \sum_{t} \nabla_\theta \log \pi_\theta(y_{i,t} \mid y_{i,<t}, x_i).
+\end{align*}
+
+Let $\mathcal{D}_+ = \{(x_i,y_i) : R_i = 1\}$ be the set of valid traces, and $\mathcal{D}_- = \{(x_i,y_i) : R_i = 0\}$ be the set of invalid traces.
+As our reward function $R(x,y)$ is binary, invalid traces do not affect the gradient (i.e., they contribute zero). Therefore, we can simplify the gradient:
+\begin{align*}
+\widehat{\nabla_\theta J} =
+\frac{1}{N} \sum_{i \in \mathcal{D}_+}
+\sum_t \nabla_\theta
+\log \pi_\theta(y_{i,t} \mid y_{i,<t}, x_i).
+\end{align*}
+
+Let $N_+ = |\mathcal{D}_+|$, then
+\begin{align}
+\widehat{\nabla_\theta J}
+=
+\frac{N_+}{N}
+\left[
+\frac{1}{N_+}
+\sum_{i \in \mathcal{D}_+}
+\sum_t \nabla_\theta \log \pi_\theta(y_{i,t}\mid y_{i,<t},x_i)
+\right].
+\label{eq:gradient-reinforce}
+\end{align}
+
+On the flip side, SFT the valid traces uses the loss
+\[
+\mathcal{L}_{\text{SFT}}(\theta)
+=
+- \frac{1}{N_+}
+\sum_{i\in \mathcal{D}_+}
+\sum_{t=1}^{T_i}
+\log \pi_\theta(y_{i,t} \mid y_{i,<t}, x_i).
+\]
+
+Its gradient is
+\[
+\nabla_\theta \mathcal{L}_{\text{SFT}}(\theta)
+=
+-
+\frac{1}{N_+}
+\sum_{i\in \mathcal{D}_+}
+\sum_t
+\nabla_\theta \log \pi_\theta(y_{i,t} \mid y_{i,<t}, x_i).
+\]
+
+We can then rewrite \eqref{eq:gradient-reinforce} in terms of $\nabla_\theta
+\mathcal{L}_{\text{SFT}}(\theta)$:
+\[
+\widehat{\nabla_\theta J}
+=
+- \frac{N_+}{N} \,
+\nabla_\theta \mathcal{L}_{\text{SFT}}(\theta).
+\]
+
+Thus, a gradient ascent step on $J(\theta)$,
+\[
+\theta \leftarrow
+\theta + \eta \widehat{\nabla_\theta J},
+\]
+is equivalent (up to the positive scaling factor $N_+/N$) to a gradient
+descent step on $\mathcal{L}_{\text{SFT}}$:
+\[
+\theta \leftarrow
+\theta - \bigl(\eta\,N_+/N \bigr)
+\nabla_\theta \mathcal{L}_{\text{SFT}}(\theta).
+\]
+
+Hence, the update directions are identical.
+\end{proof}
+
+
+\begin{proposition}
+SFT on a mixture of on- and off-policy valid traces is equivalent to REINFORCE
+with binary rewards augmented by importance-weighted contributions from the
+behavior policy.
+\end{proposition}
+\begin{proof}
+Let $p_\pi^+(x,y)$ denote the distribution over valid traces induced by
+sampling $x \sim \mu(x)$, then sampling $y \sim \pi_\theta(\cdot \mid x)$, and
+retaining the pair only if $R(x,y)=1$:
+\[
+p_\pi^+(x,y)
+\;\propto\;
+\mu(x)\,\pi_\theta(y\mid x)\,\mathbf{1}\{R(x,y)=1\}.
+\]
+Similarly, let
+\[
+p_\beta^+(x,y)
+\;\propto\;
+\mu(x)\,\pi_\beta(y\mid x)\,\mathbf{1}\{R(x,y)=1\}
+\]
+denote the distribution over valid off-policy traces.
+
+The dataset of valid traces can be modeled as a mixture
+\[
+p_{\mathrm{data}}(x,y)
+=
+(1-\lambda)\,p_\pi^+(x,y)
++ \lambda\,p_\beta^+(x,y),
+\qquad \lambda \in [0,1],
+\]
+where $\lambda$ reflects the proportion of off-policy data.
+
+We can then show that SFT on a mixture of on- and off-policy valid traces
+is equivalent to REINFORCE with binary rewards augmented by importance-weighted
+contributions from the behavior policy.
+
+The SFT objective over all valid trace is
+\[
+\mathcal{L}_{\mathrm{SFT}}(\theta)
+=
+-\mathbb{E}_{(x,y)\sim p_{\mathrm{data}}}
+\big[\log \pi_\theta(y\mid x)\big].
+\]
+
+Using the mixture form of $p_{\mathrm{data}}$, this decomposes as
+\[
+\mathcal{L}_{\mathrm{SFT}}(\theta)
+=
+-(1-\lambda)\,\mathbb{E}_{p_\pi^+}
+\big[\log \pi_\theta(y\mid x)\big]
+-
+\lambda\,\mathbb{E}_{p_\beta^+}
+\big[\log \pi_\theta(y\mid x)\big].
+\]
+
+Differentiating $\mathcal{L}_{\mathrm{SFT}}(\theta)$ we obtain the following decomposition of the gradient:
+\[
+\nabla_\theta \mathcal{L}_{\mathrm{SFT}}(\theta)
+=
+-(1-\lambda)\,\mathbb{E}_{p_\pi^+}
+\big[\nabla_\theta \log \pi_\theta(y\mid x)\big]
+-
+\lambda\,\mathbb{E}_{p_\beta^+}
+\big[\nabla_\theta \log \pi_\theta(y\mid x)\big].
+\]
+
+The first term, corresponding to the on-policy traces, is identical (up to a
+scalar factor) to REINFORCE with binary reward $R(x,y)\in\{0,1\}$ under the
+current policy:
+\[
+\mathbb{E}_{p_\pi^+}
+\big[\nabla_\theta \log \pi_\theta(y\mid x)\big]
+\;\propto\;
+\mathbb{E}_{x\sim \mu,\, y\sim \pi_\theta}
+\big[R(x,y)\,\nabla_\theta \log \pi_\theta(y\mid x)\big].
+\]
+
+To express the second term, corresponding to the off-policy traces, as an
+expectation under the current policy, we apply importance sampling
+\cite{precup-et-al-icml2000}. For any valid trace $(x,y)$,
+\[
+\frac{p_\beta^+(x,y)}{p_\pi^+(x,y)}
+=
+\frac{\pi_\beta(y\mid x)}{\pi_\theta(y\mid x)},
+\]
+so
+\[
+\mathbb{E}_{p_\beta^+}
+\big[\nabla_\theta \log \pi_\theta(y\mid x)\big]
+=
+\mathbb{E}_{p_\pi^+}
+\left[
+\frac{\pi_\beta(y\mid x)}{\pi_\theta(y\mid x)}\,
+\nabla_\theta \log \pi_\theta(y\mid x)
+\right].
+\]
+
+Substituting this expression produces the fully on-policy-looking form
+\[
+\nabla_\theta \mathcal{L}_{\mathrm{SFT}}(\theta)
+=
+-\mathbb{E}_{p_\pi^+}
+\Big[
+\big((1-\lambda)
++
+\lambda\,\tfrac{\pi_\beta(y\mid x)}{\pi_\theta(y\mid x)}\big)
+\,\nabla_\theta \log \pi_\theta(y\mid x)
+\Big].
+\]
+
+Thus the SFT update may be interpreted as a REINFORCE-like gradient step under
+the current policy, restricted to valid trace, with an \emph{effective
+reward}
+\[
+R_{\mathrm{eff}}(x,y)
+\;\propto\;
+(1-\lambda)
++
+\lambda\,\frac{\pi_\beta(y\mid x)}{\pi_\theta(y\mid x)}.
+\]
+
+This shows that SFT on a mixture of on- and off-policy valid traces corresponds
+to REINFORCE with binary rewards augmented by importance-weighted contributions
+from the behavior policy. In turn, this proves our original claim that SFT
+using only valid traces can be seen as a special case of REINFORCE
+\cite{williams-jml1992}.
+\end{proof}

@@ -1,0 +1,635 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{sav-science}[2019/12/25 SAV LaTeX package]
+
+% load xcolor before pgf
+\@ifpackageloaded{xcolor}{
+  \typeout{SAV Science: xcolor loaded, skipping...}%
+}{%
+  \RequirePackage{xcolor}
+}
+
+\RequirePackage{algorithm}
+\@ifpackageloaded{algpseudocode}{}{%
+  \RequirePackage[noend]{algpseudocode}
+}
+\RequirePackage{amsmath}
+\RequirePackage{amsfonts}
+\@ifpackageloaded{newtxmath}{%
+  \typeout{SAV Science: newtxmath loaded, skipping amssymb...}%
+}{%
+  \RequirePackage{amssymb}%
+}
+\RequirePackage{cleveref}
+\RequirePackage{etoolbox}
+\RequirePackage{pgfkeys}
+\RequirePackage{pgffor}
+\RequirePackage{stmaryrd}
+\RequirePackage{tikz}
+\RequirePackage{xparse}
+\RequirePackage{xspace}
+
+\RequirePackage{expl3}
+\RequirePackage{ifthen}
+
+\newcommand{\@ukspelling}{0}
+\DeclareOption{us}{\renewcommand{\@ukspelling}{0}}
+\DeclareOption{uk}{\renewcommand{\@ukspelling}{1}}
+\DeclareOption*{\PackageWarning{sav-science}{Unknown ‘\CurrentOption’}}
+\ProcessOptions\relax
+
+\usetikzlibrary{calc}
+\usetikzlibrary{arrows,automata}
+\usetikzlibrary{positioning}
+\usetikzlibrary{shapes,shapes.multipart}
+\usetikzlibrary{backgrounds}
+\usetikzlibrary{patterns}
+
+\tikzset{
+  every path/.style={>=stealth},
+}
+
+\newtheorem{remark}{Remark}
+
+%% Referencing
+%%%%%%%%%%%%%%
+
+\crefname{appendix}{\S\hspace{-2.7pt}}{Appendix}
+\Crefname{appendix}{Appendix}{Appendix}
+\crefname{section}{\S}{Section}
+\Crefname{section}{Section}{Section}
+\crefformat{section}{#2\S{}#1#3}
+\Crefformat{section}{Section #2#1#3}
+\crefname{chapter}{\S}{Chapter}
+\Crefname{chapter}{Chapter}{Chapter}
+\crefformat{chapter}{#2\S{}#1#3}
+\Crefformat{chapter}{Chapter #2#1#3}
+\crefname{subsection}{\S\!}{Section}
+\Crefname{subsection}{Section}{Section}
+\crefformat{subsection}{#2\S{}#1#3}
+\Crefformat{subsection}{Section #2#1#3}
+
+\Crefname{figure}{\text{Figure}}{\text{Figures}}
+\crefname{corollary}{\text{Corollary}}{\text{corollaries}}
+\Crefname{corollary}{\text{Corollary}}{\text{Corollaries}}
+\crefname{lemma}{\text{Lemma}}{\text{Lemmas}}
+\Crefname{lemma}{\text{Lemma}}{\text{Lemmas}}
+\crefname{proposition}{\text{Prop.}}{\text{Propositions}}
+\Crefname{proposition}{\text{Proposition}}{\text{Propositions}}
+\crefname{definition}{\text{Def.}}{\text{Definitions}}
+\Crefname{definition}{\text{Definition}}{\text{Definitions}}
+\crefname{notation}{\text{Notation}}{\text{Notations}}
+\Crefname{notation}{\text{Notation}}{\text{Notations}}
+\crefname{theorem}{\text{Theorem}}{\text{Theorems}}
+\Crefname{theorem}{\text{Theorem}}{\text{Theorems}}
+\crefname{figure}{\text{Fig.}}{\text{Figures}}
+\Crefname{figure}{\text{Figure}}{\text{Figures}}
+
+\newcommand{\citeapp}{\cite{appendix}}
+\newcommand{\citeappt}[1]{\cite[\cref{#1}]{appendix}}
+
+
+%% Abbreviations
+%%%%%%%%%%%%%%%%
+
+\ifnum \@ukspelling=0
+\newcommand{\ie}{{i.e.,} }
+\newcommand{\eg}{{e.g.,} }
+\else
+\newcommand{\ie}{{i.e.}\xspace}
+\newcommand{\eg}{{e.g.}\xspace}
+\fi
+
+\newcommand{\cf}{{cf.}\xspace}
+\newcommand{\wrt}{w.r.t.\xspace}
+\newcommand{\stt}{s.t.\xspace}
+\newcommand{\aka}{a.k.a.\xspace}
+\newcommand{\resp}{resp.\xspace}
+
+
+%% Notation
+%%%%%%%%%%%
+
+\newcommand{\bbN}{{\mathbb{N}}}
+\newcommand{\bbZ}{{\mathbb{Z}}}
+\newcommand{\bbQ}{{\mathbb{Q}}}
+\newcommand{\bbR}{{\mathbb{R}}}
+\newcommand{\calO}{\mathcal{O}}
+\newcommand{\calE}{\mathcal{E}}
+\newcommand{\stm}{\; | \;}
+\newcommand{\set}[1]{\{{#1}\}}
+\newcommand{\setcomp}[2]{
+\ensuremath{
+	\left\{
+	\begin{array}{@{} l | l @{}}
+		\begin{array}{@{} l @{}}
+			#1
+		\end{array}
+		 &
+		 \begin{array}{@{} l @{}}
+			#2
+		\end{array}
+	\end{array}
+	\right\}
+}
+}
+\newcommand{\sem}[1]{\llbracket #1 \rrbracket}
+\newcommand{\pfn}{\rightharpoonup}
+\newcommand{\dom}[1]{\textit{dom}{({#1})}}
+\newcommand{\codom}[1]{\textit{rng}{({#1})}}
+\newcommand{\before}[2]{{#1}_{#2}^\uparrow}
+\newcommand{\after}[2]{{#1}_{#2}^\downarrow}
+%\newcommand{\fv}[1]{fv{[{#1}]}}
+\newcommand{\tup}[1]{{\langle{#1}\rangle}}
+\newcommand{\nin}{\not\in}
+\newcommand{\subq}{\subseteq}
+\newcommand{\sqsubq}{\sqsubseteq}
+\newcommand{\supq}{\supseteq}
+\newcommand{\sqsupq}{\sqsubseteq}
+\newcommand{\size}[1]{|{#1}|}
+\newcommand{\true}{\top}
+\newcommand{\maketil}[1]{{#1}\ldots{#1}}
+\newcommand{\til}{\maketil{,}}
+\newcommand{\cuptil}{\maketil{\cup}}
+\newcommand{\uplustil}{\maketil{\uplus}}
+\renewcommand*{\mathellipsis}{\mathinner{{\ldotp}{\ldotp}{\ldotp}}}
+\newcommand{\rst}[1]{|_{#1}}
+\newcommand{\imm}[1]{{#1}{\rst{\text{imm}}}}
+\newcommand{\succof}[2]{\text{succ}_{#1}(#2)}
+\newcommand{\predof}[2]{\text{pred}_{#1}(#2)}
+\newcommand{\relmaxof}[2]{\text{max}_{#1}(#2)}
+\newcommand{\relminof}[2]{\text{min}_{#1}(#2)}
+\newcommand{\aite}[3]{(#1?#2,#3)}
+%\newcommand{\defeq}{\mathrel{\stackrel{\mathsf{def}}{=}}}
+%\newcommand{\defeq}{\triangleq}
+\newcommand{\defeq}{%
+  \mathrel{\vbox{\offinterlineskip\ialign{%
+    \hfil##\hfil\cr
+    $\scriptscriptstyle\boldsymbol{\triangle}$\cr
+    \noalign{\kern0.15ex}
+    $=$\cr
+}}}}
+\newcommand{\eqdef}{\defeq}
+\newcommand{\powerset}[1]{\mathcal{P}({#1})}
+\newcommand{\finpowerset}[1]{\mathcal{P}_{<\omega}({#1})}
+\newcommand{\impliess}{\Rightarrow}
+\newcommand{\existsa}[1]{\ensuremath{\exists #1.\ }}
+\newcommand{\foralla}[1]{\ensuremath{\forall #1.\ }}
+\newcommand{\iffdef}{\ensuremath{\stackrel{\text{def}}{\iff}}}
+\newcommand{\false}{\ensuremath{\mathrel{\bot}}}
+\newcommand{\inv}[1]{\ensuremath{#1^{-1}}}
+\newcommand{\refC}[1]{\ensuremath{#1^{?}}}
+\newcommand{\transC}[1]{\ensuremath{#1^{+}}}
+\newcommand{\reftransC}[1]{\ensuremath{#1^{*}}}
+\newcommand{\concat}{\ensuremath{{+}\!\!{+}}}
+
+
+%% Typesetting programs: readcomment, codecomment, inarr, inpar, inset, instructions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newcommand{\readcomment}[1]{\color{teal}{\,\texttt{/\!\!/}\textit{#1}}}
+\newcommand{\codecomment}[1]{{\color{teal}{\,\texttt{/\!\!/}\textit{#1}}}}
+
+\newcommand{\inpar}[1]{\left(\begin{array}{@{}l@{}}#1\end{array}\right)}
+\newcommand{\inset}[1]{\left\{\begin{array}{@{}l@{}}#1\end{array}\right\}}
+
+%% Ugly hack to be able to user \inarr{} even if \usepackage{array} is used
+%% (See: https://tex.stackexchange.com/questions/12234/how-do-i-expand-a-macro-into-a-tabular-head)
+\@ifpackageloaded{array}{%
+  \newcolumntype{\expand}{}
+  \long\@namedef{NC@rewrite@\string\expand}{\expandafter\NC@find}
+}{%
+  \newcommand{\expand}{}
+}
+
+\newcommand{\@inarrsep}{||}
+\newcommand{\@inarr}[1]{\begin{array}{@{}l@{}}#1\end{array}}
+\newcommand{\@inarrhd}{}
+\newcommand{\@inarrprg}{}
+\newcommand{\inarr}[2][]{%
+  \setbox0=\hbox{#1\unskip}\ifdim\wd0=0pt
+  \renewcommand{\@inarrsep}{||}
+  \else
+  \renewcommand{\@inarrsep}{#1}
+  \fi
+  \appto\@inarrhd{@{}l}%
+  \appto\@inarrprg{\@inarr{#2}}%
+  \@checknextarg}
+\newcommand{\@checknextarg}{\@ifnextchar\bgroup{\@gobblenextarg}{\@inarrend}}
+\newcommand{\@gobblenextarg}[1]{%
+  \appto\@inarrhd{@{\;\;}\expand\@inarrsep%
+    @{\;\;}l}%
+  \appto\@inarrprg{&\@inarr{#1}}\@ifnextchar\bgroup{\@gobblenextarg}{\@inarrend}}
+\newcommand{\@inarrend}{\begin{array}{\expand\@inarrhd%
+      @{}}\@inarrprg\end{array}
+    \renewcommand{\@inarrhd}{}
+    \renewcommand{\@inarrprg}{}
+}
+
+\newcommand{\kwstyle}[1]{\textbf{\texorpdfstring{\texttt{#1}}{#1}}}
+\newcommand{\kw}[1]{\kwstyle{#1}}
+
+\newcommand{\builtinstyle}[1]{\texorpdfstring{\texttt{#1}}{#1}}
+\newcommand{\builtin}[1]{\builtinstyle{#1}}
+
+\newcommand{\assignSymb}{{:=}}
+\newcommand{\@assign}[1][]{\;\assignSymb_{\ifthenelse{\equal{#1}{}}{}{#1}}\;}
+
+\newcommand{\derefL}{[}
+\newcommand{\derefR}{]}
+\newcommand{\derefExpr}[1]{\derefL{#1}\derefR}
+
+\newcommand{\readInst}[3][]{#2\@assign[#1]#3}
+\newcommand{\writeInst}[3][]{#2\@assign[#1]#3}
+\newcommand{\assignInst}[3][]{#2\@assign[#1]#3}
+
+\newcommand{\kwfai}{\builtin{fetch\_add}}
+\newcommand{\kwcas}{\builtin{CAS}}
+\newcommand{\faiInst}[3][]{%
+  \ifthenelse{\equal{#2}{}}{}{{#2}\@assign}%
+  \kwfai^{\ifthenelse{\equal{#1}{}}{}{#1}}({#3})%
+}
+\newcommand{\casInst}[3][]{%
+  \ifthenelse{\equal{#2}{}}{}{{#2}\@assign}%
+  \kwcas^{\ifthenelse{\equal{#1}{}}{}{#1}}({#3})%
+}
+\newcommand{\fenceInst}[1][]{\builtin{fence}_{\ifthenelse{\equal{#1}{}}{}{#1}}}
+
+\newcommand{\ifInst}[1]{\kw{if}\;(#1)\;}
+\newcommand{\elseIfInst}[1]{\kw{else}\; \kw{if}\;(#1)\;}
+\newcommand{\elseInst}{\kw{else}\;}
+
+\newcommand{\gotoInst}[1]{\kw{goto}\;#1}
+
+\newcommand{\forInst}[1]{\kw{for}\;(#1)\;}
+\newcommand{\doInst}{\kw{do}\;}
+\newcommand{\whileInst}[1]{\kw{while}\;(#1)\;}
+
+\newcommand{\skipInst}{\kw{skip}}
+\newcommand{\breakInst}{\kw{break}}
+\newcommand{\contInst}{\kw{continue}}
+
+\newcommand{\assumeInst}[1]{\builtin{assume}\ifthenelse{\equal{#1}{}}{}{({#1})}}
+\newcommand{\assertInst}[1]{\builtin{assert}\ifthenelse{\equal{#1}{}}{}{({#1})}}
+
+\newcommand{\lockInst}[1]{\builtin{acq}({#1})}
+\newcommand{\unlockInst}[1]{\builtin{rel}({#1})}
+
+
+%% Separation logic
+%%%%%%%%%%%%%%%%%%%
+
+\newcommand{\@ptloc}{}
+\newcommand{\@ptvals}{}
+\newcommand{\pt}[2]{%
+  \appto\@ptloc{#1}%
+  \appto\@ptvals{#2}%
+  \@checknextval
+}
+\newcommand{\@checknextval}{\@ifnextchar\bgroup{\@gobblenextval}{\@ptend}}
+\newcommand{\@gobblenextval}[1]{%
+  \appto\@ptvals{, #1}%
+  \@ifnextchar\bgroup{\@gobblenextval}{\@ptend}
+}
+\newcommand{\@ptend}{%
+  \@ptloc\mapsto\@ptvals%
+  \renewcommand{\@ptloc}{}
+  \renewcommand{\@ptvals}{}
+}
+
+
+%% Algorithmics
+%%%%%%%%%%%%%%%
+
+\algnewcommand\algorithmicswitch{\textbf{switch}}
+\algnewcommand\algorithmiccase{\textbf{case}}
+\algnewcommand\algorithmicdefaultcase{\textbf{otherwise}}
+\algnewcommand\algorithmicassert{\textbf{assert}}
+\algnewcommand\Assert[1]{\algorithmicassert(#1)}%
+\algnewcommand\algorithmicoutput{\textbf{output}}
+\algnewcommand\Output[1]{\algorithmicoutput(#1)}
+\algnewcommand\algorithmicexit{\textbf{exit}}
+\algnewcommand\Exit[1]{\algorithmicexit(#1)}
+\algnewcommand\algorithmiccontinue{\textbf{continue}}
+\algnewcommand\Continue{\algorithmiccontinue}
+
+\algdef{SE}[DOWHILE]{Do}{doWhile}{\algorithmicdo}[1]{\algorithmicwhile\ #1}%
+\algdef{SE}[SWITCH]{Switch}{EndSwitch}[1]{\algorithmicswitch\ #1\ \algorithmicdo}{\algorithmicend\ \algorithmicswitch}%
+\algdef{SE}[CASE]{Case}{EndCase}[1]{\algorithmiccase\ #1}{\algorithmicend\ \algorithmiccase}%
+\algdef{SE}[CASE]{DefaultCase}{EndCase}{\algorithmicdefaultcase\ }{\algorithmicend\ \algorithmiccase}%
+\algtext*{EndSwitch}%
+\algtext*{EndCase}%
+
+
+%% Access modes
+%%%%%%%%%%%%%%%
+
+\newcommand{\na}{\mathtt{na}}
+\newcommand{\rlx}{\mathtt{rlx}}
+\newcommand{\rel}{{\mathtt{rel}}}
+\newcommand{\acq}{{\mathtt{acq}}}
+\newcommand{\acqrel}{{\mathtt{acqrel}}}
+\newcommand{\sco}{{\mathtt{sc}}}
+
+
+%%% Custom definitions
+%%%%%%%%%%%%%%%%%%%%%%
+
+% We start with some helper definitions (e.g., zip)
+
+\ExplSyntaxOn
+% Spaces are now ignored, and `_` and `:` can be used in macro names.
+%
+% `\tl_if_either_empty_ii:nn` tests whether either one of two token
+% lists is empty.
+%
+\prg_new_conditional:Npnn \tl_if_either_empty_ii:nn #1 #2 {p,T,F,TF} {
+  \tl_if_empty:nTF {#1} {\prg_return_true:} {
+    \tl_if_empty:nTF {#2} {\prg_return_true:} {\prg_return_false:}
+  }
+}
+
+% Function to zip two clist together, e.g.,
+%   {1,2,3,4,5} {aa,bb,cc,d} -> {1}{aa}, {2}{bb}, {3}{cc}, {4}{d}
+% It stops when reaching the end of any of the two lists. For people who
+% care: it is `f`-expandable.
+%
+\cs_new:Npn \clist_zip_ii:nn #1 #2 {
+  \clist_zip_ii_aux:nw {} #1, \q_mark, #2, \q_mark.
+}
+\cs_new:Npn \clist_zip_ii_aux:nw #1 #2, #3 \q_mark, #4, #5 \q_mark. {
+  \tl_if_either_empty_ii:nnTF {#3} {#5} {
+    #1 {#2}{#4}
+  }{
+    \clist_zip_ii_aux:nw {#1 {#2}{#4},} #3 \q_mark, #5 \q_mark.
+  }
+}
+\cs_generate_variant:Nn \clist_zip_ii:nn {VV}
+
+
+% To map a function `#3` of two arguments onto the zipped result,
+% we do something similar, essentially replacing commas by `#1` in
+% the output.
+\cs_new:Npn \clist_map_zip_ii:nnN #1 #2 #3 {
+  \clist_map_zip_ii_aux:Nnw #3 {} #1, \q_mark, #2, \q_mark.
+}
+\cs_new:Npn \clist_map_zip_ii_aux:Nnw #1 #2 #3, #4 \q_mark, #5, #6 \q_mark. {
+  \tl_if_either_empty_ii:nnTF {#4} {#6} {
+    #2 #1{#3}{#5}
+  }{
+    \clist_map_zip_ii_aux:Nnw #1 {#2 #1{#3}{#5}} #4 \q_mark, #6 \q_mark.
+  }
+}
+\cs_generate_variant:Nn \clist_map_zip_ii:nnN {VV}
+
+
+% ======================= Your comma separated lists ==================
+% All those `g` mean `global`.
+%% \clist_new:N \g_my_first_clist
+%% \clist_new:N \g_my_second_clist
+%% \clist_gput_right:Nn \g_my_first_clist {a,b,c,d,e,f}
+%% \clist_gput_right:Nn \g_my_second_clist {1,2,3,4,5}
+
+\cs_new:Npn \my_create_fun_variable:nn #1 #2 {
+  \iow_term:n {#2 as #1} % Message to the terminal
+  \expandafter\xdef\csname #2\endcsname##1{%
+    \noexpand\ifthenelse{\noexpand\equal{##1}{}}{
+      \noexpand\ensuremath{\noexpand\textbf{{#1}}}
+    }{
+      \noexpand\ensuremath{\noexpand\textbf{{#1}}({##1})}
+    }
+  }
+  %% \tl_new:c {#1 name #2}
+}
+
+\cs_new:Npn \my_create_dinstance_variable:nn #1 #2 {
+  \iow_term:n {i\tl_upper_case:n{#2} as #1} % Message to the terminal
+  \expandafter\xdef\csname i\tl_upper_case:n{#2}\endcsname{%
+    \noexpand\ensuremath{\noexpand\mathit{{#1}}}
+  }
+  %% \tl_new:c {#1 name #2}
+}
+
+\cs_new:Npn \my_create_dfunction_variable:nn #1 #2 {
+  \iow_term:n {f\tl_upper_case:n{#2} as #1} % Message to the terminal
+  \expandafter\xdef\csname f\tl_upper_case:n{#2}\endcsname{%
+    \noexpand\ensuremath{\noexpand\mathtt{{#1}}}
+  }
+  %% \tl_new:c {#1 name #2}
+}
+
+\cs_new:Npn \my_create_domain_variable:nn #1 #2 {
+  \iow_term:n {i\tl_upper_case:n{#2} as #1} % Message to the terminal
+  \expandafter\xdef\csname d\tl_upper_case:n{#2}\endcsname{%
+    \noexpand\ensuremath{\noexpand\mathsf{\tl_mixed_case:n{#1}}}
+  }
+  %% \tl_new:c {#1 name #2}
+}
+
+\cs_new:Npn \my_create_component_variable:nn #1 #2 {
+  \iow_term:n {l\tl_upper_case:n{#2} as #1} % Message to the terminal
+  \expandafter\xdef\csname l\tl_upper_case:n{#2}\endcsname{%
+    \noexpand\ensuremath{\noexpand\mathtt{#1}}
+  }
+  \expandafter\xdef\csname \tl_lower_case:n{#2}lab\endcsname##1##2{%
+    \noexpand\ifthenelse{\noexpand\equal{##2}{}}{
+    \noexpand\ensuremath{\noexpand\mathtt{#1}^{\noexpand\mathtt{##1}}}
+    }{
+    \noexpand\ensuremath{\noexpand\mathtt{#1}^{\noexpand\mathtt{##1}}({##2})}
+    }
+  }
+  %% \tl_new:c {#1 name #2}
+}
+
+%% \clist_map_zip_ii:VVN \g_my_first_clist
+%%                       \g_my_second_clist
+%%                       \my_create_variable:nn
+
+% Restore the usual behaviour of space, colon and underscore.
+\ExplSyntaxOff
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\pgfkeys{
+  /mycomponents/.is family, /mycomponents,
+  % Available user options
+  %% default/.style = {instances = {}},
+  names/.estore in = \myComponentsNames,
+  values/.estore in = \myComponentsValues,
+}
+
+\ExplSyntaxOn
+\newcommand{\myComponentsValues}{}
+\newcommand{\definecomponents}[1][]{%
+  \renewcommand{\myComponentsValues}{}
+  %% parse options
+  \pgfkeys{/mycomponents, #1}%
+  % define components
+  \setbox0=\hbox{\myComponentsValues\unskip}\ifdim\wd0=0pt
+  \foreach \x in \myComponentsNames {
+    \my_create_component_variable:nn {\tl_upper_case:n{\x}} {\x}
+  }
+  \else
+  \clist_map_zip_ii:VVN \myComponentsValues
+                        \myComponentsNames
+                        \my_create_component_variable:nn
+  \fi
+}
+\ExplSyntaxOff
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\pgfkeys{
+  /myrelation/.is family, /myrelation,
+  % Available user options
+  default/.style = {color = black,line = thin},
+  color/.estore in = \myRelationColor,
+  name/.estore in = \myRelationName,
+  value/.estore in = \myRelationValue,
+  line/.estore in = \myRelationLine,
+}
+
+\tikzset{ shortenb/.style={ shorten >=#1, shorten <=#1 } }
+
+\ExplSyntaxOn
+\newcommand{\myRelationValue}{}
+%% \edef\MyRelationName{\tl_upper_case:n {\myRelationName}}
+\newcommand{\definerelation}[1][]{%
+  \renewcommand{\myRelationValue}{}
+  %% parse options
+  \pgfkeys{/myrelation, default, #1}%
+  %% define color
+  \colorlet{color\tl_upper_case:n{\myRelationName}}{\myRelationColor}
+  %% define math names
+  \setbox0=\hbox{\myRelationValue\unskip}\ifdim\wd0=0pt
+  \expandafter\xdef\csname l\tl_upper_case:n{\myRelationName} \endcsname{%
+    {\noexpand\color{\myRelationColor} \noexpand\mathtt{\myRelationName}}
+  }
+  \expandafter\xdef\csname l\tl_upper_case:n{\myRelationName} E\endcsname{%
+    {\noexpand\color{\myRelationColor} \noexpand\mathtt{\myRelationName}}_{\noexpand\mathtt{e}}
+  }
+  \expandafter\xdef\csname l\tl_upper_case:n{\myRelationName} I\endcsname{%
+    {\noexpand\color{\myRelationColor} \noexpand\mathtt{\myRelationName}}_{\noexpand\mathtt{i}}
+  }
+  \expandafter\xdef\csname \myRelationName \endcsname{%
+    {\noexpand\color{\myRelationColor} \noexpand\mathit{\myRelationName}}
+  }
+  \else
+  \expandafter\xdef\csname l\tl_upper_case:n{\myRelationName} \endcsname{%
+    {\noexpand\color{\myRelationColor} \noexpand\mathtt{\myRelationValue}}
+  }
+  \expandafter\xdef\csname l\tl_upper_case:n{\myRelationName} E \endcsname{%
+    {\noexpand\color{\myRelationColor} \noexpand\mathtt{\myRelationValue}}\noexpand\mathtt{e}
+  }
+  \expandafter\xdef\csname l\tl_upper_case:n{\myRelationName} I \endcsname{%
+    {\noexpand\color{\myRelationColor} \noexpand\mathtt{\myRelationValue}}\noexpand\mathtt{i}
+  }
+  \expandafter\xdef\csname \myRelationName \endcsname{%
+    {\noexpand\color{\myRelationColor} \noexpand\mathit{\myRelationValue}}
+  }
+  \fi
+  \tikzset{
+    \myRelationName/.style/.expanded={->,color=\myRelationColor,\myRelationLine, shortenb=-0.5mm},
+  }
+}
+\ExplSyntaxOff
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\pgfkeys{
+  /mydomains/.is family, /mydomains,
+  % Available user options
+  %% default/.style = {instances = {}},
+  names/.estore in = \myDomainsNames,
+  values/.estore in = \myDomainsValues,
+  functions/.estore in = \myDomainsFunctions,
+  instances/.estore in = \myDomainsInstances,
+}
+
+\ExplSyntaxOn
+\newcommand{\myDomainsValues}{}
+\newcommand{\myDomainsFunctions}{}
+\newcommand{\myDomainsInstances}{}
+\newcommand{\definedomains}[1][]{%
+  \renewcommand{\myDomainsValues}{}
+  \renewcommand{\myDomainsFunctions}{}
+  \renewcommand{\myDomainsInstances}{}
+  %% parse options
+  \pgfkeys{/mydomains, #1}%
+  % define domains
+  \setbox0=\hbox{\myDomainsValues\unskip}\ifdim\wd0=0pt
+    \foreach \x in \myDomainsNames {
+      \my_create_domain_variable:nn {\tl_mixed_case:n{\x}} {\x}
+    }
+    % define domain functions
+    \setbox0=\hbox{\myDomainsFunctions\unskip}\ifdim\wd0=0pt
+    \foreach \x in \myDomainsNames {
+      \my_create_dfunction_variable:nn {\x} {\x}
+    }
+    \else
+    \clist_map_zip_ii:VVN \myDomainsFunctions
+                         \myDomainsNames
+                         \my_create_dfunction_variable:nn
+    \fi
+    % define domain instances
+    \setbox0=\hbox{\myDomainsInstances\unskip}\ifdim\wd0=0pt
+    \foreach \x in \myDomainsNames {
+      \my_create_dinstance_variable:nn {\x} {\x}
+    }
+    \else
+    \clist_map_zip_ii:VVN \myDomainsInstances
+                         \myDomainsNames
+                         \my_create_dinstance_variable:nn
+    \fi
+  \else
+    \clist_map_zip_ii:VVN \myDomainsValues
+                         \myDomainsNames
+                         \my_create_domain_variable:nn
+    % functions
+    \setbox0=\hbox{\myDomainsFunctions\unskip}\ifdim\wd0=0pt
+      \clist_map_zip_ii:VVN \myDomainsValues
+                           \myDomainsNames
+                           \my_create_dfunction_variable:nn
+    \else
+      \clist_map_zip_ii:VVN \myDomainsFunctions
+                           \myDomainsNames
+                           \my_create_dfunction_variable:nn
+    \fi
+    % instances
+    \setbox0=\hbox{\myDomainsInstances\unskip}\ifdim\wd0=0pt
+      \clist_map_zip_ii:VVN \myDomainsValues
+                           \myDomainsNames
+                           \my_create_dinstance_variable:nn
+    \else
+      \clist_map_zip_ii:VVN \myDomainsInstances
+                           \myDomainsNames
+                           \my_create_dinstance_variable:nn
+    \fi
+  \fi
+}
+\ExplSyntaxOff
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\pgfkeys{
+  /myfunkeywords/.is family, /myfunkeywords,
+  % Available user options
+  names/.estore in = \myFunKeywords,
+  values/.estore in = \myFunValues,
+}
+
+\ExplSyntaxOn
+\newcommand{\myFunValues}{}
+\newcommand{\definefunkeywords}[1][]{%
+  \renewcommand{\myFunValues}{}
+  \pgfkeys{/myfunkeywords, #1}%
+  \setbox0=\hbox{\myFunValues\unskip}\ifdim\wd0=0pt
+    \foreach \x in \myFunKeywords{
+      \my_create_fun_variable:nn {\x} {\x}
+    }
+  \else
+    \clist_map_zip_ii:VVN \myFunValues
+                         \myFunKeywords
+                         \my_create_fun_variable:nn
+  \fi
+}
+\ExplSyntaxOff

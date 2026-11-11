@@ -1,0 +1,214 @@
+{
+ "title": "TYTAN: Taylor-series based Non-Linear Activation Engine for Deep Learning Accelerators",
+ "abstract": "The rapid advancement in AI architectures and the proliferation of AI-enabled systems have intensified the need for domain-specific architectures that enhance both the acceleration and energy efficiency of AI inference, particularly at the edge. This need arises from the significant resource constraints—such as computational cost and energy consumption—associated with deploying AI algorithms, which involve intensive mathematical operations across multiple layers. High-power-consuming operations, including General Matrix Multiplications (GEMMs) and activation functions, can be optimized to address these challenges. Optimization strategies for AI at the edge include algorithmic approaches like quantization and pruning, as well as hardware methodologies such as domain-specific accelerators. This paper proposes TYTAN: TaYlor-series based non-linear acTivAtion eNgine, which explores the development of a Generalized Non-linear Approximation Engine (G-NAE). TYTAN targets the acceleration of non-linear activation functions while minimizing power consumption. The TYTAN integrates a re-configurable hardware design with a specialized algorithm that dynamically estimates the necessary approximation for each activation function, aimed at achieving minimal deviation from baseline accuracy. The proposed system is validated through performance evaluations with state-of-the-art AI architectures, including Convolutional Neural Networks (CNNs) and Transformers. Results from system-level simulations using Silvaco's FreePDK45 process node demonstrate TYTAN's capability to operate at a clock frequency $>950 MHz$, showcasing its effectiveness in supporting accelerated, energy-efficient AI inference at the edge, which is $\\sim2\\times$ performance improvement, with $\\sim56\\%$ power reduction and $\\sim35\\times$ lower area compared to the baseline open-source NVIDIA Deep Learning Accelerator (NVDLA) implementation.\n\n\\keywords{Machine Learning \\and Domain-specific Accelerators \\and Algorithm/HW Co-design}",
+ "sections": [
+  {
+   "level": "preamble",
+   "title": "",
+   "text": "\\title{TYTAN: Taylor-series based Non-Linear Activation Engine for Deep Learning Accelerators}\n\n\\titlerunning{TYTAN: Taylor-series based Non-Linear Activation Engine}\n\n\\author{Soham Pramanik\\inst{1}\\orcidID{0009-0005-1772-2901} \\and\nVimal William\\inst{2}\\orcidID{0000-0002-1069-9594} \\and\nArnab Raha\\inst{3}\\orcidID{0000-0002-8848-1069} \\and\nDebayan Das\\inst{4}\\orcidID{0000-0003-1843-0124} \\and\nAmitava Mukherjee\\inst{5,6}\\orcidID{0000-0003-1694-3911} \\and\nJanet L. Paluh\\inst{6}\\orcidID{0000-0002-5988-6075}}\n\n\n\n\n\n\n\n\n\\authorrunning{S. Pramanik et al.}\n\n\\institute{Department of Electronics and Telecommunication Engineering, Jadavpur University, Kolkata, India \\and\nSandLogic Technologies, Bangalore, India \\and\nIntel Corporation, Santa Clara, CA, USA \\and\nDepartment of Electronic Systems Engineering, Indian Institute of Science, Bangalore, India \\and\nDepartment of Computer Science and Engineering, Amrita University, Amritapuri, Kollam, Kerala, India \\and\nCollege of Nanoscale Science and Engineering, Nanobioscience, SUNY Polytechnic Institute, Albany, New York, USA}\n\n\\maketitle\n\n\\begin{abstract}\nThe rapid advancement in AI architectures and the proliferation of AI-enabled systems have intensified the need for domain-specific architectures that enhance both the acceleration and energy efficiency of AI inference, particularly at the edge. This need arises from the significant resource constraints—such as computational cost and energy consumption—associated with deploying AI algorithms, which involve intensive mathematical operations across multiple layers. High-power-consuming operations, including General Matrix Multiplications (GEMMs) and activation functions, can be optimized to address these challenges. Optimization strategies for AI at the edge include algorithmic approaches like quantization and pruning, as well as hardware methodologies such as domain-specific accelerators. This paper proposes TYTAN: TaYlor-series based non-linear acTivAtion eNgine, which explores the development of a Generalized Non-linear Approximation Engine (G-NAE). TYTAN targets the acceleration of non-linear activation functions while minimizing power consumption. The TYTAN integrates a re-configurable hardware design with a specialized algorithm that dynamically estimates the necessary approximation for each activation function, aimed at achieving minimal deviation from baseline accuracy. The proposed system is validated through performance evaluations with state-of-the-art AI architectures, including Convolutional Neural Networks (CNNs) and Transformers. Results from system-level simulations using Silvaco's FreePDK45 process node demonstrate TYTAN's capability to operate at a clock frequency $>950 MHz$, showcasing its effectiveness in supporting accelerated, energy-efficient AI inference at the edge, which is $\\sim2\\times$ performance improvement, with $\\sim56\\%$ power reduction and $\\sim35\\times$ lower area compared to the baseline open-source NVIDIA Deep Learning Accelerator (NVDLA) implementation.\n\n\\keywords{Machine Learning \\and Domain-specific Accelerators \\and Algorithm/HW Co-design}\n\\end{abstract}"
+  },
+  {
+   "level": "section",
+   "title": "Introduction",
+   "text": "The continual advancements in Artificial Intelligence (AI) and the evolving demands for AI-assisted applications highlighted the limitations of existing infrastructures on processing such as data-intensive operations. These limitations significantly elevated the cost of accommodating modern-day AI-based applications and upgrading the existing infrastructure to support such applications could also be challenging. With the motivation of proliferating the benefits of AI, this paper focuses on optimizing the effective computation of non-linear activation functions employed in Neural Networks (NN) through state-of-the-art hardware-aware DNN algorithm optimization and algorithm-aware hardware design. The method aimed to improve the inference speed by accelerating the above-mentioned compute functions in the AI model. In addition, the methods focused on extending the support for AI-based solutions in resource-constrained environments."
+  },
+  {
+   "level": "subsection",
+   "title": "Background",
+   "text": "The rapid evolution of AI workloads demands optimized hardware infrastructures for modern deep learning models. A key bottleneck in AI accelerators is computing nonlinear functions like \\textit{softmax}, \\textit{sigmoid}, \\textit{GeLU}, and \\textit{layer normalization}. While multiply-accumulate (MAC) operations are well-optimized, efficient nonlinear operations implementation remains challenging.\n\nPrior works address these challenges through approximate computation techniques. \\textit{ViTALiTy} \\cite{10071081} approximates \\textit{softmax} in linear attention layers using Taylor series expansion. \\textit{NN-LUT} \\cite{10.1145/3489517.3530505} employs look-up-table (LUT)-based approximation for nonlinear functions, optimizing transformer models with precomputed values. However, LUT methods, while low-latency, suffer from high memory costs and limited scalability. \n\nAlternative approximation techniques include \\textit{Fast Approximations of Activation Functions} \\cite{fastapprox2021posit} using \\textit{Posit arithmetic}, \\textit{TaylorNet} \\cite{taylornet2020approx} with adaptive Taylor expansions reducing computational cost by up to 60\\%, and comparative studies of LUT-based, CORDIC, and Taylor series methods \\cite{approxactivation2022}.\n\n\\textit{UNO} \\cite{9502473,wu2021uno} introduces a MAC-based architecture unifying nonlinear function computation by mapping Taylor-approximated functions onto existing SIMD-based MAC arrays, eliminating dedicated processing units and enabling dynamic accuracy-energy scaling. However, UNO primarily uses low-order Taylor approximations, potentially compromising accuracy in complex workloads.\n\nBuilding upon these advancements, this work integrates both algorithmic and hardware design optimizations to enhance nonlinear function mapping in AI accelerators. TYTAN achieves a better balance between accuracy, power, and area efficiency, ensuring minimal resource overhead while maintaining better performance and scalability than past attempts."
+  },
+  {
+   "level": "subsection",
+   "title": "Motivation",
+   "text": "A generalized and re-configurable activation engine for accelerating activation functions with minimal power consumption can be a promising method to handle the challenges addressed previously. The co-design of approximated computing and generalized hardware architecture for accelerating non-linear activation functions shows greater potential to enable ultra-low-powered AI inference at the edge. The proposed system combines re-configurable hardware design with a specialized algorithm for estimating the amount of approximation required per activation function, providing reduced power consumption with minimal deviation from the AI model's baseline accuracy.\n    \n    The mathematical limitations of the Taylor series toward the representation of discontinuous functions restrict the proposed hardware design from supporting piece-wise linear functions such as ReLU. However, ReLU requires only trivial hardware implementation (simple sign bit check), making it unsuitable for acceleration. TYTAN targets computationally intensive non-linear functions that involve expensive operations where hardware acceleration provides substantial benefits. The key contributions of this paper are summarized below:\n    \n    \\begin{itemize}\n      \\item We propose a Taylor-series-based Non-Linear Activation Engine, TYTAN to accelerate a wide range of approximated non-linear activation functions. \n      \\item An iterative search-based algorithm is designed to estimate the amount of approximation required per activation function based on the layer placement and correlation with the AI model's baseline accuracy.\n      \\item The proposed GNAE system design combines the TYTAN accelerator with add-ons to support a wide range of non-linear functions providing a modular and scalable solution. \n      \\item Using Silvaco's FreePDK45 process node \\cite{opencell_freepdk}, we demonstrate a hardware accelerator for various non-linear activation functions operating at a clock frequency of $950MHz$, showing $>56\\%$ power reduction, $\\sim 2\\times$ performance improvement, and $>35\\times$ lower area compared to the baseline open-source NVIDIA Deep Learning Accelerator NVDLA \\cite{NVDLA} implementation.\n    \\end{itemize}"
+  },
+  {
+   "level": "section",
+   "title": "Methodology",
+   "text": "The proposed architecture articulated in Fig. 1 is a software-hardware co-design for accelerating non-linear activation functions utilized in modern AI architectures. The algorithm is tailored to intake AI models from multiple frameworks and is dedicated to computing the approximation required by individual activation functions. Furthermore, the hardware can be programmed with the pre-calculated coefficients into its buffer to expedite the computing of the appropriate nonlinear functions. The detailed infrastructure of software and hardware sub-systems utilized in the TYTAN is described in the following sections."
+  },
+  {
+   "level": "subsection",
+   "title": "Algorithm Development",
+   "text": "The software component of the co-design includes a well-structured, iterative search algorithm that determines the optimal number of terms, n, required in the Taylor series expansion to approximate the non-linear functions used in AI architectures. Additionally, the algorithm incorporates a simulated version of each approximated non-linear function, as described in Eqs. \\ref{eq:4}, \\ref{eq:5}, \\ref{eq:6}, \\ref{eq:7}, and \\ref{eq:8}, and replaces the original functions in the AI model with these approximations. Furthermore, the algorithm dynamically computes the optimal number of terms, n, based on the function’s position within the model and a predefined accuracy budget, ensuring minimal degradation in baseline accuracy. The approximator described in Fig. \\ref{intro} includes the above-illustrated search algorithm for identifying non-linear activation functions in the AI architecture. The activation selection and replacement process involves replacing the selected activation function with the pre-defined approximated activation from the activation table. The approximator triggers a counter at every activation selection and replacement, which computes the order of the Taylor series with the pre-defined search range. The search space for the approximation is determined through a set of brute-force experiments to understand the point of convergence of the approximated functions with the standard functions. The approximator also maintained a predefined deviation from the baseline accuracy by comparing the baseline accuracy to the estimated accuracy of the evaluated neural network at each iteration in computing the order of the Taylor series. \n    \n    The algorithm is generic and can support various other non-linear activation functions similar to the above-described functions. The number of terms $n$ in the approximated activation function of the Taylor series is directly proportional to the hardware resource requirements. The search space for approximation is constrained to balance power consumption and deviation from the AI model’s baseline accuracy. Algorithm \\ref{alg:approximator} presents the detailed infrastructure of the aforementioned algorithm used in TYTAN. The estimated approximation by the algorithm can be determined by factors such as activation placement in the AI architecture and its impact on the feature map to its preceding layers in the AI model. The approximation estimation is dynamic, and the depth of the Taylor series varies depending on the individual activation function based on the factors mentioned above. Utilizing pre-trained AI models as input can significantly lower the run-time cost of the algorithm, and it also inputs a minimal amount of dataset for accuracy estimation at every iteration. The algorithm's run-time complexity depends on the complexity of the input AI architecture. The framework supports retraining AI models with the approximated non-linear activation functions by its pluggable infrastructure.\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\\begin{algorithm}[h]\n    \\caption{General Purpose Non-linear Approximation Algorithm}\n    \\label{alg:approximator}\n    \\KwIn{Neural Network Model (\\textit{NN Model}), Test Data, Acceptable Accuracy Deviation (\\textit{Deviation})}\n    \\KwOut{Optimized Neural Network Model (\\textit{ApproxModel})}\n    \n    \n    $L \\gets \\text{ActivationToBeApprox}(\\textit{NN Model})$\\;\n    $BAcc \\gets \\text{Evaluate}(\\textit{NN Model})$\\;\n    $ModelData \\gets [\\;]$\\;\n    \n    \n    \\ForEach{$Layer \\in L$}{\n        $LayerData \\gets \\text{getLayer}(\\textit{NN Model}, Layer)$\\;\n        $[nTerms, Acc] \\gets \\text{IterativeSearchBasedApprox}(\\textit{NN Model}, \\textit{Test Data})$\\;\n        $ModelData.\\text{append}([nTerms, Acc])$\\;\n        \n        \n        \\If{$BAcc - Acc > \\textit{Deviation}$}{\n            \\textbf{break}\\;\n        }\n    }\n    \n    \n    $ApproxModel \\gets \\text{Approximate}(\\textit{ModelData}, \\textit{NN Model})$\\;\n    $DeltaAcc \\gets BAcc - \\text{Evaluate}(\\textit{ApproxModel})$\\;\n    \n    \n    \\If{$\\textit{DeltaAcc} > \\textit{Deviation}$}{\n        \\textbf{call} \\textit{Approximator}(\\textit{ApproxModel}, \\textit{Test Data}, \\textit{Deviation})\\;\n    }\n    \n    \\Return{$ApproxModel$}\\;\n\n\\end{algorithm}\n\nThe above-discussed algorithm focused on improving the hardware acceleration for approximated non-linear activation function through dynamic approximation of every non-linear activation function utilized in the considered AI architecture. The algorithm can be scaled by considering hardware-aware factors, including support for handling higher depths of the Taylor series for better convergence with minimal utilization of system resources. Additionally, the dynamic lower and upper limits of the algorithms for Taylor-series computation enable it to work under different resource constraints, especially with limited hardware resources."
+  },
+  {
+   "level": "subsection",
+   "title": "Hardware Modeling",
+   "text": "The proposed hardware design, illustrated in Fig. \\ref{intro}, implements an optimal hardware/software co-design strategy to accelerate approximated non-linear activation functions in modern AI architectures. The architecture is reconfigurable and dynamic, enabling efficient power consumption and improved execution speed. The element-wise operator within the non-linear activation functions is mapped using TYTAN, which compute the approximated activation of the incoming tensor. The number of coefficients stored in the internal FIFO buffer determines the accuracy of approximation. The MAC units are modified from conventional MAC designs to implement the algorithm, as expressed in Eq. \\ref{eq:3}. \n    \n    To establish the mathematical foundation of this approach, the {$e^x$} Taylor series expansion is considered:\n    \n    \\begin{equation} \n        \\frac{x^n}{n!} = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\frac{x^4}{4!} + \\dots \\label{eq:1}\n    \\end{equation}\n    \n    For computational efficiency, this expansion is restructured as follows:\n    \n    \\begin{equation}\n        = 1 + x + \\frac{x^2}{2!} + x^3 \\left[ c_3 + c_4(x) \\right] \\label{eq:2}\n    \\end{equation}\n    \n    This reformulation $T(x)$ enables efficient implementation in TYTAN using a nested multiplication approach, significantly reducing computational complexity:\n    \n    \\begin{equation}\n        \\textit{T}(x) = \\left[ c_0 + x \\left[ c_1 + x \\left[ c_2 + x \\left[ c_3 + c_4(x)\n        \\right] \\right] \\right] \\right] \\label{eq:3}\n    \\end{equation}\n    \n    \n    \n    TYTAN processes four-dimensional tensor inputs as scalar batches using precomputed Taylor series coefficients derived from the algorithm for efficient non-linear function computation. The Taylor series terms ($n$) are precomputed by Algorithm \\ref{alg:approximator} and stored in internal hardware buffers to control computational overhead. These variable terms enable flexible, adaptable architecture for efficiently mapping diverse non-linear functions.\n    \n    The proposed approach can approximate various activation functions commonly used in neural networks. The standard forms of these functions are provided below:\n    \n    \\begin{equation}\n        \\text{SELU}(x) = \\lambda \n        \\begin{cases}\n            x, & \\text{if } x > 0 \\\\\n            \\alpha(e^x - 1), & \\text{if } x \\leq 0\n        \\end{cases}\n    \\end{equation}\n    \n    \\begin{equation}\n        \\text{sigmoid}(x) = \\frac{1}{1 + e^{-x}}\n    \\end{equation}\n    \n    \\begin{equation}\n        \\text{Swish}(x) = x \\cdot \\text{sigmoid}(x) = \\frac{x}{1 + e^{-x}}\n    \\end{equation}\n    \n    \\begin{equation}\n        \\text{GELU}(x) \\approx x \\cdot \\sigma(1.702x) = \\frac{x}{1 + e^{-1.702x}}\n    \\end{equation}\n    \n    \\begin{equation}\n        \\tanh(x) = \\frac{e^x - e^{-x}}{e^x + e^{-x}} = \\frac{e^{2x} - 1}{e^{2x} + 1}\n    \\end{equation}\n    \n    \\begin{equation}\n        \\text{Softplus}(x) = \\log(1 + e^x)\n    \\end{equation}\n    \n    The key innovation in this approach lies in efficiently mapping these complex activation functions using the TYTAN hardware output. Equations \\ref{eq:4} to \\ref{eq:9} present the final formulations of the approximated non-linear functions to leverage hardware acceleration:\n    \n    \\begin{equation}\n        \\text{SELU}(x) =\n        \\begin{cases} \n            \\lambda x, & \\text{if } x > 0 \\\\\n            \\lambda \\cdot \\alpha \\cdot T_{e^x}(x),-1 & \\text{if } x < 0\n        \\end{cases}\n        \\label{eq:4}\n    \\end{equation}\n    \n    \\begin{equation} \n       \\text{sigmoid}(x) = \\frac{T_{e^x}(x)}{T_{e^x}(x) + 1}\n       \\label{eq:5}\n    \\end{equation}\n    \n    \\begin{equation}\n        \\text{Swish}(x) = x \\cdot T_{e^x}(x)\n        \\label{eq:6}\n    \\end{equation}\n    \n    \\begin{equation}\n        \\text{GELU}(x) = x \\cdot T_{e^x}(1.702x)\n        \\label{eq:7}\n    \\end{equation}\n    \n    \\begin{equation}\n        \\text{tanh}(x) = \\frac{T_{e^x}(2x) - 1}{T_{e^x}(2x) + 1}\n        \\label{eq:8}\n    \\end{equation}\n    \n    \\begin{equation}\n        \\text{Softplus}(x) = T_{log}(T_{e^x}(x))\n        \\label{eq:9}\n    \\end{equation}\n    \n    The subscripts in each equation indicate the specific Taylor series coefficients utilized for each computation type. These reformulated equations are analogous to the six example TYTAN modes shown in Fig. \\ref{fig:Panel}\n    \n    The proposed implementation offers significant flexibility, as any non-linear activation function can be efficiently mapped onto TYTAN by selecting appropriate coefficients. The arrangement of these activation functions within AI models determines the optimal number of terms $n$ to be encoded into the hardware, dynamically adjusting based on accuracy requirements and power constraints. This adaptability allows the system to maintain high efficiency with minimal energy consumption while achieving acceptable accuracy in AI applications. Furthermore, the architecture provides a unified approach for accelerating diverse activation functions without requiring dedicated hardware for each function type."
+  },
+  {
+   "level": "section",
+   "title": "HW-SW Co-Design \\& Results",
+   "text": "The robust combination of domain-specific hardware and algorithm results in accelerated computation for non-linear activation functions involved in modern AI Algorithms. The hardware design proposed in section II was evaluated and compared with TensorFlow's activation functions for correctness and accuracy. Detailed remarks on the algorithm's performance and the hardware design are discussed in the following subsections."
+  },
+  {
+   "level": "subsection",
+   "title": "Software Setup",
+   "text": "The experiment to evaluate the impact of the proposed algorithm for dynamic approximation utilizing the Taylor series is carried out by implementing approximated activation functions in the TensorFlow library \\cite{abadi2016tensorflow}. The TensorFlow simulations were used to compute the length of the Taylor series required by each approximated function to converge with the standard activation function. The approximation algorithm uses the point of convergence to restrict the search space and avoid unwanted computations beyond the convergence point. Further, the experiment focused on approximating the MobileViT \\cite{mehta2022mobilevit}, a state-of-the-art neural network with numerous compute-intensive activation functions. The approximation algorithm setup also includes T4 GPUs from Nvidia for extended hardware support. The algorithm utilizes the GPU acceleration to estimate the layer-wise length of the Taylor series for every activation function in the targeted neural network. MobileVit was initially trained on TFflower \\cite{tfflowers} with five classes and a training rate of 30 epochs.\n    \n    The parameters, such as pre-trained MobileViT and a segment of test data, can be passed to the approximation algorithm for the layer-wise dynamic approximation. The algorithm begins with the baseline accuracy estimation for the targeted neural network, followed by the dynamic approximation for the targeted non-linear activation function. A search for the nominal length of the Taylor series is initiated by the algorithm on account of identifying the targeted non-linear activation function. The iterative search starts from the point of convergence to the lower limit, and the nominal length of the Taylor series is estimated for that particular activation function.\n    \n    Table \\ref{table:ViT} demonstrates a clear correlation between the allowable deviation from the baseline accuracy and the length of the Taylor series utilized for approximation. The approximation algorithm operates for multiple deviation amounts from the baseline accuracy of the targeted neural network, and the length of the Taylor series for approximation is estimated to satisfy the constraints of the deviation from the baseline accuracy.\n    \n    \n\n    The algorithm targets about 32 swish non-linear activation functions at the MobileViT. The selection and replacement block described in Fig. \\ref{intro} replaces the swish with the approximated swish for every function. Fig. \\ref{fig:MobileVit} outlines the required length of the Taylor series for approximation at each targeted activation function at MobileViT for the different amounts of deviations from the baseline accuracy of the targeted neural network. Furthermore, Fig. \\ref{fig:MobileVit} also illustrates that the intermediate layers of the considered model are sensitive and require significantly higher Taylor series terms to satisfy the accuracy constraints. It shows that the required length of the Taylor series is minimal for the higher deviation of estimated accuracy from the baseline accuracy of the target neural network and vice versa. The experiment also shows a tight requirement for compute power to elaborate the algorithm for neural networks with more non-linear activation functions. Similarly, the algorithm above and the experiment can be applied to next-generation state-space models like Mamba \\cite{gu2024mamba} to enable faster execution of state-of-the-art non-linear functions (Softplus) used within them."
+  },
+  {
+   "level": "subsection",
+   "title": "Hardware Setup",
+   "text": "This section provides a detailed elaboration of the hardware realization of the proposed model."
+  },
+  {
+   "level": "subsubsection",
+   "title": "TYTAN Operation",
+   "text": "TYTAN efficiently computes activation functions using a multiply-accumulate (MAC) unit modified for polynomial approximation. Input data enters through a dedicated buffer, while Taylor series coefficients are stored in TYTAN's internal buffer and reused for each input element.\n        \n    The unit iteratively computes polynomial approximation through successive multiplications and additions (Eq. 3). The first coefficient is added to zero and passed to the MAC unit. Subsequent operations multiply the accumulated result with input and add the next coefficient, enabling efficient evaluation of non-linear functions.\n        \n    Fig. \\ref{fig:fsm} shows the finite state machine governing TYTAN operation. The FSM controls sequential processing through the computational pipeline, ensuring proper coefficient selection and accumulation at each polynomial evaluation step.\n        \n    TYTAN output is mapped to activation functions such as SELU, Sigmoid, Swish, GELU, Tanh and Softplus, each expressed in terms of MAC operations (Eqs. \\ref{eq:4} to \\ref{eq:9}). The architecture allows coefficient configuration through a dedicated port, providing flexibility to approximate diverse activation functions while maintaining scalability."
+  },
+  {
+   "level": "subsubsection",
+   "title": "Simulation and Synthesis",
+   "text": "TYTAN is implemented in SystemVerilog HDL, with Taylor-series coefficients for the approximated activation functions derived from the software framework. A comprehensive verification testbench was developed using SystemVerilog to validate the functional correctness of TYTAN itself as well as with the SeLu, Sigmoid, and tanh add-ons. The testbench also counts the number of clock cycles it takes to finish the task across various modes of operations. A TYTAN is then simulated using both Synopsys VCS and Verilator, followed by synthesis using Synopsys Design Compiler V-2023.12-SP3 with the FreePDK45 process technology."
+  },
+  {
+   "level": "subsection",
+   "title": "Performance Evaluation",
+   "text": "Figure \\ref{fig:activation function} presents a detailed comparison of the accelerator's accuracy across various activation functions, evaluated using different numbers of Taylor series terms. The results, benchmarked against TensorFlow's implementations over an input range from -5 to +5, reveal that increasing the number of Taylor series coefficients consistently enhances the hardware's accuracy. \n\n    Significantly, for every activation function, a threshold exists beyond which TYTAN's output precisely matches TensorFlow's reference. This finding implies that when the input range is limited to regions where the activation function is accurately represented with fewer coefficients, TYTAN can be optimally configured to use a reduced number of terms without sacrificing performance.\n\n    The computational latency of TYTAN is determined exclusively by the number of Taylor series coefficients employed, irrespective of the specific activation function being computed. Table \\ref{tab3} offers a comprehensive cycle analysis of the TYTAN hardware while calculating the tanh function using thirty Taylor series coefficients.\n\n     \n    \n    The current implementation of TYTAN operates in FP32 precision, with the total latency comprising contributions from individual module delays including buffers, multiplier, and adder operations. This overall computational latency can be further reduced through strategic optimization approaches.\n\n    By transitioning to lower precision formats or incorporating improved core hardware modules that is multiplier and adder circuits, the cumulative latency penalties from these core operations can be significantly minimized without changing rest of the system, thereby enhancing the accelerator's overall performance efficiency."
+  },
+  {
+   "level": "subsection",
+   "title": "Comparative Analysis",
+   "text": "Table \\ref{tab:comprehensive-ppa-comparison} compares neural network accelerator designs, with NVDLA serving as the primary baseline for evaluating TYTAN's performance. The comparison focuses on NVDLA's p-partition that includes the Single Data Point Processor (SDP), which uses lookup tables for linear and non-linear functions on individual data points.\n\n    TYTAN demonstrates exceptional performance improvements over NVDLA across all metrics using FreePDK45 technology. TYTAN achieves remarkable area efficiency with 35.785x improvement without addons and 27.081x with addons. Power consumption is reduced by 1.771x and 1.442x respectively, while maximum operating frequency more than doubles at 2.11x improvement. These results highlight TYTAN's scalability and modularity, efficiently handling additional capabilities like SeLu, Sigmoid, and tanh activation functions while maintaining substantial performance advantages.\n    \n    The table includes other state-of-the-art accelerators for context. NN-LUT uses advanced 7nm technology with extremely low area and power but requires 2 clock cycle latency and lacks frequency specifications, while TYTAN achieves 950 MHz in FreePDK45. UNO, despite using TSMC 45nm, consumes more power (66.5 mW vs 19.86-24.37 mW) and operates at lower frequency (400 MHz vs 950 MHz). ViTALiTy, implemented in more advanced 28nm CMOS, exhibits significantly higher area (5.22 mm²) and power (1,460 mW) while operating at lower frequency (500 MHz) than TYTAN's FreePDK45 implementation. These comparisons demonstrate TYTAN's exceptional efficiency, achieving superior performance even in a less advanced process technology."
+  },
+  {
+   "level": "section",
+   "title": "Conclusion",
+   "text": "This paper presents TYTAN, a hardware-software co-design for energy-efficient non-linear activation function computation in AI architectures. TYTAN achieves $\\sim2.11\\times$ frequency improvement, $\\sim1.77\\times$ power reduction, and $\\sim35.8\\times$ area reduction compared to NVDLA baseline, while outperforming other state-of-the-art accelerators even when implemented in 45nm technology.\n    \n    The modular and reconfigurable design ensures seamless integration with DNN accelerators, offering scalability from edge devices to high-performance systems. The parameterizable coefficient buffer optimizes precision-resource trade-offs, while supporting diverse AI workloads with configurable precision and a variety of activation functions. This approach delivers memory-optimized, accelerated activation computation with minimal resource constraints.\n    The complete implementation is made available as open source \\cite{tytan2025} to enable reproducibility and foster further research in this domain.\n\n\n\\bibliographystyle{splncs04}\n\\bibliography{VDAT}"
+  }
+ ],
+ "figures": [
+  {
+   "caption": "Software/Hardware Co-design for Generalized Non-linear Approximation Engine",
+   "label": "intro",
+   "images": [
+    "Images/image11.png"
+   ]
+  },
+  {
+   "caption": "TYTAN Architecture and Example Modes of Operations\\vspace{-0.2in}",
+   "label": "fig:Panel",
+   "images": [
+    "Images/TYTAN_Modes.png"
+   ]
+  },
+  {
+   "caption": "Comparison of Nth Non-Linear Activation function vs. Order of the Taylor-series per Activation Layer (Swish) of the MobileViT",
+   "label": "fig:MobileVit",
+   "images": [
+    "Images/mobileVit.png"
+   ]
+  },
+  {
+   "caption": "Finite State Machine (FSM) diagram illustrating the operational flow of the TYTAN architecture",
+   "label": "fig:fsm",
+   "images": [
+    "Images/graphviz.png"
+   ]
+  },
+  {
+   "caption": "TensorFlow Activation Functions vs. Hardware-Approximated Activation Results",
+   "label": "fig:first_sub",
+   "images": [
+    "Images/GeLu.png",
+    "Images/Sigmoid.png",
+    "Images/Swish.png",
+    "Images/SeLu.png",
+    "Images/Tanh.png",
+    "Images/Softplus.png"
+   ]
+  }
+ ],
+ "tables": [
+  {
+   "caption": "Performance Analysis of the Approximation Algorithm on the MobileViT Model",
+   "label": "table:ViT",
+   "latex": "\\begin{tabular}{lccccccc}\n            \\toprule\n            \\textbf{Model} & \\textbf{Target} & \\begin{tabular}[t]{@{}c@{}}\\textbf{Baseline} \\\\ \\textbf{Acc. (\\%)}\\end{tabular}"
+  },
+  {
+   "caption": "TYTAN tanh computation latency with 30 Taylor coefficients",
+   "label": "tab3",
+   "latex": "\\begin{tabular}{l>{\\centering}p{2.5cm}>{\\centering\\arraybackslash}p{2.5cm}}\n                \\toprule\n                \\textbf{Operation} & \\textbf{Clock Cycles Required} & \\textbf{Execution Time (ms)\\textsuperscript{*}} \\\\\n                \\midrule\n                Fill buffers (30 input values) & 120 & 0.126 \\\\\n                \\addlinespace\n                \n                \\addlinespace\n                Generate output for every input & 747 & 0.786 \\\\\n                \\addlinespace\n                \n                \\addlinespace\n                Full TYTAN operation (without Buffers) & 22{,}474 & 23.656 \\\\\n                \\addlinespace\n                Full TYTAN operation (with Buffers) & 22{,}594 & 23.783\\\\\n                \\bottomrule\n            \\end{tabular}"
+  },
+  {
+   "caption": "Performance, Power, and Area (PPA) Comparison of SOTA Accelerators",
+   "label": "tab:comprehensive-ppa-comparison",
+   "latex": "\\begin{tabular}{l>{\\centering}p{2.2cm}>{\\centering}p{2.2cm}>{\\centering}p{2.2cm}>{\\centering\\arraybackslash}p{2.2cm}}\n            \\toprule\n            \\textbf{Design} & \\textbf{Process Node} & \\textbf{Area (mm$^2$)} & \\textbf{Power (mW)} & \\textbf{FMAX (MHz)} \\\\\n            \\midrule\n            \\textbf{TYTAN (This Work)} & \n              FreePDK45 &\n              \\begin{tabular}[t]{@{}c@{}}0.028 (base) \\\\ 0.037 (w/ NL)\\end{tabular}"
+  },
+  {
+   "caption": "Precision and Operation Support Comparison",
+   "label": "tab:technical-specs",
+   "latex": "\\begin{tabular}{lp{3.5cm}p{4.5cm}}\n        \\toprule\n        \\textbf{Design} & \\textbf{Precision Support} & \\textbf{Supported Operations} \\\\\n        \\midrule\n        \\textbf{TYTAN (This Work)} & \n          FP32 (configurable) &\n          SELU, Sigmoid, Swish, GELU, Tanh, Softplus, etc \\\\\n        \\addlinespace\n        \\textbf{NVDLA (baseline)} & \n          INT8, INT16, FP16 &\n          ReLU, PReLU, Sigmoid, Tanh \\\\\n        \\addlinespace\n        \\textbf{NN‑LUT~} & \n          FP32, FP16, INT32 &\n          GELU, Softmax, LayerNorm \\\\\n        \\addlinespace\n        \\textbf{UNO~} & \n          16-bit fixed-point &\n          Division, exp, log, sigmoid, tanh \\\\\n        \\addlinespace\n        \\textbf{ViTALiTy~} & \n          16-bit &\n          Linear attention schemes \\\\\n        \\bottomrule\n      \\end{tabular}"
+  }
+ ],
+ "equations": [
+  {
+   "env": "equation",
+   "latex": "\\frac{x^n}{n!} = 1 + x + \\frac{x^2}{2!} + \\frac{x^3}{3!} + \\frac{x^4}{4!} + \\dots \\label{eq:1}"
+  },
+  {
+   "env": "equation",
+   "latex": "= 1 + x + \\frac{x^2}{2!} + x^3 \\left[ c_3 + c_4(x) \\right] \\label{eq:2}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\textit{T}(x) = \\left[ c_0 + x \\left[ c_1 + x \\left[ c_2 + x \\left[ c_3 + c_4(x)\n        \\right] \\right] \\right] \\right] \\label{eq:3}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{SELU}(x) = \\lambda \n        \\begin{cases}\n            x, & \\text{if } x > 0 \\\\\n            \\alpha(e^x - 1), & \\text{if } x \\leq 0\n        \\end{cases}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{sigmoid}(x) = \\frac{1}{1 + e^{-x}}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{Swish}(x) = x \\cdot \\text{sigmoid}(x) = \\frac{x}{1 + e^{-x}}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{GELU}(x) \\approx x \\cdot \\sigma(1.702x) = \\frac{x}{1 + e^{-1.702x}}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\tanh(x) = \\frac{e^x - e^{-x}}{e^x + e^{-x}} = \\frac{e^{2x} - 1}{e^{2x} + 1}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{Softplus}(x) = \\log(1 + e^x)"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{SELU}(x) =\n        \\begin{cases} \n            \\lambda x, & \\text{if } x > 0 \\\\\n            \\lambda \\cdot \\alpha \\cdot T_{e^x}(x),-1 & \\text{if } x < 0\n        \\end{cases}\n        \\label{eq:4}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{sigmoid}(x) = \\frac{T_{e^x}(x)}{T_{e^x}(x) + 1}\n       \\label{eq:5}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{Swish}(x) = x \\cdot T_{e^x}(x)\n        \\label{eq:6}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{GELU}(x) = x \\cdot T_{e^x}(1.702x)\n        \\label{eq:7}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{tanh}(x) = \\frac{T_{e^x}(2x) - 1}{T_{e^x}(2x) + 1}\n        \\label{eq:8}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{Softplus}(x) = T_{log}(T_{e^x}(x))\n        \\label{eq:9}"
+  }
+ ],
+ "stats": {
+  "n_sections": 14,
+  "n_figures": 5,
+  "n_tables": 4,
+  "n_equations": 15,
+  "n_chars": 36864
+ }
+}

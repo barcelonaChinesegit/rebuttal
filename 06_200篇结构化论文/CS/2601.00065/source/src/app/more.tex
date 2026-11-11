@@ -1,0 +1,172 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section{Details on Differentiable Transplant Operators}
+\label{app:designers}
+
+This section gives the implementation details for the differentiable shared-basis transplant operators used in the cross-operator validation: FOCUS~\citep{dobler2023focus}, CLP~\citep{ostendorff2023efficient}, and WECHSEL~\citep{minixhofer2021wechsel}.
+Each operator computes donor-side weights and synthesizes the base row as a weighted combination of base anchors. This final coefficient-reuse step is the shared structure analyzed in Appendix~\ref{app:nonlinear-shared-anchor}.
+In cases where the operator involves a linear transformation (e.g., affine alignment or projection), we denote the corresponding transformation matrix as $\mathbf{A}$.
+Differentiability lets us optimize the donor embedding $\mathbf{x}_d$ directly via backpropagation, rather than using the discrete support search used by OMP.
+
+\noindent\textbf{Optimization Objective.}
+Consistent with the general framework (Eq.~\ref{eq:designer_obj}), we set the learnable parameters to be the raw donor embedding itself ($\theta = \mathbf{x}_d$). We minimize the following loss:
+\begin{equation}
+\label{eq:diff_obj}
+    \mathcal{L}(\mathbf{x}_d)
+    \;=\;
+    \underbrace{\|f(\mathbf{x}_d) - \boldsymbol{\mu}_{\text{base}}\|_2^2}_{\text{Base Salience}}
+    \;+\;
+    \lambda \underbrace{\|U \mathbf{x}_d\|_2^2}_{\text{Donor Inertness}}
+    \;+\;
+    \rho \underbrace{(\|\mathbf{x}_d\|_2-\nu_d)^2}_{\text{Target-norm regularization}},
+\end{equation}
+where $\rho>0$ controls norm preservation and $\nu_d$ is the median natural donor embedding norm for the corresponding model.
+We solve Eq.~\ref{eq:diff_obj} using a unified gradient-based approach (Adam) for all operators described below.
+\subsection{CLP: Contrastive Linear Projection}
+\label{sec:clp-breaker}
+
+\noindent\textbf{Transplant mechanism.}
+For the barycentric CLP variant~\citep{ostendorff2023efficient}, weights are computed by rectifying cosine similarities and renormalizing.
+Using normalized donor input $\widehat{\mathbf{x}}_d$ and anchors $\widehat{\boldsymbol{\phi}}^{(d)}_j$, the weights are:
+\begin{equation}
+\label{eq:clp_w}
+w_j(\mathbf{x}_d)
+\;=\;
+\frac{\mathrm{ReLU}\!\big(\langle \widehat{\mathbf{x}}_d, \widehat{\boldsymbol{\phi}}^{(d)}_j\rangle\big)}
+{\epsilon + \sum_{k\in\mathcal{T}} \mathrm{ReLU}\!\big(\langle \widehat{\mathbf{x}}_d, \widehat{\boldsymbol{\phi}}^{(d)}_k\rangle\big)}.
+\end{equation}
+The transplanted embedding is synthesized as:
+\begin{equation}
+\label{eq:clp_func}
+f_{\text{CLP}}(\mathbf{x}_d)
+\;=\;
+\sum_{j\in\mathcal{T}} w_j(\mathbf{x}_d)\,\boldsymbol{\phi}^{(b)}_j.
+\end{equation}
+
+\noindent\textbf{Designer optimization.}
+We minimize the differentiable objective (Eq.~\ref{eq:diff_obj}) with $f=f_{\text{CLP}}$.
+Because anchors with negative cosine similarity yield zero gradient through the ReLU function, we employ a \textbf{non-negative reverse projection} for initialization to prevent vanishing gradients.
+We choose a small anchor set $\mathcal{S}$ near $\boldsymbol{\mu}_{\text{base}}$ in the base dictionary and solve
+\[
+\boldsymbol{\alpha}^\star
+=
+\arg\min_{\boldsymbol{\alpha}\ge 0}
+\left\|\sum_{j\in\mathcal{S}}\alpha_j\boldsymbol{\phi}^{(b)}_j-\boldsymbol{\mu}_{\text{base}}\right\|_2^2.
+\]
+We then set $\mathbf{x}_{\text{init}}=\sum_{j\in\mathcal{S}}\alpha^\star_j\boldsymbol{\phi}^{(d)}_j$ so the starting vector positively activates the target anchors.
+
+\subsection{WECHSEL: Alignment and Neighbors}
+\label{sec:wechsel-breaker}
+
+\noindent\textbf{Transplant mechanism.}
+WECHSEL~\citep{minixhofer2021wechsel} combines a global affine alignment with a local $k$-NN mixture over the \emph{base} vocabulary.
+Let $\boldsymbol{\mu}_{\text{src}}, \boldsymbol{\mu}_{\text{tgt}}$ be the centroids of the donor and base embeddings, respectively, and let $\mathbf{A}_{\mathrm{WEC}}$ be the alignment map from donor to base coordinates learned from shared tokens.
+We define the \emph{aligned proxy} of a donor input $\mathbf{x}_d$ as:
+\begin{equation}
+\label{eq:wechsel_align}
+\tilde{\mathbf{x}}(\mathbf{x}_d) \;=\; \mathbf{A}_{\mathrm{WEC}}(\mathbf{x}_d - \boldsymbol{\mu}_{\text{src}}) + \boldsymbol{\mu}_{\text{tgt}}.
+\end{equation}
+Let $\mathcal{N}_k(\tilde{\mathbf{x}})$ be the set of indices of the $k$ base anchors $\{\boldsymbol{\phi}^{(b)}_v\}$ nearest to $\tilde{\mathbf{x}}$ (under the specific distance metric used by WECHSEL), and let $w_v(\tilde{\mathbf{x}})$ be the corresponding softmax weights.
+The transplanted embedding is synthesized as:
+\begin{equation}
+\label{eq:wechsel_func}
+f_{\text{WEC}}(\mathbf{x}_d)
+\;=\;
+\sum_{v\in\mathcal{N}_k(\tilde{\mathbf{x}})} w_v(\tilde{\mathbf{x}}(\mathbf{x}_d))\,\boldsymbol{\phi}^{(b)}_v.
+\end{equation}
+
+\noindent\textbf{Designer optimization.}
+Because the synthesis basis $\mathcal{N}_k(\tilde{\mathbf{x}})$ changes discretely with $\mathbf{x}_d$, the objective is non-convex and piecewise-smooth.
+We initialize in the aligned base space and invert the affine map. First choose a small anchor set $\mathcal{S}_{\mathrm{WEC}}$ near $\boldsymbol{\mu}_{\text{base}}$ and solve
+\[
+\boldsymbol{\alpha}^\star
+=
+\arg\min_{\boldsymbol{\alpha}\in\Delta^{|\mathcal{S}_{\mathrm{WEC}}|}}
+\left\|\sum_{j\in\mathcal{S}_{\mathrm{WEC}}}\alpha_j\boldsymbol{\phi}^{(b)}_j-\boldsymbol{\mu}_{\text{base}}\right\|_2^2.
+\]
+Let $\mathbf{z}_{\text{init}}=\sum_{j\in\mathcal{S}_{\mathrm{WEC}}}\alpha_j^\star\boldsymbol{\phi}^{(b)}_j$. We set
+\[
+\mathbf{x}_{\text{init}}
+=
+\boldsymbol{\mu}_{\text{src}}+\mathbf{A}_{\mathrm{WEC}}^\dagger(\mathbf{z}_{\text{init}}-\boldsymbol{\mu}_{\text{tgt}}),
+\]
+then apply the donor preconditioner $\mathbf{x}_{\text{init}}\leftarrow(I+\lambda U^\top U)^{-1}\mathbf{x}_{\text{init}}$ before Adam refinement.
+We minimize the unified differentiable objective (Eq.~\ref{eq:diff_obj}) by substituting the operator $f_{\text{WEC}}$:
+\begin{equation}
+\label{eq:wechsel_obj}
+\min_{\mathbf{x}_d} \; \mathcal{L}(\mathbf{x}_d)
+\;=\;
+ \big\|f_{\text{WEC}}(\mathbf{x}_d) - \boldsymbol{\mu}_{\text{base}}\big\|_2^2
+\;+\;
+\lambda \|U \mathbf{x}_d\|_2^2
+\;+\;
+\rho(\|\mathbf{x}_d\|_2-\nu_d)^2.
+\end{equation}
+The alignment transformation in Eq.~\ref{eq:wechsel_align} is embedded within $f_{\text{WEC}}$, so refinement optimizes the raw donor vector $\mathbf{x}_d$ directly.
+
+\subsection{FOCUS: Soft Anchor Interpolation}
+\label{sec:focus-breaker}
+
+\noindent\textbf{Transplant mechanism.}
+FOCUS~\citep{dobler2023focus} reconstructs tokens via similarity-weighted interpolation of shared semantic anchors.
+Let $\mathcal{T}$ be the set of shared tokens. We denote the donor and base anchor matrices as $\Phi_d$ and $\Phi_b$, where the $j$-th row corresponds to the shared token $j \in \mathcal{T}$.
+For numerical stability, the mechanism operates on normalized donor anchors $\widehat{\boldsymbol{\phi}}^{(d)}_j = \boldsymbol{\phi}^{(d)}_j / \|\boldsymbol{\phi}^{(d)}_j\|_2$.
+Given a donor input $\mathbf{x}_d$, the operator computes attention weights using a softmax kernel with inverse temperature $\beta_{\mathrm{sm}}$:
+\begin{equation}
+\label{eq:focus_w}
+w_j(\mathbf{x}_d)
+\;=\;
+\frac{\exp\!\big(\beta_{\mathrm{sm}}\,\langle \widehat{\mathbf{x}}_d, \widehat{\boldsymbol{\phi}}^{(d)}_j\rangle\big)}
+{\sum_{k\in\mathcal{T}} \exp\!\big(\beta_{\mathrm{sm}}\,\langle \widehat{\mathbf{x}}_d, \widehat{\boldsymbol{\phi}}^{(d)}_k\rangle\big)},
+\end{equation}
+where $\widehat{\mathbf{x}}_d$ is the normalized input. The transplanted embedding is then synthesized as the weighted sum of base anchors:
+\begin{equation}
+\label{eq:focus_func}
+f_{\text{FOC}}(\mathbf{x}_d)
+\;=\;
+\sum_{j\in\mathcal{T}} w_j(\mathbf{x}_d)\,\boldsymbol{\phi}^{(b)}_j.
+\end{equation}
+
+\noindent\textbf{Designer optimization.}
+Due to the nonlinearity of the attention weights $w_j(\mathbf{x}_d)$, the objective is non-convex.
+We minimize the unified differentiable objective (Eq.~\ref{eq:diff_obj}) by substituting $f=f_{\text{FOC}}$ and employing gradient-based optimization.
+
+To avoid local minima, we employ a \textbf{reverse-projection initialization}. We identify a small subset of base anchors $\mathcal{S}\subset\mathcal{T}$ (e.g., the $k$-nearest neighbors of $\boldsymbol{\mu}_{\text{base}}$ in $\Phi_b$) and solve for the optimal reconstruction coefficients in the base space:
+\begin{equation}
+\label{eq:focus_init_ls}
+\boldsymbol{\alpha}^\star
+\;=\;
+\arg\min_{\boldsymbol{\alpha}\in\Delta^{|\mathcal{S}|}}
+\Big\|\sum_{j\in\mathcal{S}} \alpha_j \boldsymbol{\phi}^{(b)}_j - \boldsymbol{\mu}_{\text{base}}\Big\|_2^2.
+\end{equation}
+We then initialize the donor vector by mapping these coefficients back to the donor space: $\mathbf{x}_{\text{init}} = \sum_{j\in\mathcal{S}} \alpha^\star_j \boldsymbol{\phi}^{(d)}_j$.
+Finally, we apply the donor suppression constraint as a one-shot preconditioner before optimization: $\mathbf{x}_{\text{init}} \leftarrow (I+\lambda U^\top U)^{-1}\mathbf{x}_{\text{init}}$.
+\subsection{SER results on differentiable transplant operators}
+\label{sec:altops-results}
+
+We now evaluate whether the breaker-token designer transfers to the three shared-basis operator variants described above. Table~\ref{tab:app:altops:ser} reports the cross-operator validation rows for CLP, WECHSEL, and FOCUS, including the evaluated $\lambda$ values and SER for both the attacked base and the patched donor on Alpaca, SQuAD v2, and GSM8K, with an additional column showing the average across the three pools.
+
+\input{paper/tables/app_sbgrad_ser_filtered_triples}
+
+\noindent\textbf{Analysis.}
+Table~\ref{tab:app:altops:ser} shows that the same \emph{asymmetric realizability} pattern appears across differentiable shared-basis variants: the attacked base exhibits substantial SER while the patched donor remains near-silent.
+The strongest examples occur with Gem2-2B as the donor, where both CLP and FOCUS yield high base SER across pools with near-zero donor SER.
+WECHSEL achieves zero donor SER on every listed row; its base activation is smaller than CLP/FOCUS but remains substantial on multiple pairs.
+Per-task variation reflects operator geometry: on closely related pairs, FOCUS shows nonzero donor SER on individual pools while keeping high base SER, while CLP exhibits the cleanest activation--stealth gap on these rows.
+The donor-suppression objective transfers across shared-basis variants; the precise activation--stealth trade-off depends on the transplant operator's geometry.

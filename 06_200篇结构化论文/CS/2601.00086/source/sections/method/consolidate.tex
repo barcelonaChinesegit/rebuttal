@@ -1,0 +1,91 @@
+\subsection{Rule Consolidation}
+\label{sec:consolidate}
+
+Rule generation typically produces a large set of overlapping and overly specific rules.
+Consolidation is therefore required to select a compact subset that generalizes well.
+
+%Humans do not retain every exception they encounter; instead, they consolidate experience by pruning, merging, and abstracting rules to maintain a compact, reusable knowledge base. We formalize this intuition using the Minimum Description Length (MDL) principle \citep{rissanen1978mdl,grunwald2007mdl}, which favors rule libraries that balance explanatory power with conciseness by compressing both the rules themselves and the remaining failures they explain. 
+%Effective use of such rules also requires accurate retrieval at inference time: relevant rules must be identified reliably based on the current query and available tools, while ignoring incidental linguistic variation in how rules are phrased. We therefore represent rules in a dual form—a natural-language version for interpretability and a symbolic representation that abstracts away surface-level wording, enabling principled consolidation and efficient, structure-aware retrieval.
+%Ablation studies show that both components of our design are essential: MDL-guided consolidation yields more compact and effective rule libraries than prompting-based consolidation, and symbolic, structure-aware retrieval consistently outperforms retrieval based on semantic similarity over raw natural-language rules.
+
+We consider two approaches: a prompt-based heuristic that merges rules using an LLM, and a data-driven alternative based on the Minimum Description Length (MDL) principle.
+
+
+\subsubsection{Prompt-Based}
+
+A simple consolidation strategy is to prompt an LLM to merge or rewrite candidate rules,
+as in AutoRule~\citep{wang2025autorule}. While this can reduce redundancy at the textual
+level, it is heuristic and does not account for how rules affect agent behavior on actual
+failure cases. This motivates a consolidation objective that explicitly trades off rule
+complexity against empirical effectiveness.
+
+
+\subsubsection{MDL-Guided}
+\label{sec:mdl}
+
+%Unlike neural models with fixed capacity, our adaptation takes the form of a symbolic rule library whose size and content are explicitly optimized. 
+We adopt the \emph{Minimum
+Description Length} (MDL) principle, which favors models that compress observed data while
+remaining concise~\citep{rissanen1978modeling,Grunwald07MDL}. In our setting, MDL provides
+a principled objective for selecting a compact rule set that corrects as many failures as
+possible without unnecessary complexity.
+
+\paragraph{Objective.}
+Let \( H \subseteq \mathcal{R}^{\text{sym}} \) denote a candidate rule library. We minimize
+\[
+\mathrm{MDL}(H) = L(H) + L(D \mid H),
+\]
+where \( L(H) \) penalizes rule complexity and \( L(D \mid H) \) measures how well the rules
+correct observed failures.
+
+\paragraph{Model Cost.}
+We define a length-based prior over rule libraries,
+\[
+P(H) \propto \exp\!\Bigl(-\alpha \sum_{r \in H} \ell(r)\Bigr),
+\]
+where \( \ell(r) \) denotes the \textbf{symbolic token length}
+\footnote{Symbolic token length provides a canonical measure of rule complexity by
+abstracting away incidental natural-language phrasing.}
+of rule \( r \) and \( \alpha > 0 \)
+controls the strength of regularization. This corresponds to a maximum-entropy prior under
+a constraint on expected total rule length~\citep{jaynes1957maxent}. Taking the negative
+log-likelihood yields the model code length
+\[
+L(H) = -\log P(H) = \alpha \sum_{r \in H} \ell(r) + \log Z(\alpha),
+\]
+where \( Z(\alpha) \) is constant for a fixed candidate pool and is therefore omitted during
+optimization.
+
+\paragraph{Data Cost.}
+Given failure cases \( D = \{(x_i, \mathcal{S}_i, \tau_i^-, \tau_i^*)\}_{i=1}^n \), we define
+\( a_i(H) = 1 \) if injecting \( H \) corrects failure \( i \). Let
+\( k_H = \sum_i a_i(H) \). We model correction outcomes with a Bernoulli likelihood and
+use the refined MDL plug-in code
+\[
+L(D \mid H) = -\bigl[k_H \log \hat{p}_H + (n-k_H)\log(1-\hat{p}_H)\bigr],
+\]
+where \( \hat{p}_H = k_H/n \). This term directly rewards rule sets that correct more failures.
+
+\paragraph{Greedy Consolidation.}
+We minimize \( \mathrm{MDL}(H) \) starting from the full rule pool and applying local edits
+that strictly reduce the objective. We consider two operations: \emph{pruning} a rule, and
+\emph{generalizing} a tool-specific rule to a category-level rule. Edits are accepted only
+when the reduction in model cost outweighs any increase in data cost. This greedy procedure
+terminates when no local edit improves the MDL objective.
+
+In practice, consolidation scales linearly with the size of the candidate rule pool, as each iteration evaluates a constant set of local edits per rule. While this greedy procedure does not guarantee a globally optimal solution and may miss beneficial non-local edits, it follows standard practice in rule learning and MDL-based pruning, where local edits are commonly used to remove redundancy and over-specific rules and are empirically effective in improving generalization~\citep{Quinlan87Simplifying,Furnkranz97Pruning,Grunwald07MDL}. Exploring more global or approximate inference strategies for rule consolidation is an interesting direction for future work.
+
+
+\paragraph{MDL Behavior.}
+Although the term \( L(D \mid H) \) could be minimized by correcting no failures,
+this degenerate case is never reached in practice. Consolidation proceeds greedily from a
+high-performing initial rule set; in this regime, removing a rule that reduces the number
+of corrected failures sharply increases \( L(D \mid H) \), outweighing the modest reduction
+in model cost. Such edits are therefore rejected.
+
+\paragraph{Choice of $\alpha$.}
+We select the regularization strength \( \alpha \) by choosing the value that yields the best
+end-to-end accuracy after consolidation on the failure set. Since each rule is evaluated on
+failures beyond its originating instance, this selection already reflects cross-sample
+generalization. Performance is stable across a wide range of \( \alpha \), indicating that
+MDL acts as a robust regularizer.

@@ -1,0 +1,84 @@
+\section{Reliable Consensus Sampling}
+\label{sec:Methodology}
+
+
+\subsection{Safety Properties}
+
+
+We define the safety properties in $\mathcal{MG}$ based on the definitions from reliable distributed systems \citep{cachin2011introduction}.
+
+\noindent
+\textbf{Safety}. Let $f < \lceil \frac{n}{2} \rceil$, at all times, the risk of the model group $q(U) \leq n \cdot \mu(U) + \mathrm{negl}(\lambda)$. $\mu(U)$ is the average risk of generating unsafe response $y \in U$ by $s$ safe models. Safety requires that the risk of unsafe models is reduced to the risk of safe models plus $\mathrm{negl}(\lambda)$. $\lambda$ is a security parameter.
+
+\noindent
+\textbf{Liveness}. The liveness property requires that, for any time $t$, there remains the hope that the property will be satisfied at some later time $t' \ge t$. The mechanism must still retain the possibility of eventually delivering a usable response $y \in \mathcal{Y}$, although it may be risky. Liveness reflects the utility of $\mathcal{MG}$.
+
+
+
+\noindent
+\textbf{Anti-Collusion}.
+$\mathcal{MG}$ must tolerate arbitrary behavior from up to $f$ Byzantine models. Such behavior includes full control over the probability distribution of $y \in \mathcal{Y}$. This control may assign low probability to safe responses. It may also assign high probability to unsafe responses. These behaviors should not significantly affect the safety of the response delivered by $\mathcal{MG}$.
+
+
+\noindent
+\textbf{Half-Resilience}. In real-world deployments, the values of $s$ and $f$ may change over time. We consider a time $t$ at which $m$ out of the $s$ safe models become unsafe. The $\mathcal{MG}$ system then transitions to a new state with $s' = s - m$ and $f' = f + m$. In this state, the condition $f < \lceil \frac{n}{2} \rceil$ no longer holds. We do not require $\mathcal{MG}$ to preserve theoretical safety or liveness. Instead, we require the system to remain practically robust and avoid catastrophic failure. In this paper, we focus on the case of $f=s$.
+
+
+\noindent
+\textbf{Termination}. 
+The algorithm is guaranteed to complete within a finite time $T$.
+
+
+\subsection{Methodology}
+Our proposed RCS scheme is shown in Algorithm \ref{alg:consensus}. During the $R$ rounds of sampling, in each round, if the candidate response $y$ is not accepted, we record $y$ and its acceptance probability $\sigma(y)$ in real time. When all $R$ sampling rounds fail, the protocol enters the trace phase. In this phase, we select the top $\min(s, R)$ values of $\sigma(y)$ and collect the corresponding $y$ into the set $\mathcal{F}$. For each $y \in \mathcal{F}$, we compute $\alpha(y)$ as the sum of the largest $n - s$ values in $\{p_j(y)\}_{j=1}^{n}$, which have already been obtained during the computation of $\sigma(y)$. We then select the $y$ with the largest $\alpha(y)$ in order to mitigate the impact of Byzantine models, while maintaining the liveness guarantee.
+
+
+\begin{algorithm}[t]
+\SetAlgoLined
+\KwIn{
+Number of models $|\mathcal{MG}|=n$; number of safe models $s$; 
+round $R$; distributions $p_1, \ldots, p_n \in \mathrm{Distr}(\mathcal{Y})^{n}$
+}
+\KwOut{Response $y \in \mathcal{Y}$}
+
+$Buffer \gets \varnothing$\\
+\For{$r \leftarrow 1$ \KwTo $R$}{
+    Sample $y \sim \frac{1}{n}\sum_{i=1}^{n} p_i$ \\
+    $\sigma(y) =\frac{\frac{1}{s}\sum_{i=1}^{s} p_{(i)}(y)}
+             {\frac{1}{n}\sum_{i=1}^{n} p_i(y)}$
+        
+    \If{accept $y$ with $\sigma(y)$}{
+        \Return $y$
+    }
+    $Buffer \gets Buffer \cup \{\langle y, \sigma(y) \rangle \}$\\
+}
+
+Sort $Buffer=\{\langle y_i, \sigma(y_i) \rangle \}_{i=1}^{R}$ 
+ such that $\sigma(y_{(1)}) \ge \dots \ge \sigma(y_{(R)})$\\
+Let $\mathcal{F} = \{y_{(1)}, \dots, y_{u}\}, \; u= min(s,R)$ \\
+\For{$i \leftarrow 1$ \KwTo $u$}{
+    $\alpha(y_{(i)}) = \sum_{j=s+1}^{n} p_{(j)}(y_{(i)})$
+}
+\Return $y \gets \arg\max_{y \in \mathcal{F}} \alpha(y)$
+
+\caption{Reliable Consensus Sampling Algorithm}
+\label{alg:consensus}
+\end{algorithm}
+
+
+
+We present a rigorous theoretical proof of the safety property of RCS. The overlap of the output probability distributions of the $s$ safest models, that is, their degree of consensus, is computed by using $Z = \sum_{y}\frac{1}{s}\sum_{i=1}^{s}p_{(i)}(y)$ \citep{kalai2025consensus}. We denote $\Pr[T]=(1-Z)^R$ as the probability of entering the trace phase, and $\rho(U)$ as the probability that the trace phase eventually outputs an unsafe response. Let $R = \mathrm{poly}(\lambda)$. Then the risk of RCS satisfies:
+
+\begin{align*}
+q(U) &= (1-\Pr[\text{T}]) \cdot \frac{1}{Z} \sum_{y \in U}\frac{1}{s}\sum_{i=1}^{s}p_{(i)}(y) \\ &+ \Pr[\text{T}] \cdot \rho(U)\\
+&\leq  ZR \cdot \frac{1}{Z} \sum_{y \in U}\frac{1}{s}\sum_{i=1}^{s}p_{(i)}(y) + \Pr[\text{T}] \cdot \rho(U)\\
+&=  R \cdot \sum_{y \in U}\frac{1}{s}\sum_{i=1}^{s}p_{(i)}(y) + \Pr[\text{T}] \cdot \rho(U)\\
+&\leq R \cdot \frac{1}{s}\sum_{i=1}^{s}p_{(i)}(U) + \Pr[\text{T}] \cdot \rho(U) \\
+&= R \cdot\mu(U) + (1-Z)^R \cdot \rho(U)
+\end{align*}
+
+In $\mathcal{MG}$, at least $s - f$ values of $p_i(y)$ satisfy $p_i(y) > 0$. Therefore, $Z > 0$. It follows that
+$(1-Z)^R = e^{R \ln(1-Z)}$. Since $\ln(1-Z) < 0$, $\rho(U) \in (0,1)$ and $R = \mathrm{poly}(\lambda)$, we have $(1-Z)^R \cdot \rho(U) = \mathrm{negl}(\lambda)$. Therefore, $q(U) \leq R \cdot \mu(U) + \text{negl}(\lambda)$. We set the upper bound as $n = k R + b$, where $k,b > 0$ are constants. Under this choice, for any $R \le n$, $q(U) \le n \cdot \mu(U) + \mathrm{negl}(\lambda)$ holds. In fact, the above proof involves two equality conditions. These conditions are difficult to satisfy simultaneously. The first condition is $R = 1$. This condition can be enforced by design. The second condition requires that for all $y \in U$,
+$p_i(y) \le p_j(y), \; \forall i \in S,\; j \notin S .$
+This condition is extremely difficult to satisfy in practice. Therefore, in general, we have $q(U) < n \cdot \mu(U) + \mathrm{negl}(\lambda)$. As $R \to +\infty$ (without considering termination), we have $\Pr[T] \to 0$, indicating that $\mathcal{MG}$ delivers a response with probability approaching unity. In this asymptotic regime, the condition $q(U) \le n \cdot \mu(U)$ remains valid, thereby ensuring the safety property.
+

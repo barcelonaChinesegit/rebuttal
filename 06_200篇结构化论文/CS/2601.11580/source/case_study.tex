@@ -1,0 +1,68 @@
+\section{Case Study: $n$-gram Performance on InstructCoder}
+\label{subsect:ngram-bleu-score}
+
+
+The $n$-gram SD is especially attractive for speculative decoding because it is training-free.
+We observe that $n$-gram achieves particularly strong speedups on the code-editing workload, such as InstructCoder, and we therefore conduct a focused case study to understand the underlying reasons.
+
+We hypothesize that its advantage stems from the \emph{local repetition} inherent in code-editing tasks: when upcoming tokens have already appeared in the prompt, $n$-gram lookup is more likely to propose correct continuations that are subsequently accepted by the target model during verification.
+To test this hypothesis, we quantify prompt–output overlap using BLEU-$n$~\cite{papineni2002bleu}.
+BLEU-$n$ measures the fraction of overlapping $n$-grams, with higher values indicating stronger local reuse or copying.
+For each request, we compute the BLEU score between the prompt and the output generated without speculative decoding, and then group them into 5 intervals: requests with BLEU score of 0-0.2, 0.2-0.4, 0.4-0.6, 0.6-0.8 and 0.8-1.0.
+Within each interval, we compare the speedups achieved by $n$-gram and by EAGLE/EAGLE-3.
+We report the results using BLEU-4 score by default~\cite{papineni2002bleu}. In our experiments, BLEU-4 gives the clearest speedup heatmap and shows a clear cutoff where, above a certain overlap range, $n$-gram beats EAGLE/EAGLE-3 for every batch size. We have also repeated the analysis with BLEU-1 through BLEU-10 scores, and observe the same overall patterns.
+
+\begin{quoting}[leftmargin=1.5em, rightmargin=1.5em, vskip=0pt]
+\textbf{Overlap Drives $n$-gram Speedups.}
+\emph{$n$-gram works best on code editing because the output often reuses short spans that already appear in the prompt. As overlap increases, $n$-gram speedup rises and eventually surpasses EAGLE/EAGLE-3.}
+\end{quoting}
+We observe that higher BLEU-$n$ scores strongly correlate with greater $n$-gram speedup (\autoref{fig:ngram_bleu_heatmap}). 
+For requests with lower BLEU-$n$ scores (little overlap), $n$-gram underperforms due to inaccurate proposals. Once the BLEU-$n$ score exceeds a certain threshold, (e.g. larger than $0.6$ for Llama3.1-8B), $n$-gram consistently outperforms EAGLE and EAGLE-3 across all batch sizes. With a proposal length of 3, it achieves up to $53\%$ higher speedup than EAGLE and EAGLE-3. When we further increase the proposal length of $n$-gram to 5, the boundary where $n$-gram performs better is clearer, and this brings an even higher performance of up to $100\%$ higher speedup than EAGLE/EAGLE-3.
+This is likely because a larger proposal length allows $n$-gram to reuse longer repeated spans in the prompt or recent context when the overlap is high. 
+Overall, these results confirm that $n$-gram speculation benefits directly from prompt-level repetition in code-editing workloads. 
+
+Finally, our BLEU analysis measures overlap only between the complete prompt and the complete generated output. In practice, $n$-gram can match and reuse tokens from the full in-context history, which includes both the prompt and the tokens generated so far. We leave an analysis that measures overlap with respect to this evolving context for future work.
+
+% A consistent trend emerges for non-reasoning models (i.e. Llama3.1-8B, Llama3-70B) and non-reasoning datasets (i.e. InstructCoder, ShareGPT and CNNDailyMail): as BLEU increases, the speedup of $n$-gram speculation rises and eventually surpasses that of the Eagle/Eagle-3 methods. Figure~X (Llama3.1-8B and Llama3-70B on \texttt{InstructCoder}) illustrates this relationship, confirming that greater prompt--output overlap directly results in better $n$-gram efficiency. \jerry{Add Bar chart here!} 
+
+% However, this does not hold true for reasoning models (i.e. Qwen3-8B) and reasoning datasets (i.e. AIME22-24, GPQA-MAIN). We found that the similarity between the prompt and generated outputs are often too low for 
+
+% \paragraph{Cutoffs where $n$-gram beats Eagle/Eagle-3.}
+% To quantify when $n$-gram speculation becomes more effective than Eagle/Eagle-3 methods, we define a \emph{BLEU score cutoff} for each (model, dataset) pair. The cutoff is the smallest BLEU score bucket where the speedup of $n$-gram exceeds that of the compared Eagle or Eagle-3 method and remains higher in the subsequent bucket. We sweep and compute the BLEU-1 to BLEU-10 scores for every request across all configurations and identify the most appropriate cutoffs among them.
+% \autoref{tab:ngram-cutoffs} summarizes the observed cutoffs across all configurations.
+
+% \begin{table}[t]
+% \centering
+% \caption{BLEU score cutoffs where $n$-gram exceeds other speculative decoding (SD) methods.
+% “Cmp.” denotes the SD method being compared. “Eg/Eg-3” refers to Eagle/Eagle-3.
+% “Weak” indicates that fewer than 10 requests fall into BLEU buckets higher than the cutoff.
+% "NF" means no reliable cutoff found because average speedups do not cross. 
+% "NF-D" means majority of the requests have low BLEU score, "NF-C" means no reliable cutoff found despite that requests have a range of BLEU scores.
+% \jerry{Double check the results for Qwen3-8B.}}
+% \label{tab:ngram-cutoffs}
+% \resizebox{\linewidth}{!}{
+% \begin{tabular}{l l c c}
+% \toprule
+% \textbf{Model} & \textbf{Dataset} & \textbf{Cmp.} & \textbf{Cutoff} \\
+% \midrule
+% Llama3.1-8B & InstructCoder & Eg/Eg-3   & BLEU-4 $> 0.5$ \\
+%             & ShareGPT      & Eg/Eg-3   & BLEU-4 $> 0.6$ (weak) \\
+%             & CNNDailyMail  & Eg/Eg-3   & BLEU-4 $> 0.4$ (weak) \\
+%             & GSM8K         & Eg/Eg-3 & NF-D(?) \\
+% \midrule
+% Llama3-70B  & InstructCoder & Eg   & BLEU-4 $> 0.6$ \\
+%             & ShareGPT      & Eg   & BLEU-3 $> 0.7$ (weak) \\
+%             & CNNDailyMail  & Eg   & NF-C \\
+%             & GSM8K         & Eg   & NF-C \\
+% \midrule
+% Qwen3-8B    & InstructCoder & Eg-3   &  BLEU-3 $> 0.35$ (weak)\\
+%             & ShareGPT      & Eg-3   &  NF-C\\
+%             & CNNDailyMail  & Eg-3   &  NF-C\\
+%             & GSM8K         & Eg-3   &  NF-D\\
+%             & AIME21-24     & Eg-3   &  NF-D\\
+%             & GPQA-Main     & Eg-3   &  NF-D\\
+% \bottomrule
+% \end{tabular}
+% }
+% \end{table}
+

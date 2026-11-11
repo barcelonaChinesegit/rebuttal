@@ -1,0 +1,154 @@
+\section{Algorithm Overview}
+\label{app:algorithm} 
+
+\begin{algorithm}[!htbp]
+\caption{\textsc{NeuroSym-BO}: Dynamic Instruction Tuning for PDE Discovery}
+\label{alg:neurosymbo}
+\begin{algorithmic}[1]
+\Require Dataset $\mathcal{D} = \{(x_i, t_i, u_i)\}_{i=1}^N$, Strategy bank $\mathcal{B} = \{s_1, \ldots, s_K\}$, Max iterations $T$, Top-$N$ history size
+\Ensure Best discovered equation $\hat{u}^*$
+
+\State Initialize GP surrogate $\mathcal{GP}$, history buffer $\mathcal{H} \leftarrow \emptyset$, observation set $\mathcal{O} \leftarrow \emptyset$
+\State $y^* \leftarrow -\infty$ \Comment{Best fitness so far}
+
+\For{$t = 1, \ldots, T$}
+    \State \textcolor{blue}{\textit{// Strategy Selection via Bayesian Optimization}}
+    \If{$t \leq K_{\text{init}}$} \Comment{Initial exploration phase}
+        \State $k_t \leftarrow$ \textsc{RandomSelect}$(\mathcal{B})$
+    \Else
+        \State Fit $\mathcal{GP}$ to observation set $\mathcal{O}$
+        \State $k_t \leftarrow \arg\max_{k} \text{EI}(k; \mathcal{GP}, y^*)$ \Comment{Eq.~2}
+    \EndIf
+    
+    \State \textcolor{blue}{\textit{// Dynamic Prompt Construction}}
+    \State $\mathcal{H}_{\text{top}} \leftarrow$ \textsc{TopN}$(\mathcal{H}, N)$ \Comment{Best $N$ equations with scores}
+    \State $P_t \leftarrow I_{\text{task}} \oplus \mathcal{H}_{\text{top}} \oplus I_{\text{strategy}}^{(k_t)}$ \Comment{Eq.~1}
+    
+    \State \textcolor{blue}{\textit{// LLM Generation \& Numerical Evaluation}}
+    \State $\{\hat{u}_1, \ldots, \hat{u}_M\} \leftarrow \textsc{LLM}(P_t)$ \Comment{Generate $M$ candidates}
+    \For{each candidate $\hat{u}_j$}
+        \State $\hat{u}_j \leftarrow$ \textsc{STRidge}$(\hat{u}_j, \mathcal{D})$ \Comment{Fit coefficients}
+        \State $S_j \leftarrow \frac{1 - \lambda \cdot \text{complexity}(\hat{u}_j)}{1 + \text{NRMSE}(\hat{u}_j, \mathcal{D})}$ \Comment{Eq.~3}
+    \EndFor
+    
+    \State \textcolor{blue}{\textit{// Feedback \& Model Update}}
+    \State $S_t \leftarrow \max_j S_j$; \quad $\hat{u}_t \leftarrow \arg\max_j S_j$
+    \State $\mathcal{H} \leftarrow \mathcal{H} \cup \{(\hat{u}_t, S_t)\}$
+    \State $\mathcal{O} \leftarrow \mathcal{O} \cup \{(k_t, S_t)\}$ \Comment{Update BO observations}
+    \If{$S_t > y^*$}
+        \State $y^* \leftarrow S_t$; \quad $\hat{u}^* \leftarrow \hat{u}_t$
+    \EndIf
+\EndFor
+
+\State \Return $\hat{u}^*$
+\end{algorithmic}
+\end{algorithm}
+
+Algorithm~\ref{alg:neurosymbo} summarizes the \textsc{NeuroSym-BO} procedure. 
+The algorithm operates in three phases per iteration. First, the \textbf{strategy selection} phase (lines 4--10) uses Bayesian Optimization to choose the next instruction strategy $k_t$ from the bank $\mathcal{B}$. During an initial exploration phase ($t \leq K_{\text{init}}$, set to 10 in our experiments), strategies are sampled randomly to build an initial surrogate model. Subsequently, the GP surrogate is fitted to accumulated (strategy, fitness) observations, and the strategy maximizing Expected Improvement is selected.
+
+Second, the \textbf{prompt construction} phase (lines 12--13) assembles the dynamic prompt $P_t$ by concatenating the static task description $I_{\text{task}}$, the top-$N$ best-performing equations from history $\mathcal{H}_{\text{top}}$, and the BO-selected instruction $I_{\text{strategy}}^{(k_t)}$. This provides the LLM with both problem context and implicit feedback about which structural patterns have succeeded.
+
+Third, the \textbf{generation and evaluation} phase (lines 15--20) queries the LLM to produce $M$ candidate equations (we use $M=5$), fits their coefficients via sparse regression, and computes fitness scores balancing accuracy against parsimony. The best candidate updates both the history buffer (for in-context learning) and the BO observation set (for surrogate refinement). This closed-loop design enables the system to progressively refine both \textit{what} equations to propose and \textit{how} to instruct the LLM.
+
+\textbf{Time Complexity.} Let $T$ be the total number of iterations, $K$ the strategy bank size, $M$ the number of LLM-generated candidates per iteration, $N$ the data points in $\mathcal{D}$, and $d$ the number of candidate terms in the operator library.
+
+\begin{itemize}
+    \item \textit{Strategy Selection (lines 4--10):} Fitting the GP surrogate to $t$ observations requires $\mathcal{O}(t^3)$ for exact inference due to kernel matrix inversion. Computing EI across $K$ strategies costs $\mathcal{O}(K)$. Per iteration at step $t$: $\mathcal{O}(t^3 + K)$.
+    
+    \item \textit{Prompt Construction (lines 12--13):} Selecting top-$N$ equations from history $\mathcal{H}$ costs $\mathcal{O}(|\mathcal{H}|)$ with a heap, or $\mathcal{O}(1)$ if maintained incrementally. String concatenation is $\mathcal{O}(L_P)$ where $L_P$ is the prompt length.
+    
+    \item \textit{LLM Generation (line 15):} Each forward pass through the LLM costs $\mathcal{O}(L_P \cdot d_{\text{model}})$ for context encoding, where $d_{\text{model}}$ is the model dimension. Generating $M$ candidates: $\mathcal{O}(M \cdot L_P \cdot d_{\text{model}})$.
+    
+    \item \textit{Coefficient Fitting (line 17):} STRidge sparse regression for each candidate costs $\mathcal{O}(N \cdot d^2)$ per iteration of the thresholding loop. With $M$ candidates: $\mathcal{O}(M \cdot N \cdot d^2)$.
+    
+    \item \textit{Fitness Evaluation (line 18):} Computing NRMSE requires $\mathcal{O}(N)$ operations; complexity counting is $\mathcal{O}(d)$. Total: $\mathcal{O}(M \cdot N)$.
+\end{itemize}
+
+The total time complexity over $T$ iterations is $\mathcal{O}\left(\sum_{t=1}^{T} t^3 + T \cdot \left(K + M \cdot (C_{\text{LLM}} + N \cdot d^2)\right)\right) = \mathcal{O}(T^4 + T \cdot M \cdot C_{\text{LLM}})$ where $C_{\text{LLM}}$ denotes the LLM inference cost. In practice, the GP cubic term can be mitigated using sparse GP approximations~\cite{quinonero2005unifying}, reducing it to $\mathcal{O}(T \cdot m^2)$ with $m \ll T$ inducing points. The dominant cost is typically LLM inference.
+
+\textbf{Space Complexity.} The algorithm maintains: (1) the history buffer $\mathcal{H}$ storing $\mathcal{O}(T)$ equations, (2) the GP observation set $\mathcal{O}$ of size $\mathcal{O}(T)$, and (3) the kernel matrix of size $\mathcal{O}(T^2)$. Total space complexity is $\mathcal{O}(T^2 + T \cdot L_{\text{eq}})$, where $L_{\text{eq}}$ is the average equation length.
+
+\textbf{Practical Considerations.} In our experiments with $T=300$, $K=100$, $M=5$, and Llama-3.2-3B, each iteration completes in approximately 15--30 seconds on a single A100 GPU, with LLM inference accounting for $\sim$80\% of the runtime. The GP overhead remains negligible ($<$1\%) due to the moderate number of iterations.
+
+\section{Dataset and Equation Details}
+\label{app:data}
+
+To ensure rigorous and reproducible evaluation, we utilize a combination of established benchmark datasets and self-generated simulations that span a diverse range of physical phenomena. For the Burgers, Fisher, Chafee-Infante, and PDE\_divide equations, we employ standard datasets from the \textbf{LLM4ED} benchmark suite~\cite{du2024llm4ed}, which has been widely adopted for evaluating symbolic equation discovery methods. Additionally, we generate a synthetic dataset for the Allen-Cahn equation to test our framework's capability on phase-separation dynamics characterized by sharp interfaces and bistable nonlinearities. Together, these five PDEs represent a comprehensive testbed covering fluid dynamics, population biology, pattern formation, and materials science.
+
+
+
+\subsection{Benchmarks from LLM4ED}
+
+The following equations are adopted from the LLM4ED repository~\cite{du2024llm4ed}. We provide their canonical forms, physical interpretations, and simulation configurations below.
+
+\paragraph{Burgers' Equation.} 
+Burgers' equation is a fundamental partial differential equation in fluid mechanics that serves as a simplified model for shock wave formation, turbulence, and nonlinear acoustics~\cite{burgers1948mathematical,whitham2011linear}. First introduced by Bateman~\cite{bateman1915some} and later extensively studied by Burgers~\cite{burgers1948mathematical}, it combines nonlinear convection with diffusive dissipation, making it an ideal testbed for symbolic discovery methods. The viscous form is given by:
+\begin{equation}
+    u_t + u u_x = 0.1 u_{xx}
+\end{equation}
+where the left-hand side represents nonlinear advection (the term $u u_x$ causes wave steepening) and the right-hand side represents viscous diffusion with coefficient $\nu = 0.1$. The interplay between these terms leads to the formation of shock-like structures that eventually smooth out due to diffusion. The celebrated Cole-Hopf transformation~\cite{cole1951quasi,hopf1950partial} provides an analytical framework for understanding these solutions.
+
+\textit{Setup:} The simulation is performed on a spatial domain $x \in [-8, 8]$ over a time interval $t \in [0, 10]$. The data is discretized on a uniform grid of size $256 \times 201$ (spatial $\times$ temporal points). The initial condition consists of a smooth profile that evolves into a traveling shock wave, providing rich dynamics for equation discovery.
+
+\paragraph{Fisher's Equation (Fisher-KPP).} 
+Fisher's equation, also known as the Fisher-Kolmogorov-Petrovsky-Piskunov (Fisher-KPP) equation, is a classical reaction-diffusion model originally proposed by Fisher~\cite{fisher1937wave} and independently by Kolmogorov, Petrovskii, and Piskunov~\cite{kolmogorov1937study} to describe the spatial spread of advantageous genes in a population. It has since found applications in ecology, epidemiology, and combustion theory~\cite{murray1989mathematical}. The equation takes the form:
+\begin{equation}
+    u_t = u_{xx} + u(1-u)
+\end{equation}
+where $u_{xx}$ represents spatial diffusion and $u(1-u)$ is a logistic growth term that drives the population toward carrying capacity. This equation admits traveling wave solutions~\cite{ablowitz1979explicit} that propagate at a minimum speed determined by the linearization at the unstable equilibrium $u=0$.
+
+\textit{Setup:} The simulation domain is $x \in [-1, 1]$ with time interval $t \in [0, 1]$. The data is discretized on a $200 \times 100$ grid. The initial condition is chosen to exhibit front propagation behavior, testing the method's ability to recover both diffusive and reactive terms simultaneously.
+
+\paragraph{Chafee-Infante Equation.} 
+The Chafee-Infante equation is a reaction-diffusion PDE that arises in the study of phase transitions and pattern formation~\cite{chafee1974bifurcation}. It is closely related to the Allen-Cahn equation and exhibits bistable dynamics with two stable equilibria at $u = \pm 1$. The geometric theory of such semilinear parabolic equations has been extensively developed~\cite{henry1981geometric}. The equation is given by:
+\begin{equation}
+    u_t - u_{xx} = u - u^3
+\end{equation}
+The cubic nonlinearity $u - u^3$ creates a double-well potential structure, leading to the formation of domain walls (interfaces) separating regions of different phases. This equation has been extensively studied in the context of chaotic attractors and infinite-dimensional dynamical systems.
+
+\textit{Setup:} The computational domain is $x \in [0, 3]$ with time interval $t \in [0, 0.5]$. The data is discretized on a $301 \times 200$ grid. The relatively short time interval captures the initial transient dynamics and interface formation, providing a challenging test case for symbolic recovery of the cubic reaction term.
+
+\paragraph{PDE\_divide (Synthetic Division Test).} 
+This synthetic benchmark is specifically designed to evaluate the capability of symbolic discovery methods to recover rational terms involving division operators (e.g., $1/x$ or $u/x$). Such terms pose significant challenges for traditional genetic programming approaches, which often struggle with protected division operations and singularity handling. The equation is:
+\begin{equation}
+    u_t = 0.25 u_{xx} - \frac{u_x}{x}
+\end{equation}
+This PDE can be interpreted as a diffusion equation with a spatially-varying advection term that becomes singular at $x=0$. The coefficient $-1/x$ in front of $u_x$ represents a radially-dependent drift in cylindrical or spherical coordinates.
+
+\textit{Setup:} The domain is $x \in [1, 2]$ with time interval $t \in [0, 1]$. Importantly, the spatial domain is chosen to exclude $x=0$, thereby avoiding the singularity while still requiring the discovery method to identify the $1/x$ dependence. The data is discretized on a $100 \times 251$ grid. This benchmark specifically tests whether \textsc{NeuroSym-BO} can discover non-polynomial functional forms that are difficult for standard symbolic regression methods.
+
+\subsection{Allen-Cahn Equation}
+
+To further evaluate our framework on physically meaningful problems beyond the LLM4ED suite, we generate a synthetic dataset for the Allen-Cahn equation. This equation is a fundamental model in materials science and mathematical physics, describing phase separation phenomena in binary alloys, order-disorder transitions, and interface motion~\cite{allen1979microscopic}. The governing equation is:
+\begin{equation}
+    u_t = 0.1 u_{xx} + 5.0 (u - u^3)
+\end{equation}
+Here, the diffusion coefficient $D = 0.1$ controls the interface width, while the reaction rate $R = 5.0$ determines the strength of the bistable nonlinearity. The term $(u - u^3)$ derives from the derivative of a double-well free energy potential $F(u) = \frac{1}{4}(1-u^2)^2$, originally introduced by Cahn and Hilliard~\cite{cahn1958free} in their seminal work on phase separation, with stable equilibria at $u = \pm 1$ representing two distinct phases.
+
+\paragraph{Physical Significance.}
+The Allen-Cahn equation exhibits rich dynamics including phase coarsening (where smaller domains shrink and larger ones grow), interface annihilation, and curvature-driven motion~\cite{bates1997spectral}. The sharp interfaces between phases make this equation particularly challenging for numerical methods~\cite{du2019maximum} and, consequently, for data-driven discovery approaches that must accurately capture both the smooth bulk dynamics and the steep gradients at interfaces.
+
+\paragraph{Numerical Generation.}
+We generate ground truth data using high-accuracy numerical methods to ensure reliable training and evaluation. Specifically, we employ a pseudo-spectral method~\cite{trefethen2000spectral,boyd2001chebyshev} for spatial discretization, which provides exponential convergence for smooth solutions and accurately resolves the steep gradients at phase boundaries. Time integration is performed using an adaptive Runge-Kutta scheme (RK45)~\cite{dormand1980family} that automatically adjusts step sizes to maintain accuracy.
+
+\begin{itemize}
+    \item \textbf{Parameters:} The diffusion coefficient is set to $D=0.1$ and the reaction rate to $R=5.0$. These values are chosen to produce well-separated timescales between diffusion and reaction, resulting in sharp but resolvable interfaces.
+    
+    \item \textbf{Domain \& Grid:} The simulation is performed on a one-dimensional spatial domain $x \in [-10, 10]$ (total length $L=20$) over a time interval $t \in [0, 10]$. We discretize the system on a uniform grid of size $N_x \times N_t = 256 \times 201$, providing sufficient resolution to capture interface dynamics while maintaining computational efficiency.
+    
+    \item \textbf{Initial Condition:} To generate complex, physically realistic dynamics with multiple interacting interfaces, we initialize the system with a composite trigonometric function perturbed by random noise:
+    \begin{equation}
+        u(x,0) = \sin\left(\frac{2\pi x}{L}\right) + 0.5\cos\left(\frac{4\pi x}{L}\right) + \epsilon
+    \end{equation}
+    where $L=20$ is the domain length and $\epsilon \sim \mathcal{U}(0, 0.2)$ represents uniformly distributed initialization noise. This initial condition creates multiple zero-crossings that evolve into sharp interfaces, testing the discovery method's ability to handle multi-scale dynamics.
+    
+    \item \textbf{Boundary Conditions:} We impose periodic boundary conditions, which are naturally handled by the spectral method and ensure that no artificial boundary effects contaminate the interior dynamics.
+    
+    \item \textbf{Solver Details:} Spatial derivatives ($u_{xx}$) are computed in the frequency domain using the Fast Fourier Transform (FFT), which provides spectral accuracy for periodic problems~\cite{trefethen2000spectral}. The semi-discrete system of ODEs is integrated using \texttt{scipy.integrate.solve\_ivp}\footnote{https://docs.scipy.org/doc/scipy/reference/integrate.html}~\cite{virtanen2020scipy} with the RK45 method. Both relative and absolute tolerances are set to $10^{-8}$ to ensure high-fidelity data generation. The solver adaptively refines the time step during periods of rapid interface motion.
+    
+    \item \textbf{Data Extraction:} After simulation, we uniformly sample the solution at $201$ time points and store the full spatial field at each time, resulting in a data tensor of shape $(256, 201)$. We further split this data into training (80\%) and testing (20\%) sets along the temporal axis for evaluation.
+\end{itemize}
+
+\paragraph{Rationale for Inclusion.}
+The Allen-Cahn equation complements the LLM4ED benchmarks by introducing several additional challenges: (1) stronger nonlinearity with the coefficient $R=5.0$ compared to the Chafee-Infante equation, (2) longer time evolution allowing observation of phase coarsening dynamics, and (3) a different balance between diffusion and reaction terms. Successfully discovering this equation demonstrates that \textsc{NeuroSym-BO} generalizes beyond the specific parameter regimes present in existing benchmarks.

@@ -1,0 +1,217 @@
+%!TEX root=./main.tex
+
+\section{The State Estimation Problem}
+\label{sec:problem}
+\subsection{Programming Model and Partial Order Semantics}
+
+We consider a multithreaded programming model, in which a set of \emph{threads} concurrently read and write \emph{shared locations}.
+Each thread performs sequential computation, including reads and writes to shared locations and deterministic sequential control flow.
+We refrain from providing a concrete syntax.
+Instead, following \cite{trust}, we define a partial-order semantics using \emph{execution graphs}.
+Intuitively, an execution graph consists of a collection of reads and writes by the threads to the shared locations,
+ordered by program order for each thread, and
+detailing for each read to a location, the unique write from which the read gets its value. 
+Such a graph precisely captures one equivalence class under Mazurkiewicz trace equivalence of a program. 
+
+Let us define execution graphs formally.
+We assume a set of locations $\Loc$ and a set of values $\Val$.
+An event, \( e \in  \Event\), is either the initialization event $\init$, or a thread event
+\(\tuple{t, i, \ell}\) where $t \in \Tid$ is a thread identifier unique for each thread, 
+$i \in \Idx \defeq \nats$ is an index inside each thread, and
+$\ell \in \Lab$ is a label that is either a \emph{write label}
+$\opw(l, v)$ or a \emph{read label} $\opr(l, v)$ for a location $l\in\Loc$ and value $v\in \Val$.
+%
+When applicable, the functions $\tid$, $\idx$, $\loc$, $\val$, and $\op$, return the thread identifier, index,
+location, value of an event, and type of an event's label respectively. 
+An event is called a read event if its label is a read label and an event is called
+a write event if it is either $\init$ or it has a write label.
+%We use $G.\opr \triangleq \{e \mid e \in G.E \wedge \op(e.\ell) = \opr\}$ to denote the set of all read events of $E$ and $G.\opw \triangleq \{e \mid e = \init \vee (e \in G.E \wedge \op(e.\ell) = \opw)\}$ to denotes the set of all write events. Also,  we use subscripts to further restrict those sets like $G.\opw_l \triangleq \{e \mid e = \init \vee (e \in G.\opw \wedge \loc(e) = l)\}$.
+
+
+An  \emph{execution graph} $G = (E, \rf{}, \mo{})$ consists of: 
+%\UM{Why do we need $\inord$?} \MO{Because of \trust algorithm and the semantics we defined based on it in section 4.} \BA{I think Umang is right. Introducing $\inord$ here makes everything a tree, because two different reads scheduled in two different ways give rise to two different insertion orders. It needs to be removed for $\mathcal{T}(P)$. I have done that and I will reintroduce it during TruST.} \MO{I see. Then we can simply say two graphs are equal up to the the $\inord$ component. This definition also work in Trust semantics. Otherwise we should define two version of execution graphs in the text.}
+\begin{enumerate}
+    \item  a set $E$ of events, containing $\init$, such that no two events have both the same thread identifier and the same index; We use $G.\opr$ to denote the set
+    of all read events in $E$ and $G.\opw$ to denote the set of all write events in $E$.
+    Also,  we use subscripts to further restrict those sets like $G.\opw_l$ is the set of all write events in $E$ whose location is $l$.
+    %\item a total order $\inord$ on $E$, called \emph{insertion order}, represents the order in which events were incrementally added to the graph.
+    %\item a strict partial order $\po{}\subseteq E\times E$, called \emph{program order}, that totally orders events from the same thread.  
+    %We use $\po{}^{\max}(t)$ to denote the maximal event of thread $t$ w.r.t.\ $\po{}$.
+    \item a partial order $\rf{} \subseteq G.\opw \times G.\opr$, called the \emph{reads-from} relation, that relates each read event to the 
+    (unique) write event to the same location from which the read gets its value. Formally,
+    \begin{enumerate}
+        \item $\forall e \in G.\opr : \exists e' \in G.\opw_{\loc(e)} : (e', e) \in \rf{} \wedge \val(e) = \val(e').$ 
+        %(Every read event $e$ is related to at least one write event $e'$ at the same location). \BA{Added the description in English.}
+        \item $\forall (e_1, e_2) \in \rf{} : \op(e_2.\ell) = \opr \wedge (e_1 = \init \vee (\op(e_1.\ell) = \opw \wedge \loc(e_1) = \loc(e_2))$. 
+        %(Every related pair $(e_1,e_2)$ satisfies that $e_2$ is a read event and $e_1$ is either $\init$ or a write event to the same location as $e_2$). \BA{Added the description in English.}
+        \item $(e_1,e_2)\in \rf{} \wedge (e_3,e_2)\in \rf{} \implies e_1=e_3$. 
+        %(Every read event is related to at most write event). \BA{Added the description in English.}
+    \end{enumerate}
+    \item a strict partial order $\mo{} \subseteq \bigcup_{l \in \Loc}  G.\opw_{l} \times G.\opw_{l}$, called the \emph{modification order}, which is a total order on 
+    the write events on the same location. %We use $\mo{}^{\max}(l)$ to denote the latest write on the memory location $l$. 
+    Formally, 
+    \begin{enumerate}
+        \item $\forall (e_1, e_2) \in \mo{} : e_1 \neq e_2 \wedge e_1,e_2 \in G.\opw \wedge (\loc(e_1) = \loc(e_2) \vee e_1 = \init).$ 
+        \item $\forall l \in \Loc : \forall e_1,e_2 \in G.\opw_{l} : e_1 \neq e_2 \implies (e_1,e_2)  \in \mo{} \text{ or } (e_2,e_1) \in \mo{} \text{, but not both.}$
+    \end{enumerate}
+\end{enumerate}
+%
+We define a \emph{program order} $\po{}$ relation as follows:
+$$
+\po{} \triangleq \{(\init, e) \mid e \in E \setminus \init\} \cup \{(e_1, e_2) \mid e_1,e_2 \in E \wedge \tid(e_1) = \tid(e_2) \wedge \idx(e_1) < \idx(e_2)\}
+$$
+An execution graph is \emph{sequentially consistent} if $\seqcon{} \triangleq (\po{} \cup \rf{} \cup \mo{} \cup \fr{})^+$ is irreflexive, where $\fr{} \triangleq (\rf{}^{-1} ; \mo{}).$
+The semantics of $P$ is the set of its sequentially consistent execution graphs.
+%
+%
+We write $G|_{F}$ for the restriction of the graph $G$ to some set $F$ of its nodes and $G\setminus F$ for $G|_{E\setminus F}$.
+%We write $G' = G\setminus{F}$ for the graph $G'$ obtained by removing a set of events $F$. 
+%Formally,
+%\begin{enumerate}
+%    \item $G'\!.E = G.E \setminus{F}$.
+%    \item $G'\!.R = G.R \setminus{\{(e_1,e_2) \mid (e_1,e_2) \in G.R \wedge (e_1 \in F \vee e_2 \in F)\}}$ for $R \in \{\rf{}, \mo{}\}$.
+%\end{enumerate}
+%We also use $G' = G|_{F}$ to denote the restriction of an execution graph $G$ to a set of events $F$. Formally, $G|_{F} = G \setminus{F'}$ where $F = G.E \setminus{F'}$.
+
+
+\subsection{A Transition System on Execution Graphs}
+
+%\UM{This section, as such, is not a `real' preliminary. It is in fact only required to phrase the problem in a manner that is amenable to Pitt's algorithm. In fact, our other solution (namely TESTOR) doesnt rely on this way of modeling the problem. Given this, %I think this can move to Section 3. }
+%\RM{how will you define $C(P)$ without the transition system?}
+%\UM{True, it may become more verbose and also repetitive otherwise. How about we define the transition system, but refrain from pointing out that it is a DAG right away? In Sec 3 we can point out that it is a DAG}
+
+The operational semantics of the programming language defines a transition system on execution graphs.
+Instead of a detailed syntax, we assume that there is a function $\nextop_P(G)$ which takes
+an execution graph and returns a 
+set of possible next events from the program $P$: these are the next operations
+of the unblocked threads, after the events in $G$ have transpired.
+If $\nextop_P(G)$ is empty, then there are no remaining operations and the program has terminated. 
+
+
+We define a labeled transition system ($\lts$) $\mathcal{T}(P)$ on the set of sequentially consistent execution graphs.  
+First, for any execution graph $G$ and location $l$, we define $G.\momax{l}$ as the unique maximal event $e \in G.\opw_l$ in the $G.\mo{l}$ ordering.
+Intuitively, $G.\momax{l}$ is the last write to the location $l$ in $G$. 
+The labeled transition system $\mathcal{T}(P) = (S, S_0, \xrightarrow{})$ is defined as:
+\begin{enumerate}
+    \item $S$ is the set of sequentially consistent execution graphs.
+    \item $S_0$ is the execution graph $G_{\init} = (\set{\init}, \emptyset, \emptyset)$ consisting of the singleton node $\init$.
+    \item $\xrightarrow{} = \bigcup_{t \in \Tid}\{\}\xrightarrow{t}\}$, where $\xrightarrow{t}$ denotes the local transition relation of thread $t \in \Tid$.  
+\end{enumerate}
+There is an edge $G_1 \xrightarrow{t} G_2$ if
+there is an $e\in \nextop_P(G_1)$ with $t = \tid(e)$, and
+\begin{enumerate} 
+\item $G_2.E = G_1.E \cup \set{e}$.
+%\item $G_2.\inord = G_1.\inord \cup ~ \{(e', e) \mid e' \in G_1.E\}.$
+%\item $G_2.\po{} = G_1.\po{} \cup \set{(\po{}^{\max}(t), e)} \cup \set{(e', e)\mid \po{}(e', \po{}^{\max}(t)}$.
+\item $G_2.\rf{} = \begin{cases} 
+G_1.\rf{} & \op(e.\ell) = \opw \\ 
+G_1.\rf{} \cup \{(G_1.\momax{\loc(e)}, e)\} & \text{otherwise} 
+\end{cases}$
+\item $G_2.\mo{}{} = \begin{cases} 
+G_1.\mo{}{} & \op(e.\ell) = \opr \\ 
+G_1.\mo{} \cup \{(e', e) \mid e' \in G_1.W_{\loc(e)}\} & \text{otherwise} 
+\end{cases}$
+%\item If $\op(\ell) = \opw$, then $G_2.\rf{}=G_1.\rf{}$. If $\ell = \opr(l, v)$, then there exists an event $\hat{e} \in G_1.E$ such that  $\hat{e} = \init$ or $\hat{e} = \tuple{\cdot, \cdot, \opw(l, v)}$ such that $G_2.\rf{}=G_1.\rf{}\cup\{(\hat{e},e)\}$.
+%\item If $\op(\ell) = \opr$ then  $G_2.\mo{}=G_1.\mo{}$.  If $\op(\ell)=\opw$, then  there exists an event $\hat{e} \in G_1.E$ such that $\hat{e} = \init$ or $\hat{e} = \tuple{\cdot, \cdot, \opw(l, v')}$ and $G_2.\mo{}=G_1.\mo{}\cup\{(\hat{e},e)\} \cup \set{(e', e)\mid (e', \hat{e})\in G_1.\mo{}}$.
+\end{enumerate}
+%
+An execution graph is \emph{reachable} if $G_{\init} \xrightarrow{\cdot}^* G$.
+An execution graph is \emph{maximal} if it has no successors,
+i.e., $\nextop_P(G) = \emptyset$.
+We write $C(P)$ for the number of maximal reachable execution graphs in $\mathcal{T}(P)$.
+%
+% Since we assume every run of $P$ is bounded, the transition system
+% $\mathcal{T}(P)$ is finite, acyclic, and every path 
+% from $G_{\init}$ ends in a maximal execution graph.
+
+Note that $\mathcal{T}(P)$ is a DAG but not necessarily a tree: two 
+different paths in the exploration can reach the same execution graph.
+For example, if two threads each read a variable, the two possible thread schedules both lead to the same execution graph.
+
+\begin{comment}
+For given execution graphs $G$ and $G'$, a thread $t$, a label $l$, and a write event $w\in E_{G}$ such that $\floc(\flab(w))=\floc(l)$, we use $G\overset{t,l,w}{\rightarrow}G'$ to denote the relation defined as \begin{enumerate}
+    \item $E_{G'}=E_G\cup\{e\}$ with $\ftid(e)=t$ and $\flab(e)=l$;
+    \item $\po{G'}=\po{G}\cup\{(\po{G}^{max}(t),e)\}$;
+    \item $\mo{G'}=\mo{G}$ if $\op(l)=\opr$ and $\mo{G'}=\mo{G}\cup\{(w,e)\}$ if $\op(l)=\opw$; and
+    \item $\rf{G'}=\rf{G}$ if $\op(l)=\opw$ and $\rf{G'}=\rf{G}\cup\{(w,e)\}$ if $\op(l)=\opr$ and $\fval(l)=\fval(\lab(e))$.
+    
+\end{enumerate}
+We denote the special relation when $G\overset{t,l,w}{\rightarrow}G'$ and $w=\mo{G}^{max}(\floc(l))$ as $G\overset{t,l,w}{\rightarrow}_{SC}G'$  which reflects the allowed memory accesses under sequential consistency (SC). Let the special execution graph $(\init{},\emptyset,\emptyset,\emptyset)$ be denoted as $G_0$. We say that a execution graph $G$ is reachable from $G_0$ if either $G_0\overset{t,l,w}{\rightarrow}G$ for some tuple $(t,l,w)$ or $G_0\overset{t,l,w}{\rightarrow}G'$ and $G$ is reachable from $G'$. Similarly, we say that a execution graph $G$ is reachable from $G_0$ under SC if either $G_0\overset{t,l,w}{\rightarrow}_{SC}G$ for some tuple $(t,l,w)$ or $G_0\overset{t,l,w}{\rightarrow}_{SC}G'$ and $G$ is reachable from $G'$ under SC. We use $\egraph$ to denote the set of all execution graphs reachable from $G_0$ and $\scg$ to denote the set of all execution graphs reachable from $G_0$ under SC. 
+\end{comment}
+
+
+\begin{comment}
+
+\textbf{Events}.
+An event \( e \in E_{\rho} \) of a concurrent program $\rho$ is a pair \( ( t,\,  l) \), where $t$ denotes the unique thread identifier and $l\in \lab$ is a label of the event is the label associated with the event, as defined above. Let $\ftid$  and $\flab$ denote the obvious functions that maps each event to its thread identifier and labels. We use $\opw_x$ and $\opr_x$ to denote the set of all write and read events on the memory location $x$. The initial set of events \( \init{}\) is defined as \( \{( \bot, (\opw,x,0) ) \mid x \in \loc\}\). We remark that events access local registers have label $\epsilon$.
+
+\textbf{Execution Graphs} To define the semantic of the concurrent program, we use execution graphs to model concurrent accesses on shared memory locations. 
+Formally, an execution graph $G$ is a tuple $(E_G,\rf{G},\mo{G},\po{G})$ where:
+\begin{enumerate}
+    \item  $E_G$ is a set of events. 
+    \item $\po{G}$ is the "program order" that totally orders events from the same thread.  We use $\po{G}^{max}(t)$ to denote the maximal event of thread $t$.
+    \item $\mathsf{rf_G}$ is the "read from" relation such that:
+    \begin{enumerate}
+        \item if $(e_1,e_2)\in \mathsf{rf_G}$ then there exists some $x\in \loc$ such that $\mathsf{lab}(e_1)=(\opw,x)$ and $\mathsf{lab}(e_2)=(\opr,x)$.
+        \item if $(e_1,e_2)\in \mathsf{rf_G}$ and $(e_3,e_2)\in \mathsf{rf_G}$, then $e_1=e_3$.
+        \item for every $e\in E_\mathsf{G}$ that is a read event, there exists an $e'$ such that $(e',e)\in \mathsf{rf_G}$.
+    \end{enumerate}
+    \item $\mathsf{mo_G}$ is the modification order which totally orders the writes on the same memory location. We use $\mo{G}^{max}(x)$ to denote the latest write on the memory location $x$.
+\end{enumerate}
+For given execution graphs $G$ and $G'$, a thread $t$, a label $l$, and a write event $w\in E_{G}$ such that $\floc(\flab(w))=\floc(l)$, we use $G\overset{t,l,w}{\rightarrow}G'$ to denote the relation defined as \begin{enumerate}
+    \item $E_{G'}=E_G\cup\{e\}$ with $\ftid(e)=t$ and $\flab(e)=l$;
+    \item $\po{G'}=\po{G}\cup\{(\po{G}^{max}(t),e)\}$;
+    \item $\mo{G'}=\mo{G}$ if $\op(l)=\opr$ and $\mo{G'}=\mo{G}\cup\{(w,e)\}$ if $\op(l)=\opw$; and
+    \item $\rf{G'}=\rf{G}$ if $\op(l)=\opw$ and $\rf{G'}=\rf{G}\cup\{(w,e)\}$ if $\op(l)=\opr$ and $\fval(l)=\fval(\lab(e))$.
+    
+\end{enumerate}
+We denote the special relation when $G\overset{t,l,w}{\rightarrow}G'$ and $w=\mo{G}^{max}(\floc(l))$ as $G\overset{t,l,w}{\rightarrow}_{SC}G'$  which reflects the allowed memory accesses under sequential consistency (SC). Let the special execution graph $(\init{},\emptyset,\emptyset,\emptyset)$ be denoted as $G_0$. We say that a execution graph $G$ is reachable from $G_0$ if either $G_0\overset{t,l,w}{\rightarrow}G$ for some tuple $(t,l,w)$ or $G_0\overset{t,l,w}{\rightarrow}G'$ and $G$ is reachable from $G'$. Similarly, we say that a execution graph $G$ is reachable from $G_0$ under SC if either $G_0\overset{t,l,w}{\rightarrow}_{SC}G$ for some tuple $(t,l,w)$ or $G_0\overset{t,l,w}{\rightarrow}_{SC}G'$ and $G$ is reachable from $G'$ under SC. We use $\egraph$ to denote the set of all execution graphs reachable from $G_0$ and $\scg$ to denote the set of all execution graphs reachable from $G_0$ under SC. 
+\end{comment}
+
+\begin{comment}
+\input{PL}
+\textbf{Bounded concurrent programming languages}. Let $\loc$, $\reg$, and $\val$ be finite sets of locations, registers and values. 
+Every expression $e$ is constructed with values from $\val$ and values stored in local registers. The instruction $r:=e$ assigns the value of $e$ into local register $r$; $x:=e$ stores the value of $x$ in location $x$ and similarly $r:=x$ reads the value from $x$ and stores it into register $r$; if $e$ goto $n$ instruction jumps to line $n$ of the program if $e$ is true. 
+A sequential program $S\in \mathsf{SProg}$ is a finite map from natural numbers to instructions and a concurrent program $P$ is a parallel composition of sequential programs. The size of a sequential program $S$, denoted as $|S|$ is the number of  natural numbers that are mapped to instructions in $S$. Similarly, the size of a concurrent program $P$, denoted as $|P|$ is defined as $\sum_{t\in\tid}P(t)$. We say that $P$ is bounded by $k\leq |P|$ if every sequential consistent execution of $P$ is bounded by $k$.
+
+\textbf{Labeled Transition System}. The semantic of a sequential program can be given by a labeled transition system. 
+
+\begin{definition}
+    A labeled transition system (LTS) $M$ over an alphabet $\Sigma$ is a tuple $(Q, q_0,\delta)$ where $Q$ is the set of possibly infinite states, $q_0$ is the unique initial state, and $\delta:Q\times\Sigma\rightarrow Q$ is the transition function. 
+\end{definition}
+\begin{definition}
+    A label $l$ in $\lab\subseteq \{\opw,\opr\}\times\loc\times\val$ is represented as a tuple $(\mathsf{o},x,v)$ where $\mathsf{o},x,v$ denote the operation type, location, and value of the label, respectively. The functions $\op$, $\floc$, and $\fval$  return the operation type, location and value of a given label.
+\end{definition}
+The transition system $M_\rho$ induced by a sequential program $\rho\in \text{SProg}$ over $\Sigma=\lab\cup \{\epsilon\}$ is defined as follows: 
+ the states ${M_\rho}.Q$ are pairs of the form $(i,\gamma) $ where $i$ is the program counter that marks the position of the instruction and $\gamma$ is the store that maps every local register $r\in\reg$(or simply an expression $e$) to a value $v\in \val$. The initial state ${M_\rho}.q_0$ is $(0,\lambda r.0)$ The transition function ${M_\rho}.\delta$ is defined as: 
+\begin{enumerate}
+    \item ${M_\rho}.\delta((i,\gamma), \epsilon)=(i+1,\gamma')$ if $\rho(i)=r:=e$ and $\gamma'=\gamma[r\leftarrow e]$.
+    \item ${M_\rho}.\delta((i,\gamma), \epsilon)=(n,\gamma)$ if $\rho(i)=\text{if } e \text{ goto } n$.
+    \item ${M_\rho}.\delta((i,\gamma), (\opr,x,v)))=(i+1,\gamma')$ if $\rho(i)=r:=x$ and $\gamma'=\gamma[r\leftarrow v]$.
+    \item ${M_\rho}.\delta((i,\gamma), (\opw,x,\gamma(e)))=(i+1,\gamma)$ if $\rho(i)=x:=e$.
+\end{enumerate}
+Similarly, the transition system $M_P$ induced by a concurrent program $P$ over alphabet $\tid\times (\lab\cup \{\epsilon\})$ is defined as: the states $M_P.Q$ are 
+tuples in $\prod_{t\in\tid}M_{P(t)}.Q$; the initial state $M_P.q_0$ is the tuple $(M_{P(t_1)}.q_0,M_{P(t_2)}.q_0\dots M_{P(t_k)}.q_0)$ for $\tid=\{t_1,t_2,\dots t_k\}$. The transition function $M_P.\delta$ is given as:
+$M_P.\delta((q_1,q_2 \dots q_k),(t_i,l))=(q_1',q_2'\dots q_k')$ if $M_{P(t_i)}.\delta(q_i,l)=q_i'$ and for all $t_j\in \tid\setminus\{t_i\}$, $q_j=q_j'$.
+
+
+
+\textbf{Concurrent System under Sequential Consistency}
+A concurrent system consists of a concurrent programming language $P$ and a memory model. For our purpose, we use $(\scg,\overset{t,l,w}{\rightarrow}_{SC})$ as the memory model under the assumption of sequential consistency. A LTS $M_P^{SC}$ induced by a concurrent system is over alphabet $\tid\times (\lab\cup \{\epsilon\})$. Its states are pairs from $M_P\times \scg$ and the initial state is $(M_P.q_0,G_0)$.
+The transition function $M_P^{SC}.\delta$ is given as:
+\[
+    M_P^{SC}.\delta((M_{P}.q, G),(t,l))=(M_{P}.q',G') \text{ if } M_P.\delta(q,(t,l))=M_{P}.q' \text{ and } G\overset{t,l,\mo{G}^{max}(\floc(l))}{\longrightarrow}_{SC}G'\ 
+\]
+We also denote $ M_P^{SC}.\delta(q,l)=q'$ as $q\overset{l}{\to}_{M_P^{SC}}q'$
+ It is worth mentioning that with our definition, for any two states $(q_1,G_1)$ and $(q_2,G_2)$ of $M_P^{SC}.Q$, we have $G_1=G_2\rightarrow  q_1=q_2$.
+ A state $(q,G)\in {M_P^{SC}}$ is a final states if there is no valid transitions from $(q,G)$ to any state and $G$ is said to be a complete execution graph. 
+ In particular, we say that $P$ admits an execution graph $G$ if $(q,G)$ is a reachable state of $P$ for some control state $q$.  
+
+\end{comment}
+
+\begin{comment}
+    a. Concurrent programs syntax and semantics
+    b. Equivalence on executions (sound equivalences preserve control and data flow)
+    c. Estimation problem - given a program P and an equivalence, count the number of equivalence classes in the set P_n, where P_n represents the set of executions of P whose length is n.
+    d. Monte carlo estimation without equivalence (Rupak's old paper)
+\end{comment}

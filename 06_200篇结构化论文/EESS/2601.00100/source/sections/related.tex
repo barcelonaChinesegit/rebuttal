@@ -1,0 +1,190 @@
+\section{Connections to Prior Work}
+\label{sec:related}
+
+We have demonstrated in Section \ref{sec:hubert} how our framework
+instantiates HuBERT.
+Given the generality of our framework, we can also instantiate other objectives that are similar to other self-supervised objectives.
+In this section, we will discuss what our framework can achieve and how it differs from prior work,
+including approaches based on likelihood and contrastive learning.
+We do not consider combined objectives in this section, such as
+w2v-BERT \citep{chung2021w2v}.
+%
+%
+
+\subsection{APC and VQ-APC}
+
+We begin with other variants of predictive coding for speech representation that optimizes the likelihood
+\eqref{eq:pc}, in which $x_A$ is $x_{<t}$, $x_B$ is $x_{\geq t}$.
+First, autoregressive predictive coding \citep{chung2019unsupervised,yang2022autoregressive} (APC) is a generalization of linear predictive coding \citep{atal1971speech,saito1967theoretical} (LPC), 
+where a model is trained to predict future frames given the past.
+Its vector-quantized variant, VQ-APC \citep{chung2020vector}, 
+includes a quantization layer in the neural network while optimizing APC.
+Both APC and VQ-APC optimize the likelihood, while our framework is based on the variational bound in equation \ref{eq:vlb}.
+APC and VQ-APC in their original form in \citet{chung2019unsupervised} and \citet{chung2020vector} do not have the latent variables explicitly stated.
+Our framework makes the choice of latent variables explicit, and the proposed auxiliary distribution 
+offers more flexibility to estimate the likelihood, especially when marginalization of 
+latent variables is not tractable.
+
+Similar to our approach, \citet{yang2022autoregressive} and \citet{yeh2022autoregressive} make the latent variables explcit, leading to various other interpretations of APC with respect to, e.g., mutual information and co-training \citep{mcallester2018information}.
+
+\subsection{MPC and DeCoAR}
+
+MPC \citep{jiang2019improving,zhang2021transformer} and DeCoAR \citep{9053176} are both generalizations of APC,
+replacing future prediction with masked prediction.
+DeCoAR 2.0 \citep{ling2020decoar} adds quantization similar to VQ-APC.
+Both optimize the likelihood in equation \ref{eq:pc}.
+The difference between them lies in how the frames are masked---MPC masks many small spans while DeCoAR masks a single large span.
+
+\subsection{HuBERT, WavLM, and BEST-RQ}
+\label{sec:hubert-variants}
+
+We have shown that HuBERT is a special case of our framework.
+%
+%
+Subsequent work, such as WavLM \citep{chen2022wavlm} and BEST-RQ \citep{chiu2022self}, uses the same HuBERT objective.
+WavLM improves over HuBERT with data augmentation.
+BEST-RQ avoids updating the codebook, but requires a careful initialization.
+
+When training HuBERT in \citet{hsu2021hubert}, there are multiple iterations, each of which trains a Transformer encoder from scratch.
+What differs for each iteration are the training targets.
+In the first iteration, quantized MFCC is used as targets, while in the second iteration, quantized hidden vectors from layer 9 of the first iteration are used as targets.
+Our framework can also instantiate the second iteration with a pre-trained Transformer encoder from the first iteration. 
+We can simply let
+\begin{align}
+    q(z_i|h_i) = \frac{\exp\left(-\|h_i - v_{z_i}\|^2 / \tau\right)} 
+  {\sum_{k=1}^{K} \exp\left(-\|h_i - v_k\|^2 / \tau\right)},
+\label{eq:softmax-q-iter2}
+\end{align}
+where the $i$-th frame $h_i$ now comes from the intermediate layer (e.g., 6th layer) of
+the encoder from the first iteration.
+
+\subsection{CPC, VQ-CPC, and wav2vec 2.0}
+\label{sec:wav2vec}
+
+%
+%
+%
+%
+%
+%
+CPC \citep{oord2018representation}, its vector-quantized variants, VQ-CPC \citep{niekerk2020vector}, 
+wav2vec \citep{schneider2019wav2vec}, and wav2vec 2.0 \citep{baevski2020wav2vec}, 
+are all based on noise contrastive estimation (NCE) \citep{smith-eisner-2005-contrastive,pmlr-v9-gutmann10a}.
+%
+%
+%
+%
+%
+In this section, we show how wav2vec 2.0 can be instantiated with our framework.
+
+We derive their contrastive objective in wav2vec 2.0 from the cross entropy in the variational objective
+ $\mathbb{E}_{z_i \sim q}[-\log p(z_i | x_{\setminus M})]$.
+Recall that wav2vec 2.0 has a CNN followed by VQ and a Transformer,
+where the VQ produces targets for contrastive learning.
+%
+We first choose
+\begin{align}
+q(z_i | x_M) &= \delta_{z_i=g(x_M)} \label{eq:w2v2-q}\\
+p(z_i | x_{\setminus M}) &= \frac{\exp(\mathrm{sim}(\mathrm{enc}(x_{\setminus M})_i, z_i))}{
+  \int \exp(\mathrm{sim}(\mathrm{enc}(x_{\setminus M})_i, z)) dz},
+\end{align}
+where $g(\cdot)$ is the CNN with the VQ, $\mathrm{enc}(\cdot)$ is the Transformer,
+$\delta$ being the Dirac delta function, and $\mathrm{sim}(x, y) = \cos(x, y)$.
+The choice of $p(z_i | x_{\setminus M})$ is similar to that of \Eqref{eq:prior} in our framework,
+except a similarity function and a continuous $z$.
+The cross entropy becomes
+\begin{align}
+    \mathbb{E}_{z_i \sim q}&[-\log p(z_i | x_{\setminus M})] \notag\\
+    =&\log\frac{\exp(\mathrm{sim}(\mathrm{enc}(x_{\setminus M})_i, z_i))}{
+   \int\exp(\mathrm{sim}(\mathrm{enc}(x_{\setminus M})_i, z')) dz}.
+\end{align}
+Note that $z_i$ here is the codeword after quantization, i.e., a continuous vector \citep{baevski2020wav2vec}.
+The denominator in the cross entropy is in general difficult
+to compute due to the integral.\footnote{In fact,
+even when $\mathrm{sim}(x, y) = x^\top y$, i.e.,
+$p(z_i | x_{\setminus M})$ being a von-Mises--Fisher distribution,
+the denominator of $p$ is still difficult to compute.}
+Inspired by NCE, \citet{oord2018representation} and \citet{baevski2020wav2vec}
+approximate the integral by summing over a set of negative samples $S_i$. 
+The cross entropy becomes
+\begin{align}
+    \log \frac{\exp(\mathrm{sim}(\mathrm{enc}(x_{\setminus M})_i, z_i))}{
+  \sum_{z' \in S_i} \exp(\mathrm{sim}(\mathrm{enc}(x_{\setminus M})_i, z'))}.
+  \label{eq:w2v2}
+\end{align}
+which is the objective used in wav2vec 2.0.
+Consequently, minimizing the contrastive loss is analogue to minimizing the cross entropy between 
+the masked frames and unmasked frames after quantization.
+
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+
+%
+%
+%
+%
+%
+%
+%
+Several design choices in wav2vec 2.0 are taken verbatim by HuBERT, but they have a few key differences.
+Both use a softmax to parameterize $p(z_i | x_{\setminus M})$, but wav2vec 2.0 assumes $z_i$ to be a continuous vector, while HuBERT assumes $z_i$ to be discrete.
+As a consequence, wav2vec 2.0 uses a softmax over the negative and positive samples, while HuBERT uses a softmax over the codewords in a codebook.
+The codebook in wav2vec 2.0 is trained together with the rest of the model.
+In other words, there is no reconstruction and we can simply parameterize
+$p(x_i | z_i)$ as a uniform distribution. 
+In contrast, the codebook in HuBERT is trained with an offline $k$-means.
+Compared to our framework, we have the choice to optimize the codebook
+offline or jointly with the Transformer.
+
+There is a additional diversity loss in wav2vec 2.0 that
+computes the entropy of codeword usage within a batch,
+to encourage the use of individual codewords.
+The diversity loss was not meant to be part of the main objective
+\cite{baevski2020wav2vec}, but more of a regularizer that improves
+training.
+However, our instantiation on HuBERT naturally has an entropy term
+per frame that serves a similar purpose as the diversity loss.
+
+%
+%
+
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%
+%

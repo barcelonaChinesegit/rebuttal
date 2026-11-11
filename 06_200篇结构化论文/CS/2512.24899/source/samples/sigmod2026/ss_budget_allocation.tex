@@ -1,0 +1,122 @@
+\subsection{Optimal Privacy Budget Allocation}
+\label{ss:optimal_budget}
+
+The server now needs to make a decision at time $t$ whether it should
+approximate the current statistics using the last released statistics (referred
+to as \emph{approximation}), or publish the current statistics with the necessary
+noise (referred to as \emph{publication}).
+Both options will introduce errors in the released statistics, i.e., the
+approximation incurs error $\hdis_t$, and the publication incurs error
+$\var(\epsilon_{t,2})$ which is the estimation error of running FO with privacy
+budget $\epsilon_{t,2}$.
+
+Existing methods~\cite{Kellaris2014,Ren2022} directly compare $\hdis_t$ with
+$\var(\epsilon_{t,2})$, and if
+$\hdis_t<\var(\epsilon_{t,2})$, then the server chooses approximation, otherwise it chooses
+publication.
+We notice that this commonly used strategy is myopic, focusing only on the current
+timestamp and neglecting long-term overall accuracy of the released
+statistics.
+Recent empirical studies also show that these existing methods often perform
+worse than even static baseline methods~\cite{Schaler2024}.
+To address this weakness, we propose a novel strategy, i.e.,
+\emph{\textbf{O}ptimal privacy \textbf{B}udget \textbf{A}llocation (OBA)}, that
+aims to achieve high long-term accuracy of released statistics.
+
+The idea of OBA is that, at every time $t$, we make a decision of either
+approximation or publication by considering the benefit in a long-term period of
+$w$ timestamps backwards, rather than only the current timestamp.
+In more detail, as we already know the dissimilarities $\hdis_{t-w+1}, \ldots,
+\hdis_t$, an optimal privacy budget allocation strategy in a time window of size
+$w$ should choose publication on those timestamps with large dissimilarities
+(say, top $k$ largest dissimilarities), as choosing approximation on these $k$
+timestamps is only likely to introduce larger errors in the released statistics.
+Hence, a good strategy should spend the remaining $\epsilon/2$ privacy budget on
+these $k$ timestamps.
+% , with each timestamp spending $\epsilon/(2k)$ privacy budget, to publish stream statistics with noise.
+Once a timestamp is selected for publication, its approximation error $\hdis_t$ is replaced by a publication error. The goal then is to minimize the total publication error (the sum of variances) across these $k$ selected timestamps under a fixed total budget of $\epsilon/2$. Since the magnitude of the original $\hdis_t$ no longer affects that timestamp’s error and $\var(\cdot)$ is convex in the budget, the total publication error is minimized by dividing the budget equally among all the $k$ timestamps.
+The remaining $w-k$ timestamps with small dissimilarities simply choose
+approximation.
+Finally, if the current time $t$ belongs to these $k$ timestamps, then the server
+chooses publication with privacy budget $\epsilon_{t,2}=\epsilon/(2k)$;
+otherwise, the server chooses approximation.
+OBA is illustrated in \cref{fig:OBA}.
+
+\begin{figure}[htp]
+  \centering
+  \input{samples/sigmod2026/tz_OBA}
+  \caption{Illustration of OBA}
+  \label{fig:OBA}
+  \Description{The figure demonstrates the Optimal Budget Allocation (OBA) strategy using two scenarios. 
+The top row illustrates a "publication" case: the estimated dissimilarity at the current timestamp $t$ (highlighted in red) is high relative to the sliding window w. When the dissimilarities in the window are sorted in descending order, the value at $t$ falls within the top $k^*$ threshold, triggering a data publication. 
+The bottom row illustrates an "approximation" case: the dissimilarity at $t$ is low. After sorting, the red bar falls outside the top $k^*$ range into the approximation region, meaning the current data will be approximated using historical values to save privacy budget.}
+\end{figure}
+
+
+The last problem is how to find an optimal $k$.
+Let $\hdis_{(1)},\dots,\hdis_{(w)}$ denote the $w$ dissimilarities
+$\hdis_{t-w+1}, \dots, \hdis_t$ sorted in descending order.
+The \emph{cumulative error} of the released statistics in a time window of size
+$w$ consists of two parts: (i) cumulative publication error at these $k$
+timestamps due to running $k$ FOs each using a privacy budget
+$\frac{\epsilon}{2k}$, thus incurring an error
+$k\cdot\var(\frac{\epsilon}{2k})$, and (ii) the cumulative approximation error
+on the remaining $w-k$ timestamps, incurring another error
+$\sum_{i=k+1}^w\hdis_{(i)}$.
+Furthermore, we should allow $k=0$, and in this case, the server always chooses
+approximation in the current window, thus incurring an error
+$\sum_{i=1}^w\hdis_{(i)}$.
+
+Let $E_t(k)$ denote the cumulative error of the released statistics in the most
+recent window of size $w$ at time $t$, expressing $k$ as a parameter.
+Then, we have
+\[
+  E_t(k) =
+  \begin{cases}
+    \sum_{i=1}^w \hdis_{(i)}, & k=0, \\
+    k \cdot \var(\frac{\epsilon}{2k}) + \sum_{i=k+1}^w\hdis_{(i)}, & 0<k\le w.
+  \end{cases}
+\]
+Our goal is to find an optimal $k^*$ by minimizing $E_t(k)$, i.e.,
+\begin{equation}\label{eq:optimization}
+  k^* \in \arg\min_{0\le k\le w} E_t(k).
+\end{equation}
+As $k$ is in a finite set $\{0,\ldots,w\}$, a simple method to solve
+Problem~\eqref{eq:optimization} is to enumerate each $k$ and choose one
+minimizing $E_t(k)$.
+The pseudo-code of OBA is given in \cref{alg:oba}.
+
+\input{samples/sigmod2026/alg_opt_budget}
+
+It is noteworthy to mention that the ultimate goal of OBA is to decide whether
+we choose approximation or publication at time $t$, and if it is publication,
+how much privacy budget to spend.
+In Line~\ref{ln:t}, if current timestamp $t$ belongs to the selected $k^*$
+timestamps, then we choose publication using privacy budget $\epsilon_{t,2}$;
+otherwise we choose approximation with no privacy budget (Line~\ref{ln:zero}).
+In addition, $\epsilon_{t,2}$ should be upper bounded by the remaining privacy
+budget $\epsilon_t^\mathit{rm}$ available in current window
+(Line~\ref{ln:epsilon}).
+
+\paragraph{Improving Efficiency}
+A straightforward implementation of OBA requires sorting dissimilarities and enumerating all possible $k$, resulting in a per-timestamp time complexity of $O(w\log w + w^2) =
+O(w^2)$.
+When $w$ is large, such brute-force enumeration becomes computationally
+expensive in streaming settings.
+We present several tricks to improve its computational efficiency.
+\begin{itemize}
+\item{Incremental Maintenance.} 
+ Instead of sorting dissimilarities from scratch (Line~\ref{ln:sort}) at each timestamp, we maintain the sorted sequence $\{\hdis_{(1)}, \dots, \hdis_{(w)}\}$ incrementally.
+ By using a priority queue, the insertion of the new $\hdis_t$ and the deletion of the expired $\hdis_{t-w}$ can both be performed in $O(\log w)$ time.
+\item{Recursive Derivation.} The computation of the cumulative error $E_t(k)$ (Line~\ref{ln:sum2}) can be optimized by reusing intermediate results.
+The publication error term $k\cdot\var(\frac{\epsilon}{2k})$ is time
+  invariant which depends only on $k$, thus it can be computed offline and stored.
+  The publication error term can be computed incrementally while sorting (and similarly for the sum in Line~\ref{ln:sum1}).
+  So calculating $E_t$ actually has time complexity $O(w)$.
+\item{Early Termination.}
+    The function $E_t(k)$ typically exhibits a unimodal structure (initially decreasing and then increasing) or monotonicity.
+    Specifically, $E_t(k)$ decreases when the benefit of removing a large approximation error $\hdis_{(k+1)}$ outweighs the cost of added noise, and begins to increase when the remaining dissimilarities are small.
+    This structure enables an early-stop strategy: we iterate $k$ starting from $0$ and terminate immediately once $E_t(k+1) > E_t(k)$. Let $k_{\mathit{stop}}$ denote the number of values evaluated before termination.
+    Thus, we only need to evaluate $k_{\mathit{stop}}$ candidates instead of all $w$ options.
+\end{itemize}
+By combining these techniques, the overall time complexity is reduced to $O(\log w + k_{\mathit{stop}})$, ensuring scalability even with large window sizes.

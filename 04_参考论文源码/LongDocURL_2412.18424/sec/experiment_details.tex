@@ -1,0 +1,141 @@
+\section{Experimental Details}
+\label{xsec:experimental_details}
+
+
+% 图片merge的规则：
+\subsection{Merging Rules of Images Input}
+\label{xsubsec:rules_of_images_merging}
+As discussed in \Cref{subsec: ablation_of_input_paradigms}, we design a \textbf{merge} paradigm for the evaluation of current LLMs/LVLMs.
+
+\noindent\texttt{\#Columns\_merged = 2 if total\_pages/30 <= 4 else 3}
+
+\begin{table}[htbp]
+    \centering
+    \resizebox{0.5\textwidth}{!}{
+    \begin{tabular}{l|c|c}
+        \toprule
+        \textbf{Total\_pages} & \textbf{\#Columns\_merged} & \textbf{\#Images\_merged} \\
+        \midrule
+        50<x<=60 & 2 & x/2 \\
+        60<x<=90 & 2 & x/3 \\
+        90<x<=120 & 2 & x/4 \\
+        120<x<=150 & 3 & x/5 \\
+        \bottomrule
+    \end{tabular}
+    }
+    \caption{Merging rules in the ablation experiment of input paradigms. \textbf{\#Columns\_merged}: the number of columns in the sub-image array in the merged image; \textbf{\#Images\_merged}: the number of new images after merged.}
+    \label{tab:merging_rules}
+    \vspace{-5mm}
+\end{table}
+
+
+% 输入图片30页的选择规则：
+\subsection{Selection Rules of Images Input}
+\label{xsubsec:rules_of_images_selection}
+As discussed in \Cref{subsec: experimental_setup}, we design a \textbf{cut-off} paradigm for the evaluation of current LLMs/LVLMs. We provide pseudo-code below to express the selection rules.
+
+\begin{tcolorbox}[colback=gray!5,left=0.8mm,right=0.8mm]
+\small
+\textcolor{gray}{\# All page ids mentioned are based on the order in the raw document.} \\
+\textcolor{gray}{\# context\_start\_end: page start/end id of context in qa generation} \\
+\textcolor{gray}{\# num\_of\_images\_input: the number of input images, 30 images in cut-off paradigm} \\
+\textcolor{gray}{\# total\_pages: total pages in the raw document} \\
+\textcolor{gray}{\# img\_start, img\_end: input page start/end id} \\
+\raggedright
+\texttt{raw\_start\_page, raw\_end\_page = context\_start\_end} \\
+
+\texttt{raw\_pages\_len = raw\_end\_page - raw\_start\_page} \\
+
+\texttt{img\_start = max(0, raw\_start\_page -}  \\
+\texttt{\quad \quad (num\_of\_images\_input - raw\_pages\_len)//2} \\
+% \texttt{\quad // 2)} \\
+
+\texttt{img\_end = img\_start + num\_of\_images\_input} \\
+
+\texttt{if img\_end >= total\_pages:} \\
+
+\texttt{\quad \quad img\_end = total\_pages} \\
+
+\texttt{\quad \quad img\_start = max(0, } \\
+%img\_end-num\_of\_images\_input)}\\
+\texttt{\quad \quad img\_end - num\_of\_images\_input)} \\
+
+\texttt{return img\_start, img\_end}
+        
+\label{text:selection_rules}
+\end{tcolorbox}
+
+
+% 1. 自由生成回复
+\subsection{Prompt for Response Generation}
+\label{xsubsec:prompt_of_response_generation}
+
+% \lstinputlisting[style=prompt]{./prompts/response_generation.md}
+
+\begin{tcolorbox}[colback=gray!5]
+\small
+\textcolor{blue}{<document\_images>} \\
+
+You are an expert in visual document question-answering, please answer our questions based
+on the given doc images.\\
+
+Following is our question:\\
+<question\_start>\textcolor{blue}{<question>}</question\_end>
+
+\label{text:prompt_for_response_generation}
+\end{tcolorbox}
+
+
+% 2. 提炼答案
+\subsection{Prompt for Answer Extraction}
+\label{xsubsec:prompt_of_answer_extract}
+
+Prompt for answer extraction is displayed in \Cref{fig:answer_extraction}. Based on the template given in MMLongBench-Doc~\cite{MMLongBench-Doc}, we make some modifications, which are marked in \textcolor{blue}{blue}.
+
+
+\input{prompts/answer_extraction}
+
+
+% 3. 计算分数
+\subsection{Scoring Rules}
+\label{xsubsec:scoring_rules_details}
+
+Following MATHVISTA~\cite{MATHVISTA}, we evaluate the model's responses by scoring the extracted answers against the reference answers. Following MMLongBench-Doc~\cite{MMLongBench-Doc}, our scorer is rule-based and employs different strategies according to the format of the reference answer. We detail its rules as below:
+
+\noindent\textbf{String:} We firstly use a series of regular expressions to determine whether the answers require exact matching (\eg, telephone numbers, email addresses, website addresses, file names, times, dates, \etc.) If an exact match is needed, we perform a straightforward string comparison and score the answer either 0 or 1. Otherwise, we calculate the ANLS (Average Normalized Levenshtein Similarity) with a pre-defined threshold ($\tau = 0.5$).
+
+\noindent\textbf{Integer:} We perform an exact match comparison and score the answer either 0 or 1.
+
+\noindent\textbf{Float:} We view the prediction and reference answers as equal if they fall within a 1\% relative tolerance. 
+
+\noindent\textbf{List:} Compared with MMLongBench-Doc, we adopt a relatively soft rule for scoring answers in list format: (1) If the prediction does not have the same number of elements as the reference, it incurs a length-dependent penalty instead of receiving a score of 0, which we think more reasonable. (2) The score of models on single element of the reference list is the highest one among the scores which are calculated and combined between the element and each one of the prediction list. Compared with MMLongBench-Doc, we assume that the sorting positions of the two lists are not always one-to-one corresponding, allowing more errors, and our rules are gentler and more tolerant. We use pseudo-code below to express the scoring rules in MMLongBench-Doc and our \benchName, respectively. The element-wise scoring strategies is determined by the formats of elements (\ie, string, integer or float).
+
+\begin{tcolorbox}[colback=gray!5]
+\small
+\textcolor{gray}{\# MMLongBench-Doc} \\
+pred\_list, ref\_list = sorted(pred\_list), sorted(ref\_list) \\
+Score(pred\_list, ref\_list) = min([score(pred, ref) for pred, ref in zip(pred\_list, ref\_list)]) \\
+
+\vspace{0.5em}
+\textcolor{gray}{\# LongDocURL} \\
+pred\_list, ref\_list = sorted(pred\_list), sorted(ref\_list) \\
+greedy\_scores\_list = [ \\
+\setlength{\parindent}{2em} 
+\hspace{1em} max([score(pred, ref) for pred in pred\_list]) for ref in ref\_list \\
+] \\
+Score(ref\_list, pred\_list) = \\ 
+\hspace{1em} sum(greedy\_scores\_list) / len(ref\_list) * min(1, len(ref\_list) / len(pred\_list)) ** 0.5 \\
+
+\label{text:scoring_rules_for_list}
+\end{tcolorbox}
+
+The part of the rule description that differs from MMLongBench-Doc is mainly in the \textbf{List} section.
+
+
+\subsection{Fine-Grained Evaluation Results}
+\label{xsubsec:appendix_multi_dimensional_results}
+Detailed results are presented in \Cref{tab:main_results_2}. 
+
+\noindent Related analysis is in \Cref{subsubsec:multi-dimensional_analysis}.
+
+\input{table/experiments_main_results_2}

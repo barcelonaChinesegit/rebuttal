@@ -1,0 +1,261 @@
+\section{Empirical Validation}
+
+We evaluate iterative deployment on \emph{classical planning} benchmarks: single-agent problems
+with deterministic actions in a fully-observable and discrete environment. We
+restrict ourselves to planning domains encoded using PDDL
+\citep{mcdermott-et-al-tr1998,haslum-et-al-2019}, which is the description
+language used in planning competitions \citep{taitler-et-al-aimag2024}.
+Classical planning using LLMs has been widely studied recently in different contexts
+\egcite{valmeekam-et-al-neurips2023,stechly-et-al-neurips2024,katz-et-al-neurips2024}. In
+\emph{end-to-end planning} with LLMs, the model is prompt with a planning
+problem and asked for a solution---called a \emph{plan}---for it. Shorter plans
+are usually preferred.
+
+In the context of iterative deployment, we ask the model to solve a set of
+planning tasks. Then, we filter the traces that led to valid plans. These valid
+traces are then used for the fine-tuning of the next model generation. We include the
+valid traces produced by the previous generations as well.
+
+But different model generations might solve the same tasks but with different traces
+or different plans. As we reuse valid traces from past generations, this
+means that the fine-tuning could contain several traces and plans for the same
+input prompt. We decided to have at most one training sample per task during
+fine-tuning, and so we use the following rules:
+\footnote{
+We experimented with alternative variations of these---use several
+training samples for the same task, breaking ties randomly---but these
+alternatives deteriorated performance. }
+
+
+\begin{enumerate}
+\item if there are several valid traces for the same task, we choose the one that yielded the shortest plan (`simplest', in number of steps)
+\item if there is a tie, we select the one with the least amount of reasoning tokens
+\end{enumerate}
+
+Additional experimental setup details are given in \S\ref{sec:ExperimentalSetup}.
+
+
+
+\paragraph{Benchmark.}
+
+Our benchmark consists of three domains commonly used in classical planning. All
+three domains were recently used in the Learning Track of the International
+Planning Competition 2023 (IPC 2023) \citep{taitler-et-al-aimag2024}:
+
+\begin{description}[font=\normalfont\itshape]
+\item[Blocksworld:]
+
+Several blocks are stacked on a table. The goal is to rearrange them to match a
+target configuration. The planning challenge comes from deciding which blocks to
+move first and which stacks must be ``destroyed'' in order to reach the target
+configuration. Any Blocksworld task can be solved with a simple polynomial
+strategy: put all blocks back on the table and then rearrange them according to
+the goal. This guarantees that any task with $n$ blocks can be solved within
+$2n$ steps.
+
+\item[Rovers:]
+
+This domain is inspired by the 2003 Mars Exploration Rover (MER) missions and
+the planned 2009 Mars Science Laboratory (MSL) mission
+\cite{long-fox-jair2003}. Rover robots (deployed in Mars) must perform tasks
+such as analyzing soil/rock, taking images with cameras (which may need
+calibration), and later communicating results-among waypoints and under
+visibility constraints. Plan existence for Rovers can be decided in polynomial time \cite{helmert-icaps2006}.
+
+\item[Sokoban:]
+
+This is a PDDL version of the well-known puzzle: an agent in a grid must push
+boxes to their goal locations. The grid has several walls and obstacles that may
+prevent movement. The agent can only push but never pull boxes. This might lead
+to the case where boxes are ``trapped'' in corners which lead to dead-end
+states. Sokoban is \pspace-complete \citep{culberson-tr1997}, so plans might be
+exponentially long.
+\end{description}
+
+\input{table-dataset}
+
+We generated 1000 instances per domain,  varying the difficulty for each instance. This was done by varying specific domain parameters.
+Table~\ref{tab:domain-params} explains the
+most relevant parameter for each domain and shows their respective
+distributions. In this experiment, we train one model per domain; later, we show
+results for the case where the generations are fine-tuned over different
+domains.
+
+We emphasize that as we are analyzing how the model can self-improve, it is not
+relevant whether these domains were already seen during pre-training or not: our
+focus is on the relative increase in performance with respect to the base model and not
+to external baselines.
+
+\paragraph{Metrics.}
+
+The most relevant metric for our experiments is the number of solved tasks at
+each generation. This is our main estimate to know whether new generations are
+improving their planning skills or not. We analyze the average number of
+solved tasks over 3 complete runs, and also the number of tasks solved
+unanimously by all three runs, denoted as unanimous@3. Higher values for
+unanimous@3 indicate that the model is more robust, as it is more consistently
+able to solve certain tasks despite sampling noise during inference. We are also
+interested in the length of the computed plans, which represents the quality of
+the solutions, and the length of the reasoning traces, to see if our model's
+thinking behavior changes.
+
+\begin{figure}[t]
+\centering
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \scalebox{0.55}{\input{coverage-per-gen.pgf}}
+    \caption{Average number of solved tasks}
+    \label{fig:average}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \scalebox{0.55}{\input{unanimous-3-per-gen.pgf}}
+    \caption{Unanimous@3}
+    \label{fig:unanimous-consent}
+\end{subfigure}
+\caption{Performance of different generations for the different domains tested.}
+\label{fig:performance}
+\end{figure}
+
+
+\paragraph{Results.}
+
+Figure~\ref{fig:performance} shows the number solved tasks and unanimous@3 per
+domain for each generation. In all three domains, there is a substantial
+increase in performance for the first three generations. In later generations,
+the speed of improvement decreases. After five generations, the average number of solved tasks in
+Blocksworld increased by 196\%, in Rovers by 401\%, and in Sokoban by
+196\%. Overall, this indicates that iterative deployment can bring a significant
+improvement in planning performance.
+
+In later generations, the number of solved tasks fluctuates slightly between
+generations. But this is expected \egcite{deepseek-arxiv2025}, as the
+stochasticity in the inference process can cause tasks to be solved (or
+unsolved) simply by chance. Overall, still, the trend is clear: the last
+generations sustain better performance than earlier ones.
+
+Later generations are also better at the unanimous@3 metric. In particular, the
+latest generation achieves the best value for all three domains. This shows that
+despite the slow down in performance in the later generations, the models are
+still learning to solve some tasks more consistently.
+
+Appendix~\ref{sec:extra-exps} includes more details on these results.
+
+\paragraph{Is the Model Only Learning Simple Tricks?}
+One might wonder whether the models are learning to solve harder tasks or simply learning a few tricks (e.g., format answers correctly, avoid minor mistakes). Our experiments show that later generations are indeed solving longer horizon tasks. Figure~\ref{fig:selected-domains} shows the plan length distribution for different model generations in the Blocksworld and Sokoban domains. It shows the distribution for one single pass over the benchmark. Both figures show a similar trend: as the model evolves, later generations often find longer plans. For example, in Blocksworld, the base model finds mostly plans up to 20 steps, while generation
+5 finds many plans up to 35 steps.
+
+Figure~\ref{fig:rovers} shows the cumulative number of solved tasks
+per plan length for each generation for the Rovers domain. In this Figure,
+outliers are more visible than in Figures~\ref{fig:heatmap-bw} and
+\ref{fig:heatmap-sokoban}. We can see that the last three generations find more
+plans with 10--30 steps, and generation 5 has significant outliers. However,
+when comparing the plans found by two different generations for a same task,
+there is no clear trend, and often the plans for a same task have the same
+lengths.
+
+\begin{figure}[t]
+\centering
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[scale=0.3]{heatmap-bw}
+    \caption{Blocksworld}
+    \label{fig:heatmap-bw}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[scale=0.3]{heatmap-sokoban}
+    \caption{Sokoban}
+    \label{fig:heatmap-sokoban}
+\end{subfigure}
+\caption{Plan length frequency of different generations for the Blocksworld and Sokoban domain.}
+\label{fig:selected-domains}
+\end{figure}
+
+
+\begin{figure}[t]
+\centering
+\begin{minipage}[t]{0.48\textwidth}
+    \centering
+    \scalebox{0.75}{\input{rovers-plot.pgf}}
+    \caption{Performance across generations for Rovers. The $y$-axis represents
+      the plan length of the plans found by each generation, while the $x$-axis
+      shows the cumulative number of solved instances sorted by plan length.}
+    \label{fig:rovers}
+\end{minipage}
+\hfill
+\begin{minipage}[t]{0.48\textwidth}
+    \centering
+    \scalebox{0.575}{\input{token-curves.pgf}}
+    \caption{Average number of reasoning tokens per generation for each
+      domain. Shaded area corresponds to one standard deviation of the
+      mean. Considering both valid and invalid traces.}
+    \label{fig:tokens}
+\end{minipage}
+\end{figure}
+
+
+The last metric studied for this experiment is the amount of reasoning tokens
+produces by each generation. In RL fine-tuning, the model often increases the
+number of reasoning tokens produced as training progresses
+\citep{deepseek-arxiv2025}. Figure~\ref{fig:tokens} shows that this does not happen
+in our case. We average over both valid and invalid traces in this analysis. For
+Blocksworld and Sokoban, later generations have slightly fewer reasoning tokens
+in average, while for Rovers the result is the opposite. However, the difference
+between the base model and the last tested generation is not so significant:
+around 2000 tokens difference per domain. If we restrict the data to the valid
+traces, we still observe the same behaviour.
+
+
+\paragraph{Does Curation Really Matter?}
+
+\begin{wraptable}{r}{0.55\textwidth}
+\vspace{-10pt}
+\centering
+\begin{tabular}{lrl}
+\toprule
+\textbf{Gen.} & \textbf{w/ Curation}     & \textbf{w/o Curation}   \\ \midrule
+Base          & \textbf{52.0 $\pm$ 6.3}  & \textbf{52.0 $\pm$ 6.3} \\
+Gen. 1        & \textbf{109.6 $\pm$ 2.8} & 71.0 $\pm$ 3.2          \\
+Gen. 2        & \textbf{132.0 $\pm$ 3.7} & 82.0 $\pm$ 4.1          \\
+Gen. 3        & \textbf{148.6 $\pm$ 2.6} & 84.3 $\pm$ 4.9          \\
+Gen. 4        & \textbf{142.0 $\pm$ 4.2} & 84.0 $\pm$ 2.1          \\
+Gen. 5        & \textbf{154.0 $\pm$ 2.9} & 79.3 $\pm$ 5.2          \\
+\bottomrule                                                        \\
+\end{tabular}
+\caption{Average number of solved tasks in Blocksworld for iterative deployment
+  with and without curation.
+}
+\label{tab:no-curation}
+\vspace{-1pt}
+\end{wraptable}
+
+
+We also studied how curation impacts our results. To analyze that, we repeated
+the experiment for the Blocksworld domain but \emph{without} curation. In other words,
+we used all traces from previous generations to fine-tune the next one. (We do
+not include traces that reached the maximum token generation limit though.)
+Table~\ref{tab:no-curation} compares the average number of solved tasks for the
+case with and without curation. The version without curation also improves on
+the base model. While this might seem surprising at first, this is still
+expected: with more data, the version without curation is still able to acquire
+minor improvements, such as a better understanding of the PDDL syntax and more
+reliability at following instructions.
+The version with curation has a clear edge on the version without curation. This
+shows that, as we expected, the curation mechanism is crucial to achieve a
+significant improvement using iterative deployment.
+Furthermore, the version with curation requires less data. For example, to train
+the 5th generation of each model, the version with curation only used 356
+traces, while the version with curation used 4017. So curation is capable of
+improving performance by 94\% while using a fraction of the training data.
+
+
+
+
+
+
+
+
+

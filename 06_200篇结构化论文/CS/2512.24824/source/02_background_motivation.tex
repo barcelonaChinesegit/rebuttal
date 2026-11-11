@@ -1,0 +1,165 @@
+\section{Background and Motivation}
+\label{sec:back&moti}
+\subsection{The Idea of Learned Index}
+The concept of learned indexes is inspired by machine learning: an index can be viewed as a model that maps keys to storage addresses, and building an index is analogous to training that model\cite{case18}. Concretely, the index model is the empirical cumulative distribution function (ECDF) of dataset, so the core idea of learned indexing is to construct models that fit the ECDF. In practice, however, fitting a complex real-world ECDF with a single global model is difficult and brittle under distribution shifts. Therefore, most practical learned index designs adopt multi-model hierarchies: an upper layer directs queries to leaf layer models, which are typically piecewise functions that provide more accurate local fits. In addition, indexes applies the final “last-mile” search corrects any residual prediction error when necessary.
+
+One representative realization of this multi-model hierarchies is the Recursive Model Index (RMI) framework \cite{case18}. In RMI, each layer consists of multiple models, where a higher-level model selects the next-layer model, and the leaf-layer model predicts the position within its local range, followed by a correction search to find the exact key. Error correction in multi-model hierarchies can be performed either at internal/leaf nodes \cite{pgm20, xindex20, finedex21} or only at leaf nodes \cite{case18, alex20}; all corrections introduce runtime overhead. LMIndex achieves perfect accuracy in internal node predictions, eliminating the need for internal node correction and its associated cost.
+
+At the leaf level, learned indexes often adopt piecewise linear models due to their structural simplicity and sufficient fitting capability \cite{sosd20}. Constructing a piecewise linear function typically involves two phases: segmentation and training. Some indexes \cite{alex20, swix24, carmi22} perform segmentation using independent heuristics and then train per-segment models via least squares regression. An alternative family of approaches \cite{fiting-tree19, pgm20, bourbon20} follows an $\varepsilon$-constrained construction: during segmentation, an error threshold $\varepsilon$ is enforced so that each segment’s model satisfies the constraint:
+
+\begin{constraint}[$\varepsilon$-constraint]
+\label{cons:epsi}
+    For all keys $k$ in a segment, have $|\hat{p}(k) - p(k)| \le \varepsilon$, where $\hat{p}(k)$ is the predicted position and $p(k)$ is the true position.
+\end{constraint}
+
+Several methods, including RS \cite{radixspline20} and LIPP \cite{lipp21}, use greedy one-pass segment generation algorithms to produce $\varepsilon$-constrained partitions efficiently. The PGM-Index \cite{pgm20} adapts the streaming algorithm from \cite{line81} to construct the optimal piecewise linear approximation model (Opt. PLA-model), which generates the minimum number of $\varepsilon$-constrained segments in one pass. Opt. PLA constructs, for each prospective segment, a convex region of slope–intercept pairs that satisfy the $\varepsilon$-constrain and simply chooses the central point as the model parameter.
+
+% Compared with independent training strategies, $\varepsilon$-constrained approaches typically require only $O(n)$ time for segmentation, and part of training cost is implicitly embedded in the segmentation process, yielding higher construction efficiency. However, Opt. PLA-model focuses solely on optimal segmentation and does not optimize the training phase. LMIndex builds upon this foundation with the Optimal Error Threshold Algorithm (OETA), which computes model parameters with the minimum maximum error for each segment in constant time. Combined with binary search for final error correction, LMIndex adapts to the local distribution of each segment, thereby reducing correction overhead.
+
+Compared to independent segmentation-then-train pipelines, $\varepsilon$-constrained approaches typically run in $O(n)$ time for segmentation, and the part of training cost is implicitly embedded in the segmentation process, yielding higher construction efficiency. However, Opt. PLA-model focuses solely on optimal segmentation and does not optimize the training phase. LMIndex builds upon this foundation with the Optimal Error Threshold Algorithm (OETA), which efficiently computes per-segment linear parameters that minimize the segment’s maximum prediction error. Combined with binary search for final error correction, OETA allows LMIndex to adapt each segment to its local distribution and significantly reduce last-mile correction overhead.
+
+% \begin{table}
+%   \caption{B+Tree vs. Learned indexes across six key dimensions}
+%   \small
+%   \begin{tabular}{lccccc}
+%     \toprule
+%      &\textbf{B+Tree}&\textbf{DPGM}&\textbf{ALEX}&\textbf{LIPP}&\textbf{FINEdex}\\
+%     \midrule
+%     \textbf{Bulk load} & $\triangle$ & $\triangle$ & $\times$ & $\times$ & $\times$\\
+%     \textbf{Point query} & $\triangle$ & $\bigcirc$ & $\bigcirc$ & $\bigcirc$ & $\triangle$\\
+%     \textbf{Range query} & $\triangle$ & $\triangle$ & $\triangle$ & $\times$ & $\times$\\
+%     \textbf{Update} & $\triangle$ & $\bigcirc$ & $\times$ & $\triangle$ & $\triangle$\\
+%     \textbf{Stability} & $\triangle$ & $\times$ & $\triangle$ & $\triangle$ & $\triangle$\\
+%     \textbf{Space} & $\triangle$ & $\bigcirc$ & $\triangle$ & $\times$ & $\times$\\
+%   \bottomrule
+%   \label{tab:learnedVSbtree}
+% \end{tabular}
+% % \footnotesize{$\bigcirc$: good; $\triangle$: moderate; $\times$: poor.}
+% \vspace{-8pt}
+% \begin{tablenotes}
+%     \small
+%     \item \textbf{Compared to B+Tree:} $\bigcirc$: better; $\triangle$: similar; $\times$: worse.
+%   \end{tablenotes}
+% \end{table}
+
+% \begin{table}
+%  \centering
+%   \caption{B+Tree vs. Learned indexes across six key dimensions}
+%   \small
+%   \begin{tabular}{lccccc}
+%     \toprule
+%      &\textbf{B+Tree}&\textbf{DPGM}&\textbf{ALEX}&\textbf{LIPP}&\textbf{FINEdex}\\
+%     \midrule
+%     \textbf{Bulk load} & $\triangle$ & $\triangle$ & $\times$ & $\times$ & $\times$\\
+%     \textbf{Point query} & $\triangle$ & $\bigcirc$ & $\bigcirc$ & $\bigcirc$ & $\triangle$\\
+%     \textbf{Range query} & $\triangle$ & $\triangle$ & $\triangle$ & $\times$ & $\times$\\
+%     \textbf{Update} & $\triangle$ & $\bigcirc$ & $\times$ & $\triangle$ & $\triangle$\\
+%     \textbf{Stability} & $\triangle$ & $\times$ & $\triangle$ & $\triangle$ & $\triangle$\\
+%     \textbf{Space} & $\triangle$ & $\bigcirc$ & $\triangle$ & $\times$ & $\times$\\
+%   \bottomrule
+%   \label{tab:learnedVSbtree}
+% \end{tabular}
+% % \footnotesize{$\bigcirc$: good; $\triangle$: moderate; $\times$: poor.}
+% \vspace{-8pt}
+% \begin{tablenotes}
+%     \small
+%     \item \textbf{Compared to B+Tree:} $\bigcirc$: better; $\triangle$: similar; $\times$: worse.
+%   \end{tablenotes}
+% \end{table}
+
+% \begin{table}
+%   \centering
+%   \caption{B+Tree vs. Learned indexes across five key dimensions}
+%   \small
+%   \begin{tabular}{lcccc}
+%     \toprule
+%       &\textbf{B+Tree}&\textbf{DPGM}&\textbf{ALEX}&\textbf{LIPP}\\
+%     \midrule
+%     \textbf{Bulk load} & $\triangle$ & $\triangle$ & $\times$ & $\times$\\
+%     \textbf{Point query} & $\triangle$ & $\bigcirc$ & $\bigcirc$ & $\bigcirc$\\
+%     \textbf{Range query} & $\triangle$ & $\triangle$ & $\triangle$ & $\times$\\
+%     \textbf{Update} & $\triangle$ & $\bigcirc$ & $\times$ & $\triangle$\\
+%     \textbf{Stability} & $\triangle$ & $\times$ & $\triangle$ & $\triangle$\\
+%     \textbf{Space} & $\triangle$ & $\bigcirc$ & $\triangle$ & $\times$\\
+%   \bottomrule
+% \end{tabular}
+% \label{tab:learnedVSbtree}
+% % \footnotesize{$\bigcirc$: good; $\triangle$: moderate; $\times$: poor.}
+% % \vspace{-4pt}
+% \begin{tablenotes}
+%     \small
+%     \item \textbf{Compared to B+Tree:} $\bigcirc$: better; $\triangle$: similar; $\times$: worse.
+%   \end{tablenotes}
+% \end{table}
+
+% \subsection{Learned Indexes vs. B+Tree}
+% Learned indexes have attracted significant attention for their potential to exploit data distribution to accelerate query processing. Nevertheless, compared to the mature and widely adopted B+Tree, existing learned index designs invariably fall short in one or more critical dimensions. This discrepancy restricts their applicability as versatile indexes in practical database systems.
+
+% Table \ref{tab:learnedVSbtree} summarizes the comparison among B+Tree, DPGM, ALEX, LIPP, and FINEdex across six key evaluation dimensions. All symbols represent performance comparisons against B+Tree. For example, $\bigcirc$ indicates better performance than B+Tree, while $\triangle$ denotes similar performance to B+Tree. All dimensions (except space) are evaluated in terms of latency. For Stability, we evaluate the deviation in read/write latency after updates. The results highlight that no existing learned index consistently outperforms B+Tree across all these dimensions. We briefly analyze the underlying reasons for these limitations below.
+
+% \textbf{DPGM.} DPGM \cite{pgm20} extends the original read-only PGM-index by organizing data into sorted sets of exponentially increasing size, each independently indexed with a read-only PGM. New entries are inserted into the smallest set and trigger merges upon overflow, which involves retraining a static PGM for the merged set. While enabling updates, DPGM suffers from unstable query performance post-update: unlike B+Tree’s logically contiguous leaf data layout, DPGM disperses data across multiple sets, causing point queries to probe several models and range queries to merge partial results from each set, thus incurring higher latency and resource consumption.
+
+% \textbf{ALEX.} ALEX \cite{alex20} segments data using a cost model involving complex sampling and computation, followed by $O(n)$-time least squares training per segment. Its construction demands multiple passes over data and maintains a complex cost model, whereas B+Tree can be bulk-loaded with one pass. Under heavy updates cause drastic changes in the data distribution, ALEX experiences frequent node splits and retraining, and pay further overhead to maintain the cost model. In contrast, B+Tree updates are less sensitive to data distribution and avoid the burden of model recalibration.
+
+% \textbf{LIPP.} LIPP \cite{lipp21} eliminates correction both at internal and leaf nodes by ensuring perfect prediction. To prevent “last-mile” correction, it recursively partitions conflicting key sets and retrains models until each key is uniquely placed. This leads to high bulk loading cost on complex distributions due to repeated conflict resolution and retraining. And scattered data layouts of LIPP increase range query overhead compared to B+Tree’s linked leaf nodes. Additionally, LIPP’s conflict-driven model proliferation may cause large internal gaps and unpredictable space usage, especially on real-world skewed data, unlike B+Tree’s stable space footprint.
+
+% \textbf{FINEdex.} FINEdex \cite{finedex21} employs the Learning Probe Algorithm (LPA) to adaptively train models and optimize layout, storing them in a SIMD-optimized B-Tree. LPA uses least squares fitting, probing whether appending a block exceeds an error threshold, and performing localized rollbacks if necessary. This LPA-based construction requires multiple data passes, thus incurring greater construction complexity compared to B+Tree’s one pass bulk load. For updates, LIPP employs an optional per-key “level bins” to absorb insertions. Although its fine-grained buffering can absorb more keys, it increases range query cost and space overhead.
+
+% \textbf{Motivation.} As summarized above, existing learned indexes tend to trade off improvements in few metric for another, limiting their generality under unknown or dynamic workloads and data distributions. This gap motivates us to design a comprehensive learned index that achieves superiority compared to B+Tree across multiple key dimensions (including bulk load, point and range queries, updates, stability, and space usage), while simultaneously maintaining competitiveness with state-of-the-art learned indexes.
+
+\begin{table*}[htbp]
+\centering
+\caption{Impact of Design Strategies on Key Evaluation Dimensions. Note that Negative/Positive denote relative impacts within the same main strategy. Unmarked entries depend on specific implementations (e.g., query performance of hybrid strategies depends on the additional structure).}
+\label{tab:strategy_dimensions}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{ll cccccc}
+\toprule
+\textbf{Main Strategy} & \textbf{Sub-Strategy} & \textbf{Bulk Loading} & \textbf{Point Queries} & \textbf{Range Queries} & \textbf{Update} & \textbf{Stability} & \textbf{Space Usage} \\
+\midrule
+
+% 1. Model training strategies
+\multirow{2}{*}{Model training} 
+& Top-Down & \nega & \pos & & \nega & \nega &\\
+& Bottom-Up & \pos & & & \pos & \nega &\\
+\midrule
+
+% 2. Segments indexing strategies
+\multirow{2}{*}{Segments indexing} 
+& RMI-style & & \pos & & \nega & \nega & \pos \\
+& Hybrid & & & & \pos & \pos & \nega\\
+\midrule
+
+% 3. Error management strategies
+\multirow{3}{*}{Error management} 
+& All Node Error & & \nega & & & & \pos \\
+& Leaf-only Error & \nega & \pos & & & & \\
+& Zero Error & & \pos & \nega & & & \nega \\
+
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Design Strategy Analysis of Learned Index}
+Although learned indexes demonstrate performance potentials exceeding traditional counterparts in specific scenarios, their robustness faces severe challenges under uncertain operating environments. Existing studies \cite{pgm20, lipp21} tend to highlight a small number of metrics (eg, lookup speeds) in specific scenarios, but their performance frequently decays when triggered by shifts in data distribution, hardware resource constraints, or workload fluctuations. The core pain point lies in the instability of performance or even unavailability (e.g. out of memory in some devices), which limits the potential for learned indexes to be widely deployed in practice.
+
+The underlying cause of this fragility is that existing designs often pursue specialized optimization of single or few performance dimensions, neglecting the complex interference among different dimensions. Notably, the performance dimensions of an index, such as point query latency, space usage, and update latency, are not independent but tightly coupled. For instance, strategies that minimize point query latency to the extreme, such as LIPP \cite{lipp21}, incur a multiplicative expansion of the memory footprint compared to other baselines\cite{learned23}. This observation suggests that a lack of holistic consideration regarding these inter-dimensional trade-offs leads to the observed lack of robustness. Understanding the trade-offs of existing strategies is essential to enhance index robustness. Therefore, we present the following design strategies:
+
+\subsubsection{Model Training Strategies}
+In the context of model training paradigms, Top-Down and Bottom-Up strategies exhibit distinct trade-offs across multiple performance dimensions. (1) \textbf{Top-Down strategies} \cite{case18, alex20, swix24} treat the dataset as a whole and attempt to fit a global model. This method recursively partitions the dataset into subsets to improve precision of models. While this utilizes global distribution of the dataset to reduce random memory accesses and optimizes average read latency in static settings, the training process requires multiple passes over the full data, resulting in low efficiency during bulk loading. Furthermore, the advantages of this approach primarily stem from partitioning based on the perception of global distribution. Consequently, when the data distribution undergoes changes, either frequent cascading updates are required to maintain high efficiency, leading to significant update cost, or distribution drift is permitted, which results in a subsequent decline in query efficiency. (2) \textbf{Bottom-Up strategies} \cite{radixspline20, pgm20, finedex21}, represented by Piecewise Linear Approximation (PLA) \cite{pgm20}, greedily construct segments (i.e. data partitions containing the model) based on a strict maximum model prediction error threshold and build segment indexes upward from these segments. These methods are typically efficient for bulk loading, as they require only a single pass over the data. Furthermore, they remain insensitive to changes in the global distribution, given that the impact of insertions is usually confined to local regions. However, the fixed parameters of such methods (e.g. maximum error threshold) are immutable during construction, which may generate a large number of segments on skewed datasets. Furthermore, updates potentially exacerbate this increase in the segment count. Thus, segment indexing becomes critical and some indexing strategies may lead to severe degradation of query efficiency after updates \cite{pgm20, learned23}.
+
+\subsubsection{Segments Indexing Strategies}
+Consistent with the above, a segment is defined as a bottom data partition and its corresponding model (In context of B+Tree, it's leaf node). Similarly, in the design of indexing structures for managing segments, a significant conflict exists between structural flexibility and maintenance overhead. (1) \textbf{RMI-Style strategies} \cite{xindex20, chameleon24, sali23} index segments using models of varying precision. A request initially enters the lowest precision model and progressively predicts and transitions to the next layer of higher precision models until it is routed to the target segment. The advantage of this approach lies in the small memory footprint of model parameters and typically low prediction overhead. However, it faces a challenge in balancing precision and flexibility. High-precision models are tightly coupled with the data distribution, where structural modification operations (SMOs) may trigger cascading retraining and result in significant overhead. Conversely, models prioritizing flexibility permit prediction errors and rely on local correction, which compromises query efficiency. (2) \textbf{Hybrid strategies} employ additional structures or their model-integrated variants to locate segments, including B+Trees \cite{fiting-tree19, learnedkv24}, flat arrays \cite{swix24, uplif25}, hash tables \cite{lits24, lead26}, etc. The SMO of this approach generally exhibit less dependence on the data distribution, thereby partially mitigating the cascading retraining issues associated with previous methods. Furthermore, different underlying structures provide distinct advantages. For instance, B+Trees offer efficient construction alongside relatively balanced update and search performance, whereas hash tables support high-speed insertions and point queries. However, compared to RMI-Style strategies, hybrid approaches introduce additional space overhead. Furthermore, these designs inherit the specific limitations of their chosen structures, such as the search latency inherent in trees or the poor range query efficiency of hash tables.
+
+\subsubsection{Error Management Strategies}
+The error management strategy determines how the gap between the predicted position and the true position is bridged, triggering a triangular game among query latency, construction cost, and spatial continuity. Depending on the source of the error, it can be divided into three classes: (1) \textbf{All Node Error strategies} \cite{plex21, hlihp24} permits prediction inaccuracies across all nodes. This strategy benefits from simpler models, such as basic linear regression, and results in the minimal storage overhead for model parameters. However, error correction costs accumulate at every node along the query propagation path, which leads to reduced query efficiency. (2) \textbf{Leaf-only Error strategies} \cite{alex20, lits24, alt-index25} restricts prediction inaccuracies to leaf nodes (i.e., segment nodes), thereby reducing the frequency of error correction to $O(1)$ complexity and effectively decreasing query overhead. Achieving this strategy typically requires complex node splitting logic, which prolongs bulk loading time. Furthermore, certain implementations \cite{alex20} lack theoretical constraints on the maximum error of leaf nodes. (3) \textbf{Zero Error strategies} like LIPP \cite{lipp21} force physical positions to match predictions. While this eliminates correction search and optimizes point queries, it necessitates reserving massive empty slots. This results in spatial inflation and memory discontinuity, which severely degrades the performance of range queries.
+
+In summary, most existing learned indexes represent compromises on specific performance metrics under limited assumptions. This design philosophy limits their generality in complex, dynamic environments. To this end, our goal is not to pursue single-point extremism but to design a robust and efficient framework. We aim to coordinate the aforementioned conflicts to achieve an optimal balance among critical performance dimensions, including bulk loading efficiency, point and range query performance, update throughput, stability, and space usage.
+
+\subsection{Strategies Selection for Multi-dimensional Performance Balance and Efficiency}
+As summarized in Table \ref{tab:strategy_dimensions}, existing strategies inherently incur trade-offs across different evaluation dimensions. With the objective of multi-dimensional comprehensive optimization, the key idea for selecting strategies is to exploit their inherent strengths while mitigating their respective weaknesses. Based on this systematic analysis, we identify two core philosophies: \textbf{(1) simple and universal strategies generally outperform complex designs tailored for single-dimensional gains; (2) Allowing constrained deviations or limited chaos is often more effective across multi-dimensions than strategies of absolute restriction or complete freedom.} Specifically, we select:
+
+\textbf{Model training strategies.} We adopt Bottom-Up strategies. Compared to Top-Down strategies, which suffer from low bulk loading efficiency due to multiple data scans and high sensitivity to distribution drift, Bottom-Up strategies are more simple and universal. This approach requires only a single pass to complete construction, and its greedy algorithm offers the advantages of high efficiency and local decoupling. Furthermore, to address the issue of immutable preset error thresholds, we propose the OETA algorithm to compress the threshold of each segment to its minimum. To overcome the potential drawback of excessive segment generation, we introduce a novel segment indexing strategy that ensures the theoretical maximum routing length remains strictly bounded and small.
+
+\textbf{Segments indexing strategies.} We adopt Hybrid strategies. Specifically, we design a novel flat/tree-like hybrid structure named Linear Map (LM) to index segments and mitigate the inherent drawbacks of Bottom-Up strategies. Compared to traditional structures, LM exploits segment distribution information. When the key type is fixed, the theoretical complexity of both queries and updates remains $O(1)$. The core model of this structure is essentially a derivation of the segments, enabling LM to achieve precise routing to target segment without the need for model training. This ensures simultaneous efficiency in both construction and query execution. Furthermore, experimental results demonstrate that its space consumption is second only to RMI-Style strategies.
+
+\textbf{Error management strategies.} We adopt Leaf-only Error strategies. In practice, error management strategies can be viewed as a spatio-temporal trade-off. While the All Node Error strategies maximizes space savings at the expense of query efficiency, the Zero Error strategies achieves theoretically optimal query efficiency but it needs to allocate empty slots in advance. This requirement leads to both severe space inflation and degraded performance for range queries. The Leaf-only Error strategy represents a compromise between these two extremes. By incorporating OETA to ensure that leaf node errors remain controlled, it avoids space wastage while simultaneously maintaining high performance for both point and range queries. Furthermore, we design a gaps allocation strategy and hybrid search to further reduce the cost of error correction within leaf nodes.

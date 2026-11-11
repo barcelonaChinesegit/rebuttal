@@ -1,0 +1,99 @@
+\clearpage
+\section{Experimental Details}
+\label{appendix: experimental_details}
+
+\subsection{Prompt for Response Generation}
+\lstinputlisting[caption={Prompt used for response generation. The \texttt{[Document]} is in PNG format (page screenshots) for LVLMs, and TXT format for LLMs.}, style=prompt]{./prompts/response_generation.md}
+
+\subsection{Prompt for Answer Extraction}
+\lstinputlisting[caption={Prompt used for answer extraction.}, style=prompt]{./prompts/answer_extraction.md}
+
+
+\subsection{Rules for Score Calculation}
+We evaluate the model's responses by scoring the extracted answers against the reference answers. The scorer is rule-based and employs different strategies according to the format of the reference answer. We detail its rules as below:
+
+\noindent\textbf{String:} We firstly use a series of regular expressions to determine whether the answers require exact matching (\eg telephone numbers, email addresses, website addresses, file names, times, dates, \etc). If an exact match is needed, we perform a straightforward string comparison and score the answer either 0 or 1. Otherwise, we follow previous work~\cite{VanLandeghem2023DocumentUD} and calculate the ANLS (Average Normalized Levenshtein Similarity) with a pre-defined threshold ($\tau = 0.5$).
+
+\noindent\textbf{Integer:} We perform an exact match comparison and score the answer either 0 or 1.
+
+\noindent\textbf{Float:} We view the prediction and reference answers as equal if they fall within a 1\% relative tolerance. 
+
+\noindent\textbf{List:} We adopt a relatively strict rule for scoring answers in list format: predictions that do not have the same number of elements as the reference receive a score of 0. For the remaining predictions, as Eq.~\ref{eq:list_score} indicates, we score each element in order and use the minimum element-wise score as the score for the entire list. The element-wise scoring strategies is determined by the formats of elements (\ie string, integer or float).
+
+\begin{equation}
+    \label{eq:list_score}
+    \begin{aligned}
+    & \texttt{pred\_list}, \texttt{ref\_list}  = \texttt{sorted(pred\_list)}, \texttt{sorted(ref\_list)}   \\
+    & \texttt{Score(pred\_list, ref\_list)} = \texttt{min}( \\
+    & \quad \quad [\texttt{Score(pred, ref) for pred, ref in zip(pred\_list, ref\_list)}] \\
+    & )
+    \end{aligned}
+\end{equation}
+
+Evaluation detailed in the Appendix~\ref{subsec: Human Evaluation on the Automatic Evaluation Pipeline} shows that while this scorer is not perfect, it aligns well with human judgment. We will continue refining these rules to cover more corner cases and enhance their accuracy.
+
+\subsection{Human Evaluation on the Automatic Evaluation Pipeline}
+\label{subsec: Human Evaluation on the Automatic Evaluation Pipeline}
+We conduct human evaluations to assess the performance of our automatic evaluation pipeline, which includes the answer extractor and the score calculator. Specifically, we randomly select 100 questions and review their responses from two representative LVLMs: GPT-4o and Gemini-1.5-Pro. We manually evaluate the correctness of each response and compare the results between human evaluation and automatic evaluation. The performance, as shown in Table~\ref{tab:eval_compare}, indicates a high correlation between human judgment and our automatic pipeline.
+
+\begin{table}[!htbp]
+    \centering
+    \begin{tabular}{l|ccc}
+    \toprule
+        \multirow{2}{*}{\textbf{Model}} & \multicolumn{3}{c}{\textbf{Inconsistent Evaluation}} \\
+         & Ans. Extractor & Scorer & Overall \\
+         \midrule
+        GPT-4o & 4 & 2 & 6 \\
+        Gemini-1.5-Pro & 2 & 2 & 4 \\
+        \bottomrule
+    \end{tabular}
+    \vspace{1em}
+    \caption{We manually check 100 responses from GPT-4o and Gemni-1.5-Pro, and compare the evaluation results between humans and our automatic pipeline.}
+    \label{tab:eval_compare}
+\end{table}
+
+\subsection{Model Hyperparameters}
+\label{appendix: Hyperparameters}
+The hyperparameters of used LVLMs and LLMs in Section 3.3 are detailed in Table~\ref{tab:hyperparameters}. The temperature is set as $0.0$, and the max\_new\_tokens is set as $1024$ for all the models. The `concatenated\_images' parameter determines the maximum number of images that can be combined into a single input for LVLMs. By concatenating multiple images, we can meet the minimum context window requirements. The `max\_pages' parameter specifies the maximum number of images that can be directly input into the LVLMS without concatenation.
+
+\begin{table}[!htbp]
+    \centering
+    \resizebox{0.8\linewidth}{!}{
+    \begin{tabular}{l|c}
+        \toprule
+        \textbf{Model} & \textbf{Hyperparameters}  \\
+        \midrule
+        \multicolumn{2}{l}{\textit{LLM}} \\
+        \midrule
+        ChatGLM-128k & max\_input\_words=60000 \\
+        Mistral-Instruct-v0.2-7B & max\_input\_words=20000  \\ 
+        Mixtral-Instruct-v0.1-8x7B & max\_input\_words=20000 \\
+        Mixtral-Instruct-v0.1-8x22B & max\_input\_words=40000  \\
+        QWen-Plus & max\_input\_words=16000 \\
+        DeepSeek-V2 & max\_input\_words=20000  \\
+        \midrule
+        \multicolumn{2}{l}{\textit{LVLM}} \\
+        \midrule
+        DeepSeek-VL-Chat & concatenated\_images=5 \\
+        Qwen-VL-Chat & concatenated\_images=5 \\
+        Idefics2 &concatenated\_images=5 \\
+        MiniCPM-Llama3-V2.5 & concatenated\_images=2 \\
+        InternLM-XC2-4KHD & concatenated\_images=2 \\
+        Monkey-Chat & concatenated\_images=1 \\
+        CogVLM2-Llama3-Chat & concatenated\_images=1 \\
+        InternVL-Chat-v1.5 & concatenated\_images=5 \\
+        EMU2-Chat & concatenated\_images=5 \\
+        \midrule
+        \multicolumn{2}{l}{\textit{LLM \& LVLM}} \\
+        \midrule
+        Claude-3 Opus & version=\texttt{claude-3-opus-20240229}, concatenated\_images=20 \\
+        Gemini-1.5-Pro & max\_pages=120, version=\texttt{gemini-1.5-pro-latest} \\
+        GPT-4-turbo & max\_pages=120, version=\texttt{gpt-4-turbo-2024-04-09} \\
+        GPT-4o & max\_pages=120, version=\texttt{gpt-4o-2024-05-13} \\
+        \bottomrule
+    \end{tabular}
+    }
+    \vspace{1em}
+    \caption{Model Hyperparameters}
+    \label{tab:hyperparameters}
+\end{table}

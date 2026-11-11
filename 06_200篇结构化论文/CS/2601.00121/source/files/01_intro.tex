@@ -1,0 +1,52 @@
+\section{Introduction}
+\label{sec:intro}
+
+A recurring tension in management science lies between \emph{normative optimality}—the decisions prescribed by formal models—and \emph{descriptive reality}—the decisions practitioners actually make under time pressure, incomplete data, and limited analytical support. Inventory management makes this tension vivid. Operations research has produced a mature toolkit for stochastic inventory control, including classical base-stock and $(s,S)$ policies with sharp optimality guarantees under stylized assumptions (e.g. \cite{axsater2006inventory}), as well as modern approximate dynamic programming and deep reinforcement learning (DRL) methods for richer environments (e.g. \cite{madeka2022deep}). In principle, these methods can reduce total cost (holding, ordering, and shortage) while improving service levels. In practice, however, many small and medium-sized retailers do not deploy them. Without dedicated analysts or data infrastructure, managers often rely on informal rules of thumb—``order when it looks low,'' ``double before holidays,'' ``round to a case-pack''—that are easy to apply but rarely calibrated to demand uncertainty, lead-time variability, or cost trade-offs.
+
+    
+
+
+This gap persists not primarily because the \emph{optimal policy} is too hard to compute, but because standard optimization tools remain inaccessible to non-experts. A critical challenge lies in the intricacy of \emph{problem formulation}. Even a basic inventory model requires translating messy operational context into precise inputs: what constitutes a stockout (lost sales vs.\ backorders); how lead times behave (deterministic vs.\ stochastic, including supply disruptions); what the review cadence is; which constraints bind (cash, storage, minimum order quantities, case-pack rounding, delivery schedules); and what objective proxies are acceptable (service-level targets, penalty costs, fill-rate). Much of this information is not stored in clean tables—it lives in human memory and informal language. This highlights an interpretive barrier: converting qualitative business narratives into a structured, model-consistent specification, and then converting the model output back into an operational routine that a manager can execute and trust.
+
+
+
+
+
+  
+
+Recent advances in large language models (LLMs) create a compelling opportunity to reduce this bottleneck, but also introduce a subtle trap. A natural first idea is to \emph{directly call the LLM} as an end-to-end decision-maker: describe the business in natural language and ask, “What should I order?” This often produces fluent, confident recommendations. Yet fluency is not the same as correctness. Inventory control is a stochastic control problem where small structural mistakes—misinterpreting lead time, conflating lost sales with backorders, mishandling uncertainty, ignoring capacity or service constraints—compound into recurring costs. Moreover, LLMs are not designed to guarantee feasibility, respect Bellman optimality, or provide calibrated probabilistic reasoning. As a result, a direct LLM call can yield policies that are \emph{plausible but systematically suboptimal}, or even internally inconsistent. In other words, naïvely using an LLM as the solver risks paying a “hallucination tax”: the efficiency loss induced when decision quality is limited by unconstrained language-model reasoning rather than grounded optimization.
+
+The key insight of this paper is therefore not that LLMs can replace operations research, but that they can be used \emph{more intelligently}: as an interface and orchestrator that makes rigorous optimization usable. We propose a hybrid, agentic decision-support framework that explicitly separates semantic interaction from mathematical optimization. Our system decomposes the pipeline into three roles:
+(i) a \emph{Information Extraction Agent} that engages the user, surfaces missing information, and resolves ambiguity through targeted follow-up questions;
+(ii) an \emph{Optimization Agent} that receives a structured specification and computes a policy using grounded operations research algorithms (e.g., $(s,S)$-style methods and DRL where appropriate);
+and (iii) an \emph{Policy Interpretation Agent} that translates the computed policy back into operational guidance—what to order and when—while explaining assumptions, checking feasibility against stated constraints, and presenting actionable summaries in the user’s own language.
+
+This separation is not merely an engineering choice; it is an epistemological one. It treats language models as tools for elicitation, structuring, and translation, while reserving {policy computation} for methods that can be verified, stress-tested, and improved with established theory. This design also clarifies what the “last-mile” problem in decision support really is. When strong algorithms already exist, the binding constraint is often the {fidelity of the interface}: how well it can elicit, stabilize, and formalize the problem instance that the solver requires. In our framework, the LLM acts as a {rationality prosthetic}—a front end that sanitizes inputs, makes assumptions explicit, and aligns business narratives with model structure—while the optimization back end remains the engine of efficiency. Rather than pursuing a one-size-fits-all, end-to-end Generative AI solver, we argue for a dual-engine approach in which LLMs unlock the rigor of management science for users who cannot otherwise access it.
+
+To rigorously evaluate this dual-engine architecture, however, we face a methodological challenge.
+Interactive decision-support systems are difficult to evaluate at scale because real user inputs are noisy, inconsistent, and expensive to collect repeatedly. Static benchmarks miss the central difficulty: the agent must ask for missing parameters, handle contradictions, and converge to a well-posed model through dialogue. To enable controlled, reproducible evaluation, we introduce a \emph{Human Imitator}: a language model fine-tuned on more than hundreds of real human--machine dialogues. The Human Imitator serves as a scalable “digital twin” of a boundedly rational small-business owner, reproducing the ambiguity, incompleteness, and occasional inconsistency characteristic of real managerial inputs. This allows systematic stress-testing of interactive systems without the logistical and financial burden of large human-subject trials.
+
+
+
+\subsection{Our Main Contributions}
+
+
+Our study makes four main contributions to the design and evaluation of LLM-based decision support for stochastic inventory control.
+
+    \begin{description}
+        \item[Performance quantification:] Our hybrid agentic system reduces policy costs by $32.1\%$ relative to a baseline in which \emph{GPT-4o} is used as an interactive end-to-end solver. This gap provides a concrete estimate of the \emph{hallucination tax}: the efficiency loss incurred when policy computation relies on unconstrained language-model reasoning rather than grounded stochastic optimization. 
+
+   
+        
+        \item[Drivers of Performance:] We disaggregate performance to identify the specific regimes where agentic support yields the highest marginal value. Our analysis reveals that while the framework is distribution-agnostic (robust to demand shape), its advantage scales with \textit{complexity} and \textit{economic stakes}. The performance gap widens significantly under longer lead times and in high-penalty, high-flexibility regimes. This observed ``complexity premium'' confirms that solver-backed architectures deliver outsized returns precisely where the financial consequences of imprecise heuristics are most acute.
+
+    \item[Limits of prompt-based reasoning:] We isolate the source of decision error by comparing the interactive end-to-end \emph{GPT-4o} baseline against a ``perfect information'' counterfactual. Strikingly, providing ground-truth parameters to \emph{GPT-4o} yields no statistical improvement. This identifies a hard ``cognitive ceiling'': the performance bottleneck of LLMs is not \textit{informational} (data extraction) but fundamentally \textit{computational}. This confirms that prompt engineering cannot bridge the gap to stochastic optimality; rather, LLMs function better when architected to \emph{orchestrate} rigorous solvers.
+        
+      
+        
+
+        \item[Behavioral simulation for interactive benchmarks:] Methodologically, we address the scarcity of interactive benchmarks by establishing a Human Imitator as a scalable proxy for boundedly rational managers. By reproducing the inconsistency and ambiguity of real-world inputs, this approach allows us to move beyond static datasets and stress-test decision support systems against the realistic friction of human-machine interaction. Beyond inventory control, our scalable evaluation pipeline offers a general template for evaluating interactive LLM-based decision-support tools in other operational domains.
+
+    \end{description}
+    
+    Collectively, these findings suggest that the true potential of Generative AI in operations lies in its ability to democratize expertise. By serving as an intelligent orchestration layer on top of existing analytical tools, LLMs can finally unlock the power of management science for the long tail of small business owners who have historically been left behind.

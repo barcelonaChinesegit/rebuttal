@@ -1,0 +1,625 @@
+{
+ "title": "Utility maximisation with model-independent constraints",
+ "abstract": "We consider an agent who has access to a financial market, including derivative contracts, who looks to maximise her utility. Whilst the agent looks to maximise utility over one probability measure, or class of probability measures, she must also ensure that the mark-to-market value of her portfolio remains above a given threshold. When the mark-to-market value is based on a more pessimistic valuation method, such as model-independent bounds, we recover a novel optimisation problem for the agent where the agents investment problem must satisfy a pathwise constraint.\n\nFor complete markets, the expression of the optimal terminal wealth is given, using the max-plus decomposition for supermartingales.  Moreover, for the Black-Scholes-Merton model the explicit form of the process involved in such decomposition is obtained, and we are able to investigate numerically optimal portfolios in the presence of options which are mispriced according to the agent's beliefs.",
+ "sections": [
+  {
+   "level": "preamble",
+   "title": "",
+   "text": "\\begin{asydef}\nusepackage(\"amsmath\");\ntexpreamble(\"\\newcommand{\\ul}[1]{\\underline{#1}}\\newcommand{\\ol}[1]{\\overline{#1}}\\newcommand{\\indic}[1]{\\boldsymbol{1}_{\\{\\ensuremath{#1}\\}}}\\newcommand{\\Rt}{\\overline{R}}\\newcommand{\\Rs}{\\underline{R}}\\newcommand{\\BS}{\\mathsf{BS}}\");\n\nimport graph;\n\nreal bs(real s, real K, real T, real r, real sigma)\n{\n  real N(real x)\n  {\n    return 1/2+erf(x/sqrt(2))/2;\n  }\n\n\n  real d1 = (sigma>0)?(log(s)-log(K) + (r + sigma^2/2)*T)/(sigma*sqrt(T)):10^6*sgn(log(s)-log(K)+r*T);\n  real d2 = d1 - sigma*sqrt(T);\n  \n  return s*N(d1) - N(d2)*K*exp(-r*T);\n}\n\\end{asydef}\n\n\n\\begin{abstract}\nWe consider an agent who has access to a financial market, including derivative contracts, who looks to maximise her utility. Whilst the agent looks to maximise utility over one probability measure, or class of probability measures, she must also ensure that the mark-to-market value of her portfolio remains above a given threshold. When the mark-to-market value is based on a more pessimistic valuation method, such as model-independent bounds, we recover a novel optimisation problem for the agent where the agents investment problem must satisfy a pathwise constraint.\n\nFor complete markets, the expression of the optimal terminal wealth is given, using the max-plus decomposition for supermartingales.  Moreover, for the Black-Scholes-Merton model the explicit form of the process involved in such decomposition is obtained, and we are able to investigate numerically optimal portfolios in the presence of options which are mispriced according to the agent's beliefs.\n\\end{abstract}\n\\maketitle"
+  },
+  {
+   "level": "section",
+   "title": "Introduction",
+   "text": "\\label{sec:Introduction}\n\nIn this paper we  consider a utility maximisation problem for an agent who has some modelling beliefs, according to which the agent will aim to maximise her utility, but also some constraints which are based on model-independent considerations. Our basic setting is that the agent assumes they will observe only `possible' paths according to their beliefs, and they will pursue a utility maximisation objective corresponding to their beliefs. We importantly include in our setting both trading in an underlying risky asset, as well as in illiquid derivatives, whose initial price and payoff are known, but no assumptions about the intermediate value can be made. The agent is also being observed by a manager or regulator who does not share the agent's modelling assumptions, but rather uses other (typically more pessimistic) assumptions. The manager will intervene if their valuation of the agent's portfolio goes below some given threshold, and the agent will act to avoid this scenario. Note that many real-world trading strategies are subject to related constraints, for example Interactive Brokers, an electronic trading platform, base customer margin requirements on a \\emph{portfolio margin} basis, which they state is `determined using a ``risk-based'' pricing model that calculates the largest potential loss of all positions in a product class or group across a range of underlying prices and volatilities', \\cite{InteractiveBrokers:2025}.\\footnote{We are grateful to Paulo Guasoni for pointing this out to us.} \n\nUnder these modelling assumptions, our aim will be to determine the agent's optimal trading strategy when they are able to take (static) positions in certain options, for example, call options, or other simple derivatives. In the context of some of these options, we will use the notion of an ``intrinsic'' value of an option, which we think of as the worst-case valuation of the option or portfolio of options, for example (in the absence of interest rates) the intrinsic vale of a long position in a call option with maturity $T$ and strike $K$ at time $t< T$ is $(S_t-K)_+$, since this can be realised through taking model-independent positions in the underlying asset.\n\nOur approach borrows from the literature model-independent or robust pricing and hedging (see e.g.~\\cite{Hobson:1998aa,Cox:2011aa,galichon_stochastic_2014,beiglbock_model-independent_2013,dolinsky_super-replication_2018,Dolinsky:2014aa,beiglbock_pathwise_2017,cheridito_martingale_2021,cox_roots_2013,cox_model-independent_2017}). We also use classical results from the theory of utility maximisation in complete markets. Our approach to handling pathwise constraints is heavily inspired by the papers of~\\cite{El-Karoui:2006aa,El-Karoui:2008aa}, see also \\cite{bank_stochastic_2021,bank_stochastic_2004}."
+  },
+  {
+   "level": "subsection",
+   "title": "Basic Problem Formulation",
+   "text": "We consider a market on the time interval $[0,T]$, and we suppose that an asset price $(S_t)_{t \\in [0,T]} \\in C([0,T])$ is observed, where for the moment we suppose all prices are given in discounted units. We suppose the agent believes that there is a class of probability measures $\\Pc$, and the agent aims to find\n\\begin{equation}\\label{eq:MainProb}\n  \\sup_{ \\pi} \\inf_{ \\P \\in \\Pc} \\Edot{\\P}{U\\left(w_0 + X_T^\\pi\\right)}, \n\\end{equation}\nwhere $U$ is a utility function, $w_0$ the initial wealth of the agent, and $X_T^{\\pi}$ the trading gains of the agent given they follow the trading strategy $\\pi$. \n\nMore generally, we suppose that at time zero, the trader observes additional market information in the form of the prices of other traded derivatives. For example, the agent may observe the prices of call options given by $\\tC(K) = \\int (x-K)_+ \\, \\mu(\\dx)$ for some probability measure $\\mu$ (given by the Breeden-Litzenberger formula,~\\cite{breeden_prices_1978}). In this case, the trader may purchase a portfolio of call options with payoff $h(S_T)$ for price $\\int h(x) \\, \\mu(\\dx)$ at time 0.\n\nIn our setup, we will impose a `model-independent' restriction on the trader's behavior by assuming a specific budget constraint. This constraint will occur when the trader's portfolio contains derivatives. Our underlying assumption is that, even though the trader may evaluate the `correct' price of the derivative in their model, they are subject to portfolio constraints imposed by a manager or regulator who is much more risk averse, and who values their derivatives using a more conservative set of pricing rules. We will typically call the valuation of the manager or regulator the \\emph{intrinsic value} of the derivatives. The canonical example of such a derivative is a call option, where the intrinsic value of the derivative is the `zero-volatility' payoff of the option, or the terminal value of the call option if the asset grows at the (deterministic) interest rate $D_{\\cdot}^{-1}$.\n\nOf crucial interest to us is that these intrinsic values are in general non-linear, and so choosing to purchase different portfolios of derivatives will have a complex effect on the terminal wealth of the investor, and hence on the optimal investment strategies of the investor. Our usual setup in this paper will be the case where the intrinsic value of the derivative corresponds to the model-independent sub-replication price of the derivative, and in many examples we are able to specifically identify this quantity in terms of the underlying contract.\n\nFor example in the case where the agent may purchase a portfolio of calls with payoff $h(S_T)$ then the \\emph{intrinsic value} of the portfolio at time $t$ will be $h^*(S_t)$, where $h^*$ is the greatest convex minorant (on $[0,\\infty)$) of the function $h$. We think of the intrinsic value at time $t$, which we write $\\In_t(S_T) = h^*(S_t)$, as the minimum value of the portfolio which can be guaranteed under \\emph{any} possible model. For example, if $h(x) = (x-K)_+$, then $h^*(x) = h(x) = (x-K)_+$, and we confirm that this amount may be realised at time $t$ through the trading strategy which (if $S_t >K$) short sells the asset until either the asset drops below $K$, or time $T$, whichever is earlier. If we write $H^t_K:= \\inf \\{r \\ge t: S_r \\le K\\}$, then the value of this portfolio at maturity is:\n\\begin{align*}\n  (S_T-K)_+ + (S_t-S_{T \\wedge H^t_K}) \n  & = \n    \\begin{cases}\n      (S_T - K)_+ + (S_t - K) & H^t_K \\le T\\\\\n      (S_T - K) + (S_t-S_T) & H^t_K > T\n    \\end{cases}\n  \\\\\n  & \\ge S_t - K.\n\\end{align*}\nBy considering the model where the asset price remains constant, so that the price under this model is equal to the intrinsic value, we conclude that this is the best we can do. Note, in particular, that with this trading strategy the trader's wealth (including the intrinsic value) at time $u>t$ is always at least $S_u$: that is,\n\\begin{equation*}\n  \\In_u((S_T-K)_+) + (S_t-S_{u \\wedge H^t_K}) \\ge S_u.\n\\end{equation*}\n\nThe constraint we impose on our trader is that the trader's portfolio must satisfy an admissibility constraint, based on the intrinsic value of the derivatives. Specifically, we require the trader's (intrinsic) wealth at every time $t$ to satisfy:\n\\begin{equation}\\label{eq:Wdefn}\n  W_t^{\\pi,h} := D_t^{-1}(w_0  - \\int h(x) \\, \\mu(\\dx))+ \\In_t(h(S_T)) + X_t^{\\pi} \\ge -\\alpha.\n\\end{equation}\nThe quantity $\\alpha$ represents a lower bound imposed on the trader's portfolio value, which is required to be observed at all times. We will call a wealth process which satisfies \\eqref{eq:Wdefn} \\emph{$\\alpha$-admissible}.\n\nOur intuition is as follows: the trader will follow her trading strategy $\\pi$ in a manner that maintains \\eqref{eq:Wdefn} at all times. Under any probability measure $\\P \\in \\Pc$, this will result in a portfolio which satisfies the constraint. If the real path of the asset does not follow a path which is compatible with any $\\P \\in \\Pc$, then the trader can monitor her wealth, and at the first time the wealth goes below $-\\alpha$, then the trader will stop dynamic trading, and simply follow the simple strategy which realises (at worst) the intrinsic value of the asset. Combined with the intrinsic value of the portfolio, this strategy always ensures that the portfolio's value remains above the lower bound.\n\nAlternatively, one could tell the story from the perspective of a trader who is being monitored by a manager or regulator. The manager is conservative, and will look at the agent's gains from trade continuously, evaluating their derivative portfolio using a stated, model-independent rule. If the trader's \\emph{intrinsic} wealth goes below the level $-\\alpha$, the manager will fire the trader and close out the position with a resulting loss bounded below by $\\alpha$. As a result, the trader wishes to pursue a strategy which does not result in their dismissal, and hence looks to find a strategy which stays above the intrinsic wealth constraint with probability one (under any model that they believe is possible).\n\nOur results will take two different forms: first we will consider cases where the trader is able to trade dynamically to exploit mispricings, and guarantee a profit under certain conditions on the admissibility level $\\alpha$; these results will be in a similar spirit to classical model-independent pricing constraints on traded option prices. Second, we will consider utility maximisation problems, where the trader aims to maximise their utility from terminal wealth under the additional constraint that their wealth process is admissible. In this case, we will examine the impact of different choices of derivative portfolios, and will give concrete conclusions about the optimal strategies that should be employed by the investor when faced with various traded options on the market.\n\n\n\\begin{remark}\n  We note that the notion of intrinsic value introduced above is fairly flexible. For example, above we defined the intrinsic value to be the convex minorant on $[0,\\infty)$, which corresponds to the case where it is not believed that the asset price can go negative. However, it is possible also to consider the intrinsic value assuming that asset prices can go below zero (e.g. in the Bachelier model). In this case, it might not be sufficient to consider the convex minorant on $[0,\\infty)$, but rather to look at the minorant on $\\R$. In some cases, this would give different values of the intrinsic process. More generally, intrinsic values arising from robust pricing bounds (i.e. over a class of models) as opposed to model-independent (over all models) bounds are also natural to consider.\n\\end{remark}\n\nThis paper is organized as follows: Section 2 introduces the notion of intrinsic value of derivative contracts  in terms of a subreplicating submartingale, providing examples for specific\ncases.   The robust optimization problem of maximizing  expected utility of terminal wealth subject to model independent  intrinsic budget restrictions is presented in Section 3, together with some implications in the trader's behavior. Specific results are obtained for the Black-Scholes-Merton model. In Section 4 optimal trading strategies are obtained under the assumption of completeness of the market, with the help  of representations of supermartingales."
+  },
+  {
+   "level": "section",
+   "title": "Intrinsic Valuation of Derivatives and Trading",
+   "text": "We define here our basic market setup. We suppose that there is an underlying asset price process $(S_{t})_{t \\in [0,T]}$ which takes values in $\\Omega: = C_{s_0}([0,T])$, the set of continuous paths $\\omega$ on $[0,T]$ with $\\omega(0) = s_0$, and where we equip $\\Omega$ with the uniform norm, under which topology $\\Omega$ is a Polish space. This space is endowed with the Borel $\\sigma-$algebra $\\mathbb{F}$. Our agent believes that the underlying dynamics of $S$ are governed by a probability measure $\\P \\in \\mathcal{P}$, for some class $\\mathcal{P}$ of probability measures on $\\Omega$. We will typically be interested in statements which hold $\\P$-\\as{} for all $\\P \\in \\Pc$, which we will write as $\\Pc$-\\as{}. It is natural therefore to introduce $\\mathcal{N}(\\mathcal{P}):= \\{A \\in \\mathbb{F}: \\P(A) = 0 \\ \\forall \\P \\in \\Pc\\}$. We also introduce the set $\\Qc(\\Pc)$, the set of martingale measures which are equivalent to some $\\P \\in \\Pc$. The natural filtration generated by $S$ is denoted by $\\Fc^S=\\{\\F_t^S\\}$. We also need the filtration $\\Fc=\\{\\F_t;\\;t\\in[0,T]\\}$, with $\\F_t:=\\F^S_{t^+}=\\cap_{s>t} \\F_s^S$ for $t<T$ and $\\F_T:=\\F_T^S$, which is the minimal filtration associated to the process $S$ satisfying the usual conditions, i.e. $\\{\\F_t;\\;t\\in[0,T]\\}$ is an increasing right continuous family of $\\sigma-$fields and completeness with respect to $\\mathcal{P}$, by which we mean that $\\mathcal{N}(\\Pc) \\subset \\F_0$.\n\nWe denote by $\\Lambda$ a  Meyer $\\sigma-$field which contains the predictable $\\sigma-$field with respect to $\\F$, that is, the  $\\sigma-$field generated by $\\F-$adapted, left-continuous processes, and which in turn is contained in the optional $\\sigma-$field with respect to the filtration $\\F$. \n\nIn addition to the risky asset, we suppose there exists a bank account which pays a deterministic (although not necessarily constant) interest rate. We write $D_t$ for the discount factor, so the time-0 value of $\\$1$ at time $t$ is $D_t$, or equivalently, $\\$1$ invested at time $0$ will be worth $\\$D_t^{-1}$ at time $t$. We assume then that $D_t$ is decreasing, continuous  and $D_0 = 1$.\n\nWe also associate with our setup   trading strategies $\\pi$ with respect to the filtration $\\F$. In this paper we do not wish to directly address the specific technicalities of possible trading strategies under model-uncertainty, but refer readers to the large and growing literature for various approaches (\\eg{} \\cite{Dolinsky:2014aa, beiglbock_pathwise_2017, biagini_robust_2017, hou_robust_2018, dolinsky_martingale_2015,cheridito_martingale_2021} among others). The details here will not be important, so we will generally either work in the case where $\\Pc$ is a singleton, and classical results are applicable, or else in the case where $\\Pc$ is large, and then we will only need to consider very simple trading strategies; see Remark \\ref{Rem:Est2.6} below.\n\nNote in particular, that these two cases are essentially the main ones of interest. For example, \\cite{dolinsky_super-replication_2018} show that a robust hedging for a large class of stochastic volatility models essentially reduces to the case where $\\Pc$ contains all martingale measures.\n\nWe also consider the special `classical' case of model-independent pricing, where\n\\begin{equation}\\label{def:P0}\n  \\Pcc := \\{ \\P: D S \\text{ is a non-negative, uniformly integrable martingale}\\}.\n\\end{equation}\nThis will give rise to our canonical notion of intrinsic value, but other choices will also be possible."
+  },
+  {
+   "level": "subsection",
+   "title": "Intrinsic Value of Derivative Contracts",
+   "text": "We consider the {\\it intrinsic} valuation of a derivative contract:\n\n\\begin{definition} \\label{def:intrinsic}\n  A \\emph{derivative contract} is a measurable function $C_T: \\Omega \\to \\R$. We say that $\\In_{\\cdot}(C_T)$ is a \\emph{fair intrinsic value} of a derivative contract $C_T$ corresponding to the class $\\Pc$ of probability measures at time $t$, if:\n  \\begin{enumerate}\n\n  \\item $D_t\\In_t(C_T)$ is a \\cadlag{} $\\Q$-$\\F$-submartingale for all $\\Q \\in \\Qc(\\Pc)$;\n  \\item $\\In_T(C_T) = C_T$ $\\Pc$-\\as{}.\n  \\end{enumerate}\n\\end{definition}\n\nAs an interesting fact, of course, $D_t\\In_t(C_T) \\le \\Eq{D_T C_T|\\Fc_t}$, for all $\\Q \\in \\Qc(\\Pc)$, where we are assuming  throughout that $D_T C_T$ satisfy implicitly the required integrability conditions in order that the conditional expectation is well defined. On the other hand, in general, we would hope to find a maximal version of the fair intrinsic price for a given set $\\mathcal{P}$, which one could define (except for non-trivial measurability issues!) to be the price of the most expensive model-independent sub-replicating strategy. That is:\n\\begin{equation}\\label{eq:6}\n D_t \\In_t(C_T) := \\sup \\{ x \\in \\R: \\exists (\\pi) \\text{ s.t. } x + \\int_t^T \\pi_r \\, \\di (D_r S_r ) \\le D_T C_T \\quad \\Pc-\\as{}\\}.\n\\end{equation}\nSuch problems have been considered recently in discrete time (\\cite{beiglbock_model-independent_2013,bouchard_consistent_2016,aksamit_robust_2020}) and continuous time (\\cite{Dolinsky:2014aa, beiglbock_pathwise_2017, biagini_robust_2017, hou_robust_2018, dolinsky_martingale_2015,cheridito_martingale_2021}), but defining this process in general in continuous time is a non-trivial technical exercise. For the majority of this paper, our aim will be to consider easily specified intrinsic value processes, but we emphasise that in our setup the chosen fair intrinsic value is a part of the modelling framework, and not necessarily a given quantity.\n\nNote in particular that we do not expect the intrinsic price $\\In_t$ to be linear: we do not typically expect for example $\\In_t(\\beta C_T) = \\beta \\In_t(C_T)$ if $\\beta<0$. However, the intrinsic price will generally be positive homogenous, with $\\In_t(\\beta C_T) = \\beta \\In_t(C_T)$ if $\\beta \\ge 0$.\n\n\n\\begin{example} \\label{ex:Intrinsic}\n  In the case where $\\Pc = \\Pcc$, see (\\ref{def:P0}), and $D_t \\equiv 1$, we can give concrete examples of an intrinsic value process which does in fact satisfy \\eqref{eq:6}. Since many of our examples will be based on this specific choice of the intrinsic price process, we denote this specific operator by $\\Inc$.\n  \\begin{enumerate}\n  \\item\\label{item:1} If $h:\\R_+ \\to \\R$, then $\\Inc_t(h(S_T)) = h^*(S_t)\\ind_{t<T}\n    + h(S_T)\\ind_{t=T}$, where $h^*(x)$ is the greatest convex minorant of $h$ (on $\\R_+$). For example, $h^*((x-k)_+) = (x-k)_+$, but $h^*(-(x-k)_+) = -x$.\n\n    To see this, we first observe that this intrinsic price satisfies all of the conditions of Definition~\\ref{def:intrinsic}. Second, to see that this is the greatest such price, observe that if $h^*(x)$ is the greatest convex minorant of $h$, for $x \\in (0,\\infty)$ we can find $y_n \\le x \\le z_n$ such that \\[h^*(x) = \\lim_{n \\to \\infty} \\left[ \\frac{(z_n-x) h(y_n) + (x-y_n)h(z_n)}{z_n-y_n}\\right].\\]\nNow consider the model which is a (uniformly integrable, continuous) martingale, which runs from $x$ at time $t<T$, to either $z_n$ or $y_n$ at time $T$. Then the fair price of the derivative under this model is exactly $ \\left[ \\frac{(z_n-x) h(y_n) + (x-y_n)h(z_n)}{z_n-y_n}\\right]$, and the claim follows. In the presence of non-zero interest rates, it is easy to see by a similar argument that $\\Inc_t(h(S_T)) = D_t^{-1} D_Th^*( D_T^{-1} D_tS_t)\\ind_{t<T}\n    + h(S_T)\\ind_{t=T}$.\n  \\item\\label{item:2} If $0 < T' < T$ then $\\In_t(h(S_{T'})) = h^*(S_t) \\ind_{t < T'} + h(S_{T'}) \\ind_{t \\ge T'}$. This is essentially the same argument as  in  \\emph{(i)}.\n  \\item\\label{item:3} If $B >0$ is a fixed barrier, we can consider the\n    \\emph{one-touch} option, $\\OT^B_T := \\ind_{S_T^* \\ge B}$, where\n    $S_t^* = \\sup_{r \\le t} S_r$ is the maximum process. In\n    particular, it can be checked that one has $\\In_t(\\OT_T^B) =\n    \\ind_{S_t^* \\ge B}$, while $\\In_t(-\\OT_T^B) = -\\frac{S_t}{B}\n    \\ind_{S_t^* < B, t<T} - \\ind_{S_t^* \\ge B}$.\n\n    In fact, in the last case, we can extend some of these ideas. For example, let $K<B$. Then we have for $t \\le T$\n    \\begin{equation*}\n      \\In_t\\left(\\frac{(S_T-K)_+}{B-K} - \\OT_T^B\\right) =\n      \\begin{cases}\n        0, &\\quad \\text{ if } S_t^* < B\\\\\n        \\frac{1}{B-K} \\left[ (S_t - S_{H_B}) + (K-S_t)_+\\right], & \\quad \\text{ if } S_t^* \\ge B\n      \\end{cases},\n    \\end{equation*}\n    where we write $H_B := \\inf \\{ t \\ge 0: S_t = B\\}$.  This is a consequence of the hedge for one-touch options given by \\cite{Hobson:1998aa}.\n\n    We note that the amount $(S_t - S_{H_B})$ is easily constructed from an adapted trading strategy (buy one unit of the asset if it hits $B$ before $T$). Including this additional trading, the intrinsic value of the combined position is then simply $(K-S_t)_+ \\ind_{H_B \\le t}$.\n  \\end{enumerate}\n\\end{example}"
+  },
+  {
+   "level": "subsection",
+   "title": "Dynamic Trading Strategies",
+   "text": "We also wish to consider the class of dynamic trading strategies which are available to our agent for investment. Typically we would expect these to be specified as part of the modelling assumptions, and could depend on the choice of $\\Pc$. For example, if $\\Pc$ is a singleton, one may be able to use the standard stochastic integral, while for more complex choices of $\\Pc$, one needs to be more careful to admit a measurable choice of the resulting trading strategy. \n\n\n\\begin{definition}\n  To each choice of \\emph{dynamic trading strategy} $\\pi$, we associate a corresponding \\emph{gains process} $X_\\cdot^\\pi: \\Omega \\to C_0([0,T])$. We say that a dynamic trading strategy $\\pi$, or equivalently the gains process $X^\\pi_\\cdot$, is \\emph{$\\Pc$-admissible}, if there exist $a \\ge 0$ and  a process $\\Gamma$, with $\\Gamma_t \\ge 0$ $\\Pc_t$-\\as{} for all $t \\ge 0$, such that $\\sup_{0 \\le t \\le T} \\Gamma_t$ is $\\Q$-integrable for any $\\Q \\in \\Qc(\\Pc)$, and  $D_t X_t^\\pi \\ge -a(1+\\Gamma_t)$ $\\Pc$-\\as{} holds for all $t$.\n\\end{definition}\nBy abuse of notation, we will often write $\\int_0^t \\pi_s \\, \\di(D_sS_s) = D_t X_t^\\pi$, despite the fact that $\\pi$ may not be explicitly defined as a pathwise object.\n\n \n\nIn most examples, process $\\Gamma$ will be taken without further comment as $\\Gamma_t = 1 + D_t |S_t|$, and then Doob's inequality will give the required integrability provided \n$$\\Eq{((1+D_T S_T) \\log (1+D_T|S_T|))_+} < \\infty,\\;\\;\\;\\text{ for all}\\;\\;\\; \\Q \\in \\Qc(\\Pc).$$\nNote that we need a constraint on dynamic trading strategies to rule out possible doubling strategies. It is natural to impose conditions which are pathwise and not probabilistic since we are potentially considering multiple pricing measures. Relevant results which show that the pathwise interpretation is sufficient can be found in \\cite{acciaio_trajectorial_2013}. The condition above will naturally be satisfied if (for example) our market includes derivatives whose payoffs have growth rate which is larger than $((1+D_T S_T) \\log (1+D_T|S_T|))_+$. We can then deduce from the relevant pathwise condition that the trading portfolio is uniformly integrable. If we have stronger integrability (for example we know $\\Eq{S_T^p} < \\infty$ for some $p>1$), then we can weaken the pathwise constraint by increasing $\\Gamma$ appropriately.\n\n\nWe make the following definition:\n\\begin{definition} \\label{def:dynam-trad-strat}\n  We say that $\\Vc$ is a set of \\emph{admissible dynamic trading strategies} if, for each $\\pi \\in \\Vc$, the gains process $X^\\pi$ is:\n  \\begin{enumerate}\n  \\item $\\F$-adapted,\n  \\item $\\Pc$-admissible, and\n  \\item $D_t X_t^\\pi$ is a $\\Q$-local martingale for every $\\Q \\in \\Qc(\\Pc)$.\n  \\end{enumerate}\n\\end{definition}\n\nWe further assume that the set $\\Vc$ is closed under addition and non-negative scalar multiplication, that is, if $\\pi, \\psi \\in \\Vc$ and $\\lambda, \\mu \\ge 0$, then $\\lambda \\pi+\\mu \\psi \\in \\Vc$, where $X^{\\lambda\\pi+\\mu\\psi}:= \\lambda X^\\pi + \\mu X^\\psi$.\n\n\\begin{remark}\\label{Rem:Est2.6}\n  Note that in the case where the asset price process $S$ is non-negative, the class of simple trading strategies, ie $\\pi_t = \\sum_{i = 1}^n \\, \\indic{t \\in (\\tau_{i-1},\\tau_i]} a_i$, where $a_i$ are bounded and  $\\Fc_{\\tau_i}$-measurable, and $(\\tau_i)_{i=1}^n$ is a sequence of increasing, $\\F$-predictable stopping times in $[0,T]$, belongs to the set of admissible strategies. Similarly, the \\emph{buy-and-hold} strategy is always allowed in a set of admissible dynamic trading strategies. \n\\end{remark}\n\nWe can adopt results from Dolinsky-Soner, e.g.~\\cite{Dolinsky:2014aa} to show that the class of progressively measurable trading strategies includes  \nfinite variation strategies $\\pi$, defining the stochastic integral pathwise via integration by parts: \n$$\n\\int_0^t \\pi_s \\, \\di(D_sS_s) :=\\pi_t D_tS_t-\\pi_0 S_0-\\int_0^tD_sS_s d\\pi_s.\n$$\nThis definition is consistent with the stochastic integration for simple trading strategies."
+  },
+  {
+   "level": "section",
+   "title": "Trading with constraints on Intrinsic Wealth",
+   "text": ""
+  },
+  {
+   "level": "subsection",
+   "title": "General setup and preliminary results",
+   "text": "\\label{sec:setup}\n\nWe begin by making the following observation about trading under intrinsic value constraints. We fix a class $\\Pc$ of possible probability measures, and a set $\\Vc$ of admissible dynamic trading strategies. We first suppose that there is an agent who acts to maximise utility from wealth, and the utility function $U$ satisfies the Inada conditions ($U:[0,\\infty) \\to \\R\\cup \\{-\\infty\\}$ is concave increasing and $U'(0) = \\infty, U'(\\infty) = 0$). We suppose that the agent will maximise worst case utility, in the presence of a derivative $C_T$ which has been purchased for price $c_0$, so the problem is to find:\n\\begin{equation}\\label{eq:MainProb2}\n  \\sup_{ \\pi\\in\\Vc} \\inf_{ \\P \\in \\Pc} \\Edot{\\P}{U\\left(D_T^{-1}(w_0 - c_0) + C_T + X_T^\\pi\\right)}, \n\\end{equation}\nwhere $X_t^\\pi$ is the gains from dynamic trading, subject to the \\emph{intrinsic budget constraint}\n\\begin{equation}\\label{eq:Wdefn2}\n  W_t^{\\pi,C} := D_t^{-1}(w_0-c_0) + \\In_t(C_T)  + X_t^{\\pi} \\ge -D_t^{-1} \\alpha, \\qquad \\Pc-\\as{}, \\forall\\; 0\\le t \\le T,\n\\end{equation}\nwhere $w_0, \\alpha \\ge 0$.\n\n\\begin{definition}\\label{def:admissset}\n  We call a trading strategy $\\pi\\in \\Vc$ a $(w_0, \\alpha, c_0,C_T)$-intrinsically admissible dynamic trading strategy if $W_T^{\\pi,C}\\geq 0$ and \\eqref{eq:Wdefn2} holds. Then, we write $\\pi \\in \\Vc(w_0,\\alpha,c_0,C_T)$.\n\\end{definition}\n\nOur first result describes some simple cases where the trader's behavior can be easily described.\n\n\\begin{lemma}\\label{lem:BasicHedging}\n  \\begin{enumerate}\n  \\item\\label{item:4} Suppose there exists $\\psi \\in \\Vc$ which $\\Pc$-superreplicates $C_T$ for initial value $\\kappa$:\n    \\begin{equation*}\n      \\kappa + \\int_0^T \\psi_r \\, \\di (D_r S_r) \\ge D_T C_T, \\quad \\Pc-\\as{},\n    \\end{equation*}\n    and further\n    \\begin{equation}\\label{eq:1}\n      c_0 + \\int_0^t \\psi_r \\, \\di (D_r S_r) \\ge D_t \\In_t(C_T), \\quad \\forall t, \\Pc-\\as{}\n    \\end{equation}\n    Then if $\\kappa < c_0$, the market price of the option, it is never optimal for the trader to purchase the option, that is, for all $\\pi \\in \\Vc(w_0,\\alpha,c_0,C_T)$ there exists $\\hat{\\pi} \\in \\Vc(w_0,\\alpha, 0,0)$ such that $W_T^{\\hat{\\pi}} \\ge W_T^{\\pi,C}$.\n  \\item\\label{item:5} Suppose there exists a strategy $\\psi \\in \\Vc$ which $\\Pc$-subreplicates $C_T$ for initial value $\\kappa$:\n    \\begin{equation*}\n      \\kappa + \\int_0^T \\psi_r \\, \\di (D_r S_r) \\le D_T C_T, \\quad \\Pc-\\as{},\n    \\end{equation*}\n    such that $-\\psi\\in \\Vc$ and  the path constraint:\n    \\begin{equation*}\n      c_0 +  \\int_0^t \\psi_r \\, \\di (D_r S_r) \\le D_t \\In_t(C_T),  \\quad \\forall t, \\Pc-\\as{}\n    \\end{equation*}\n    holds.  If $\\kappa > c_0$, then the trader can find portfolios with arbitrarily large utility.\n  \\end{enumerate}\n\\end{lemma}\n\n\n\\begin{proof}\n  \\begin{enumerate}\n  \\item We compare the strategy which purchases the option for price $C_0$, and follows the $(w_0, \\alpha, c_0,C_T)$-admissible dynamic trading strategy $\\pi \\in \\Vc(w_0,\\alpha,c_0,C_T)$, with the strategy which simply follows the dynamic trading strategy $\\pi + \\psi$. Since $\\pi$ and $\\psi$ are both in $\\Vc$, so too is the combined trading strategy. We need to show that $\\pi + \\psi \\in \\Vc(w_0,\\alpha,0,0)$ and $W_T^{\\pi+\\psi,0} \\ge W_T^{\\pi,C}$.\n\n    Now $W_T^{\\pi,C} = D_T^{-1}(w_0-c_0) + C_T + X_T^{\\pi} \\ge 0$ since $\\pi \\in \\Vc(w_0,\\alpha,c_0,C_T)$, and $W_T^{\\pi+\\psi,0} = D_T^{-1} w_0 + X_T^{\\pi+\\psi} = D_T^{-1} w_0 + X_T^{\\pi} + X_T^{\\psi} \\ge D_T^{-1} (w_0- \\kappa) + C_T + X_T^{\\pi}  > W_T^{\\pi,C}$. It remains to show that the strategy $\\pi + \\psi$ satisfies \\eqref{eq:Wdefn2}. Since $\\pi \\in \\Vc(w_0,\\alpha,c_0,C_T)$, we know that\n    \\begin{align*}\n      -D_t^{-1} \\alpha\n      & \\le D_t^{-1}(w_0-c_0) + \\In_t(C_T)  + X_t^{\\pi} \\\\\n      & \\le  D_t^{-1}(w_0-c_0) + \\left(X_t^\\psi + D_t^{-1} c_0\\right)  + X_t^{\\pi}\\\\\n       & = D_t^{-1}w_0 + X_t^{\\pi+\\psi} \n    \\end{align*}\n    for all $t, \\Pc-\\as{}$, using \\eqref{eq:1} in the second line.\n\n\n  \\item Let $\\lambda >0$ and suppose the trader buys $\\lambda$ units of the derivative for price $c_0$, and takes short position $-\\lambda \\psi_t$. Then the traders terminal wealth is:\n    \\begin{equation*}\n      W_T^{-\\lambda \\psi, \\lambda C} = D_T^{-1} w_0 + \\lambda\\left( C_T - X_T^\\psi - D_T^{-1} \\kappa\\right) + \\lambda (\\kappa - c_0).\n    \\end{equation*}\n    Since first term in brackets is non-negative, and the second term is strictly positive, the trader's utility can be made arbitrarily large as $\\lambda \\to \\infty$.\n\n    On the other hand, at any time $t$, we have:\n    \\begin{equation*}\n      D_t^{-1}w_0 + \\lambda \\In_t(C_T) - \\lambda X_t^{\\psi} - \\lambda D_t^{-1} c_0 \\ge D_t^{-1}w_0\\ge -D_t^{-1} \\alpha,\n    \\end{equation*}\n    and so the strategy satisfies the trading constraint.\n  \\end{enumerate}\n\\end{proof}\n\n\\begin{remark}\n  \\begin{enumerate}\n  \\item[(a)] Note that Lemma~\\ref{lem:BasicHedging} can also be applied to shorting an option, by replacing $C$ by $-C$, and $c_0$ by $-c_0$.\n  \\item[(b)] In (\\ref{item:4}), the pathwise condition is fairly weak: we know $\\kappa + D_T X_T^\\psi \\ge D_T C_T$, and hence for any $\\Q \\in \\Qc(\\Pc)$, using Definitions~\\ref{def:dynam-trad-strat} and \\ref{def:intrinsic}, we expect that\n    \\begin{align*}\n      \\kappa + D_t X_t^{\\psi} \\ge \\kappa + \\Eq{D_T X_T^{\\psi}|\\Fc_t} \\ge  \\Eq{D_T C_T|\\Fc_t} \\ge \\In_t(C_T) .\n    \\end{align*}\n    This is almost sufficient to deduce the pathwise constraint, however there is no guarantee in our setup that this may hold $\\Pc$-almost everywhere for a given $t$; there may exist sets of paths which are $\\Pc$-possible, but do not appear under any $\\Q \\in \\Qc(\\Pc)$ for superhedging problems. See \\eg{} \\cite{aksamit_robust_2020}  for a discussion of this phenomena.\n\n    On the other hand, the corresponding condition in (\\ref{item:5}) is much stronger, in particular taking $t=0$ it already implies that the market price of the option is below its intrinsic value. This reflects the much stronger conclusion possible in (\\ref{item:5}).\n    \n  \\end{enumerate}\n      \n\\end{remark}"
+  },
+  {
+   "level": "subsection",
+   "title": "European Options in the Black-Scholes-Merton model",
+   "text": "For motivation, we start by considering the case where the agent believes the underlying model is the Black-Scholes-Merton model. In this case, the set $\\Pc$ is a singleton, and moreover, the market is complete, so a desired (non-negative, integrable) terminal wealth $X_T$ can be realised through an admissible dynamic trading strategy, with portfolio process $\\pi \\in \\Vc$ such that $X_t^\\pi = D_t^{-1} \\Eq{D_T X_T|\\Fc_t}$, where $\\Q$ is the usual (unique) risk-neutral measure. We will assume that the intrinsic price value is given by $\\In = \\In^\\circ$ as described in Example~\\ref{ex:Intrinsic}.\n\n\nWe suppose that our agent holds a European option with terminal value $h(S_T)$, for some measurable function $h$ such that $h(x) \\le a(1+x)$ for some $a>0$, and we are interested in the admissibility of this simple trading strategy for different values of $\\alpha$. We can write $\\BS(h,t,T,S_t)$ for the price at time $t$ of an option with payoff $h$, time-to-maturity $T$ and current asset price $S_t$. If the trader purchases the option and trades dynamically to hedge the risk completely, it follows that $X_t^\\pi = D_t^{-1}\\BS(h,0,T,S_0) - \\BS(h,t,T,S_t)$. If the trader follows the strategy of investing in the portfolio $h$ at price $c_0$ and hedging using the strategy $\\pi$, then the intrinsic portfolio value at time $t$ is given by\n\\begin{align*}\n  W_t^{\\pi,h} & := D_t^{-1} (w_0-c_0) +  \\In_t(h(S_T))  + X_t^{\\pi} \\\\\n              & \\;= D_t^{-1} (w_0-c_0)  + \\frac{D_T}{D_t} h^*\\left(S_t \\frac{D_t}{D_T}\\right) + D_t^{-1}\\BS(h,0,T,S_0) - \\BS(h,t,T,S_t).\n\\end{align*}\n\n\nConsider initially the case where $h(x) = (x-K)_+$, for $K \\ge 0$, write $\\BS(h,\\cdot,\\cdot,\\cdot) = \\BS^C(K,\\cdot,\\cdot,\\cdot)$ and denote by $c_0(K)$ the time-0 market price of the option, which (since we are taking a long position) we expect (but do not need) to be lower than the fair price of the derivative, \\ie{} $c_0(K) < \\BS^C(K,0,T,S_0)$. Write $\\Delta C(K) := \\BS^C(K,0,T,S_0) - c_0(K)$, the difference between the fair price and the market price, then our admissibility criteria (\\ref{eq:Wdefn2}) for this strategy becomes:\n\\begin{align*}\n   D_t^{-1}\\left(w_0 + \\Delta C(K)\\right)  + \\left(S_t-K \\frac{D_T}{D_t}\\right)_+ - \\BS^C(K,t,T,S_t) & \\ge -\\frac{\\alpha}{D_t}\\\\\n   \\iff  \\quad  \\left(w_0 + \\Delta C(K) \\right) + \\left(S_tD_t-K D_T\\right)_+ - D_t\\BS^C(K,t,T,S_t) & \\ge -\\alpha.\n\\end{align*}\nNow, noting that $t \\mapsto D_t \\BS^C(K,t,T,sD_t^{-1})$ is decreasing by Jensen's inequality and the convexity of $s \\mapsto \\BS^C(K,t,T,s)$, we have:\n\\begin{align*}\n  \\inf_{\\substack{t \\in [0,T]\\\\ s \\in [0,\\infty)}}\n  \\Big\\{(sD_t- KD_T&)_+  - D_t\\BS^C(K,t,T,s)\\Big\\} \\\\\n  & = \\inf_{\\substack{t \\in [0,T]\\\\ s \\in [0,\\infty)}}\n  \\left\\{(s-KD_T)_+ - D_t\\BS^C(K,t,T,sD_t^{-1})\\right\\} \\\\\n  & = \\inf_{ s \\in [0,\\infty)}\n  \\left\\{(s-KD_T)_+ - \\BS^C(K,0,T,s)\\right\\} \\\\\n& = -\\BS^C(K,0,T,KD_T).\n\\end{align*}\n\nWe can summarise in the following:\n\\begin{proposition}\n  In the Black-Scholes-Merton problem with intrinsic price given by $\\In^\\circ$, for $\\pi$ the usual delta-hedging of a long position in the European call option with strike $K$, then $\\pi \\in \\Vc(w_0, \\alpha, c_0(K), (S_T-K)_+)$ if\n  \\begin{equation} \\label{eq:9}\n    w_0 + \\Delta C(K)  \\ge \\BS^C(K,0,T,KD_T) -\\alpha,\n  \\end{equation}\n  where $\\Delta C(K) := \\BS^C(K,0,T,S_0) - c_0(K)$.\n  Similarly $$-\\pi \\in \\Vc(w_0, \\alpha, -c_0(K), -(S_T-K)_+)$$ if\n  \\begin{equation*}\n    w_0 + \\alpha - \\Delta C(K) \\ge K D_T.\n  \\end{equation*}\n\\end{proposition}\n\n\\begin{proof}\n  The first part of the result was shown in the discussion preceding the proposition. To prove the second part of the claim, we sell the call and hedge dynamically. Then we have $h(x) = -(x-K)_+$, $h^*(x) = -x$, and so $\\In_t(-(S_T-K)_+) = -S_t$. Then\n  \\begin{align*}\n    W_t^{-\\pi,h} & := D_t^{-1} (w_0+c_0(K)) + \\In_t(-(S_T-K)_+) + X_t^{-\\pi} \\\\\n                & \\; = -S_t + \\BS^C(K,t,T,S_t) + D_t^{-1} (w_0 + c_0(K) - \\BS^C(K,0,T,S_0)).\n  \\end{align*}\n  As above, we need to compute:\n  \\begin{align*}\n    \\inf_{\\substack{t \\in [0,T]\\\\ s \\in [0,\\infty)}} \\Big\\{-sD_t +  D_t\\BS^C(K,t,T,s) \\Big\\}\n    &  = \\inf_{t \\in [0,T]} \\left\\{D_t\\inf_{s \\in [0,\\infty)}\\left[ -s + \\BS^C(K,t,T,s)\\right] \\right\\}\\\\\n    & = \\inf_{t \\in [0,T]} \\left\\{ - D_t \\left(K D_T D_t^{-1}\\right)\\right\\}\\\\\n    & = - K D_T.\n  \\end{align*}\n  The conclusion follows.\n\\end{proof}\n\n\n\n\n\n\n\n\n\nThe term $\\BS^C(K,0,T,KD_T)$ on the right-hand side of \\eqref{eq:9} is the price of an at-the-money call option with strike $K$, and by the Black-Scholes formula, we can rewrite this as $K D_T \\left( 1 - 2 \\Phi(\\sigma \\sqrt{T}/2)\\right)$. Suppose that  $w_0 + \\alpha>0$ and the call options are underpriced. Then we can always find some small $K$, $K< K_+(w_0 + \\alpha) := (w_0 + \\alpha) D_T^{-1} \\left( 1 - 2 \\Phi(\\sigma \\sqrt{T}/2)\\right)^{-1}$ such that we can buy the call, and hedge dynamically to guarantee a profit. For larger strikes it will not be possible to follow this strategy unless the mis-pricing is sufficiently large. A similar behaviour is observed when the prices are too large, but now the asymmetry in the intrinsic value of the call options makes the critical strike $K< K_-(w_0 + \\alpha) := (w_0 + \\alpha) D_T^{-1}$."
+  },
+  {
+   "level": "subsection",
+   "title": "Consistency of market prices under constrained trading",
+   "text": "Above, we considered only the case where single call options were traded. In reality call options at a range of strikes and maturities are available for trading, and one natural question is whether the prices are consistent. Simple model-free conditions for the absence of arbitrage are well understood, based on simple model-independent arbitrage strategies which can enforce such an arbitrage. In this section, we analyse whether these strategies are available to a trader whose strategies are subject to the admissibility criteria proposed above.\n\nA common setup is to consider the case where call options with all strikes at a given maturity are traded. Then the prices are free of (model-independent) arbitrage only if the market prices for call options, $C(K)$, satisfies the conditions: \\emph{(i)} $C$ is convex; \\emph{(ii)} $C$ is decreasing; \\emph{(iii)} $C(0) = S_0$; \\emph{(iv)} $C'_+(0) \\ge -D_T$; moreover, it is commonly assumed that also \\emph{(v)} $C(K) \\to 0$ as $K \\to \\infty$. The first two conditions can classically be enforced by simple arbitrage. In this section, we show that there exist trading strategies in $\\Vc$, which satistfy \\eqref{eq:Wdefn2} for $\\alpha = 0$, and generates a strictly positive wealth if any of \\emph{(i)}--\\emph{(iv)} fail. We note that \\emph{(v)} is generally more subtle; see \\eg{} \\cite{Cox:2016aa}, but under this further assumption (\\eg{} \\cite{Cox:2011aa}), it follows that there exists a probability measure $\\mu$ on $\\R_+$ such that $C(K) = \\int (x-K)_+ \\, \\mu(\\dx)$. We consider a weaker version, which is simply to enforce positivity, which normally follows from the limiting behaviour and the decreasing property.\n\n\n\\begin{lemma}\n  Suppose that $\\Pc$ is given by $\\Pc^\\circ$, $\\In$ is given by $\\In^\\circ$, and European call options with strike $K$ and maturity $T$ can be traded at price $C(K)$ at time $0$. Suppose that any of \\emph{(i)} $C$ is convex; \\emph{(ii)} $C$ is decreasing; \\emph{(iii)} $C(0) = S_0$; \\emph{(iv)} $C'_+(0) \\ge -D_T$; \\emph{(v)} $C$ is non-negative; fail.  Then there exists a portfolio of call options with payoff $g(S_T) = \\sum_{i=1}^k a_i (S_T-K_i)_+$ and price $g_0 = \\sum_{i=1}^k a_i C(K_i)$ with $k \\in \\Nb$, $a_i \\in \\R$, and $\\eps>0$ such that $\\Vc(-\\eps,0,g_0,g)$ is non-empty.\n\\end{lemma}\n\nNote that the conclusion of the lemma, $\\Vc(-\\eps,0,g_0,g)$ is non-empty, is equivalently a formulation of arbitrage in our setting: that is, there exists a portfolio and trading strategy which can be setup with initial capital $-\\eps$, and which will never use our `intrinsic capitalisation' capacity, $\\alpha$, but will finish with a non-negative wealth. It is easy to check that the strategies we implement are in fact scalable, so that we can in fact find such a strategy for an arbitrary $\\eps >0$ by a simple scaling argument.\n\n\\begin{proof}\n  Suppose that $C(K)$ is not convex, then there exists $K_1 < K_2 < K_3$ such that $C(K_2) > \\lambda C(K_1) + (1-\\lambda) C(K_3)$, where $\\lambda = (K_3-K_2)/(K_3-K_1)$. Then the agent should define the function $g$ such that $a_1 = \\lambda$, $a_3 = (1-\\lambda)$, and $a_2 = -1$.\n\n  Choose $\\eps:= -g_0 = C(K_2) - \\lambda C(K_1) - (1-\\lambda) C(K_3)$. The agent holds a portfolio of calls with positive payoff\n  \\begin{equation*}\n    g(S_T) := \n    \\begin{cases}\n      0 & S_T \\not\\in( K_1,K_3)\\\\\n      \\lambda (S_T-K_1) & S_T \\in (K_1,K_2]\\\\\n      (1-\\lambda)(K_3-S_T) & S_T \\in (K_2,K_3)\n    \\end{cases}\n  \\end{equation*}\n  So we have $g^*(S_t) = \\In_t(g(S_T)) \\equiv 0$ for $t<T$. Taking the dynamic trading strategy $\\pi$ which is identically zero, we see that our portfolio intrinsic value is $W_t^{\\pi,g} = g(S_T)\\ind_{t=T}$, which is non-negative under the assumption that $C$ is not convex, and hence $\\pi = \\in \\Vc(-\\eps,0,g_0,g)$.\n\n  The cases (ii)--(iv) are then essentially identical. For (ii) we suppose there exist $K_1 < K_2$ with $C(K_1) < C(K_2)$, and pursue the strategy of selling the call with strike $K_2$ and buying the call with strike $K_1$. Then we have $g(x) = (x-K_1)_+ - (x-K_2)_+$, and so $g^*(x) = 0$, and the result follows as above. For (iii) consider either the strategy of selling the asset and buying the call with strike $0$, or selling the call with strike 0, and buying the asset. In this case we have $\\In_t(S_T) = S_t$ and $\\In_t(-S_T) = -S_t$, and $X_t^{\\pi} = \\pm(S_t-D_t^{-1} S_0)$, and the conclusion follows.\n\n  For (iv), we have by (iii) a $K>0$ such that $C(K) < S_0 -D_TK$. We sell the asset, and buy the call with strike $K$. Then $\\In_t((S_T-K)_+-S_T) = (-S_t) \\vee (-D_T D_t^{-1} K) \\ge -D_t^{-1} D_T K$, and so the intrinsic value of the portfolio at time $t$ is $(-C(K)+S_0) D_t^{-1} + \\In_t((S_T-K)_+ - S_T) > D_t^{-1} D_T K - D_t^{-1} D_T K = 0$. The case (v) is trivial, we can buy the option for negative price, and hold to maturity.\n\\end{proof}\n\n\\begin{remark}\n \\begin{enumerate}\n \\item  Note that some of the properties of the $\\In$ operator use the non-negativity of the prices process. Of course, if the asset price can go negative, then some of the conditions given can fail, e.g. in the Bachelier model.\n \\item \n  Consider the case where \\emph{(v)} fails. Then the `usual' arbitrage strategy would be to sell a call with a large strike, which should be worth very little, for approximately $\\lim_{K \\to \\infty} C(K)$, and hedge in some way (or just not bother, the model-implied loss will happen with arbitrarily small probability). In our current setup, this will use up some of our lower constraint, since the intrinsic value of this strategy will remain as $-S_t$, no matter how large $K$ is. In this way, we can `use' spare $\\alpha$ to generate gains, but the cost may be higher than the value of using this capacity elsewhere, depending on other elements. \n  \\end{enumerate}\n \\end{remark}"
+  },
+  {
+   "level": "section",
+   "title": "Utility Maximisation in Complete Markets",
+   "text": "In this section we consider the problem as setup in Section~\\ref{sec:setup} under the additional assumption that the trader believes in a complete market. In this case, the trader can hedge their risk, subject to the condition that the intrinsic value of their portfolio satisfies the wealth constraint, and we try to understand the impact of this on their behavior."
+  },
+  {
+   "level": "subsection",
+   "title": "Complete Market Assumption",
+   "text": "To make significant progress on this problem, we make the assumption that $\\Pc$ is a singleton, and moreover, $\\Pc = \\{ \\P\\}$, where $\\P$ is a complete market. In particular, we suppose that there exists a uniformly integrable state-price density process $H_t$, with $H_t > 0$ \\as{}, $H_0 = 1$, such that whenever $Y$ is an $\\Fc_T$-measurable random variable with $\\Ep{D_T^{-1}H_T (1+|Y|) \\log \\left(1+|Y|\\right)_+}<\\infty$, there exists a $\\mathcal{P}$-admissible portfolio $\\pi$ with $\\Ep{H_T Y} + X_T^\\pi = Y$. In such a market, we can define as usual a risk-neutral measure $\\Q$, by $\\left.\\frac{\\di \\Q}{\\di \\P}\\right|_{\\Fc_t} = H_t D_t^{-1}$. Moreover it follows from our assumptions above that $ H_t D_t^{-1}$ is a $\\P$-martingale.\n\n\nAdditionally, we suppose that  a (set of) traded derivatives is available. To each derivative or portfolio of derivatives, we associate a fair intrinsic price process, $\\In_t(C_T)$. Note that by Definition~\\ref{def:intrinsic} we have $\\In_t(C_T) \\le C_t := H_t^{-1} \\Ep{H_T C_T | \\Fc_t}$, where $C_t$ is the arbitrage-free price of the derivative.\n\nIf the investor decides to take a long position in the option, her optimisation problem is:\n\\begin{equation}\\label{eq:2}\n  \\text{maximise } \\Ep{u(W_T^{\\pi,C})}, \\; \\text{ subject to } \\pi \\in \\Vc(w_0, \\alpha, c_0, C_T),\n\\end{equation}\nwhere $W_t^{\\pi,C}$ is given by \\eqref{eq:Wdefn2}; recall Definition \\ref{def:admissset}.\n\nIn this section, we solve this problem for specific choices of the derivative $C$, and under a range of assumptions on the market measure $\\P$. Our approach to this problem is based on results of \\cite{El-Karoui:2006aa}. In that paper the authors characterise the martingale $M_t$ which maximises $\\Ep{u(M_T)}$ for a concave function $u$ subject to the constraint that $M_0 = 0$ and $M_t \\ge J_t$ for some supermartingale $J$. (More generally, if $J$ is not a supermartingale, it is trivial that $J$ can be replaced by its Snell envelope, \\ie{} the smallest supermartingale dominating $J$). The main result of \\cite{El-Karoui:2006aa} says that, if the supermartingale $J_t$ can be written in the form\n\\begin{equation}\\label{Representation}\n  J_t = \\Ep{\\sup_{t \\le u \\le T} J^*_u | \\Fc_t}\n\\end{equation}\nfor some adapted process $J^*$, then the martingale $M_t := \\Ep{m \\vee \\sup_{0 \\le u \\le T} J^*_u | \\Fc_t}$, where $m$ is chosen so that $M_0 = 0$, maximises $\\Ep{u(M_T)}$ for any concave function $u$, over the class of all martingales starting at $0$ which dominate $J$. The proof of this representation theorem can be found in \\cite{El-Karoui:2008aa}.\n\nFurther, in~\\cite{El-Karoui:2006aa}, the authors are able to extend their results to cover the case of utility maximisation problems under certain assumptions on the form of the function $u$. We adapt their arguments to apply to our setup. The main complication in the utility maximisation framework is that the expectation and the martingale properties of the wealth are taken under different probability measures ($\\P$ and $\\Q$ respectively). The aim is to put these under the same measure through an appropriate change of measure, and we require the following condition: There exists $\\delta>1$ such that $\\Ep{H^{-\\delta}_T} <\\infty$.\n\nFollowing~\\cite{El-Karoui:2006aa}, we suppose that our utility function is of the form $u(x) = u_p(x) = \\frac{x^{1-p}}{1-p}$, where $\\frac{1}{1+\\delta} < p < 1$. \n\nReformulating \\eqref{eq:2} using the definition of $W_t^{\\pi,C}$ and the complete market characterisation of admissible dynamic trading strategies, our problem is to choose the $\\Fc_T$-measurable random variable $X_T^\\pi$ to maximise \n$$\\Ep{u_p(D_T^{-1}(w_0 - c_0) + C_T + X_T^\\pi)}$$\nsubject to $\\Ep{H_T X_T^\\pi} = 0$, $D_T^{-1}(w_0 - c_0) + C_T + X_T^\\pi \\ge 0$ and\n\\begin{equation}\\label{eq:3}\n   D_t^{-1}(w_0 - c_0)  + \\In_t(C_T) + H_t^{-1}\\Ep{H_T X_T^\\pi|\\Fc_t} \\ge -D_t^{-1}\\alpha, \\quad 0 \\le t < T.\n\\end{equation}\nTo write our problem in a form where we can apply the results of \\cite{El-Karoui:2006aa}, we introduce\n\\begin{equation}\\label{def:Y1}\n  Y_T := D_T^{-1}(w_0 - c_0)+C_T+X_T^\\pi ,\n\\end{equation}\nso $\\Ep{H_T Y_T} = w_0 + (\\Ep{H_T C_T} -c_0)$ if and only if $\\Ep{H_T X_T^\\pi} = 0$; recall that $\\Ep{D_T^{-1} H_T} =  1$. Write also $\\Delta C := (\\Ep{H_T C_T} -c_0) $, the difference between the hedging price (without portfolio constraints) and the market price of the option. Then, in terms of $Y$, \\eqref{eq:3} becomes\n\\begin{equation*}\n  \\In_t(C_T) + H_t^{-1}\\Ep{H_T Y_T|\\Fc_t} - H_t^{-1}\\Ep{H_T C_T | \\Fc_t} \\ge -D_t^{-1}\\alpha ,\n\\end{equation*}\nor equivalently, writing \n\\begin{equation}\\label{def:Y2}\nY_t := H_t^{-1} \\Ep{H_T Y_T|\\Fc_t}, \n\\end{equation}\nwe need:\n\\begin{equation*}\n  D_t Y_t \\ge -\\alpha + (D_t H_t^{-1}) \\Ep{H_T C_T|\\Fc_t} - D_t \\In_t(C_T), \\quad Y_ 0 = w_0 + \\Delta C.\n\\end{equation*}\nNote in particular that $(D_tY_t)$ is a $\\Q$-martingale.\n\nThe issue now is that $DY$ is a martingale under $\\Q$, while we maximise under the probability $\\P$. To get around this difficulty we introduce a new measure $\\bQ$ under which the two conditions can be understood for the same measure. For this purpose, we define $(\\xi_{\\cdot})$ by\n\\begin{equation}\n  \\label{eq:4}\n  \\xi_T := \\frac{H_T^{-\\frac{1}{p}}}{\\Ep{H_T^{1-\\frac{1}{p}}}}, \\quad \\xi_t := H_t^{-1} \\Ep{\\xi_T H_T | \\Fc_t}.\n\\end{equation}\nThen $\\xi_0 = 1$,  $\\xi_t H_t$ is a $\\P$-martingale, and we can define a change of measure $\\frac{\\di \\bQ}{\\di \\P} = \\xi_T H_T$.\n\n\\begin{lemma} \\label{lem:Ybar}\n  Under $\\bQ$, with utility function $u = u_p$, the problem \\eqref{eq:2} is equivalent to the problem:\n  $$\n   \\text{maximise } \\Ebq{u_p(\\ol{Y}_T)},\n  $$\n  subject to\n  \\begin{equation}\\label{eq:5}\n  \\begin{cases}\n    \\ol{Y} &\\text{ is a non-negative $\\bQ$-martingale}, \\\\\n     \\ol{Y}_0 &=  w_0 + \\Delta C,\\\\%\\label{eq:5}\\\\\n     \\ol{Y}_t &\\ge  -\\alpha \\xi_t^{-1} D_t^{-1} -\\xi_t^{-1} \\In_t(C_T)  + \\Ebq{C_T \\xi_T^{-1}| \\Fc_t}.\n    \\end{cases}\n  \\end{equation}\nMoreover, the optimal terminal wealth $W_T^{\\pi,C}$ can be recovered by $W_T^{\\pi,C} = \\xi_T \\ol{Y}_T$, where $\\ol{Y}_T$ is the optimiser for the problem above.\n\\end{lemma}\n\n\\begin{proof}\n  Let $X_T^\\pi$ be a candidate solution to \\eqref{eq:2}, so $\\Ep{H_T X_T^\\pi} = 0$ and $W_T^{\\pi,C} = D_T^{-1}(w_0 - c_0) + C_T + X_T^\\pi \\ge 0$. Then, from (\\ref{def:Y1}, \n  \\begin{equation*}\n    \\Ep{u_p(D_T^{-1}(w_0 - c_0) + C_T + X_T^\\pi)} = \\Ep{u_p(Y_T)}.\n  \\end{equation*}\n  Define $\\ol{Y}_t = Y_t \\xi_t^{-1}$; see (\\ref{def:Y2}). Then $\\Ebq{\\ol{Y}_T | \\Fc_t} = (\\xi_t H_t)^{-1}\\Ep{Y_T \\xi^{-1}_T H_T \\xi_T| \\Fc_t} =Y_t  \\xi_t^{-1} = \\ol{Y}_t$. In particular, $\\ol{Y}$ is a $\\bQ$-martingale, and $\\ol{Y}_T \\ge 0$, hence $\\ol{Y}$ is a non-negative martingale.\n  \n  On the other hand, we have \n  \\begin{align*}\n    \\Ep{u_p(Y_T)} \n    & = \\Ep{\\frac{Y_T^{1-p}}{1-p}}\\\\\n    & = \\Ebq{(H_T \\xi_T)^{-1} \\frac{(\\ol{Y}_T\\xi_T)^{1-p}}{1-p}}\\\\\n    & = \\Ebq{\\frac{\\xi_T^{-p}}{H_T} u_p(\\ol{Y}_T)}\\\\\n    & = \\left(\\Ep{H_T^{1-\\frac{1}{p}}}\\right)^{p} \\Ebq{u_p(\\ol{Y}_T)}.\n  \\end{align*}\n  Moreover, the constraints on the lower bound and the initial value of $\\ol{Y}$ follow immediately. As a consequence, any feasible solution $Y$ to the first problem gives rise to a feasible solution $\\ol{Y}$ to the second problem, and the corresponding values differ only by a positive constant multiple.  A similar conclusion can be obtained starting with a feasible solution $\\ol{Y}$  to  \\eqref{eq:5}, and building a candidate solution to   \\eqref{eq:2}. Since the market is complete,  the arbitrage free price and the replication strategy of any contingent claim are uniquely determined, and hence there exists an admissible dynamic trading strategy $\\pi$  such that  the $\\Q$-martingale  $D_t X_t^{\\pi}$ replicates the contingent claim $D_T \\xi_T \\ol{Y}_T-D_T C_T-(w_0-c_0)$.   \n\\end{proof}\n\n\\begin{remark}\\label{rem:restprop}\n  Note that the intrinsic wealth constraint process\n  \\begin{equation} \\label{eq:ZetaDef}\n    \\zeta_t := -\\alpha D_t^{-1}\\xi_t^{-1} - \\xi_t^{-1} \\In_t(C_T) + \\Ebq{ \\xi_T^{-1} C_T | \\Fc_t}\n  \\end{equation}\n  is a $\\bQ$-supermartingale.  To see this, we observe that $\\frac{\\di \\bQ}{\\di \\Q} = D_T \\xi_T$, so $(D_t^{-1}\\xi_t^{-1})$ is a $\\bQ$-martingale, and $(D_t \\In_t(C_T))$ is a $\\Q$-submartingale by the assumption that $\\In_t(C_T)$ is a fair intrinsic wealth process, so also $(\\xi_t^{-1} \\In_t(C_T))$ is a $\\bQ$-submartingale.\n  \n  \n\\end{remark}\n\n  More generally, we can reformulate the conditions in Lemma~\\ref{lem:Ybar} that $(\\ol{Y})_{t \\le T}$ is a non-negative $\\bQ$-martingale such that $\\ol{Y}_t \\ge \\zeta_t$ for $t \\le T$ in terms of the process\n  \\[\n    \\zeta_t^0 :=\n    \\begin{cases}\n      \\zeta_t & t < T\\\\\n      0 & t = T\n    \\end{cases}.\n  \\]\n  Specifically, since $\\zeta_T = -\\alpha D_T^{-1}\\xi_T^{-1} < 0$, the requirement that $\\ol{Y}$ is non-negative and greater than $\\zeta_t$ is equivalent to requiring that the process $\\ol{Y}$ is greater than $\\zeta^0$, and further, equivalently, that it is greater than the Snell envelope of $\\zeta^0$, which we denote by $\\zeta^*$.\n\n\n\n\n\n \n\n\\begin{assumption} \\label{ass:sup-decomp}\n \n The process $\\zeta^*$ is a supermartingale of class  $({\\mathcal D})$ upper semi-continuous in expectation which admits the decomposition in terms of an optional, upper-right semi-continuous process $J_u^\\zeta $, with $J_T^\\zeta =0$, as \n \\begin{equation}\n    \\label{eq:7}\n    \\zeta_t^* = \\Ebq{\\sup_{t \\le u \\le T} J_u^\\zeta | \\Fc_t}.\n  \\end{equation}   \n \\end{assumption}\n\n\n \n \n  \n\n\n  \n \n  \n  \n    \n   \n  \n  By \\cite[Theorem~2.9]{bank_stochastic_2021}, we have that the representation in (\\ref{eq:7}) can be obtained for process $\\zeta^*$. Observe that, following \\cite{El-Karoui:2006aa} and \\cite{{El-Karoui:2008aa}}, in order to obtain this representation \n  \n  it is sufficient that the filtration $ \\{\\Fc_t\\}$  is quasi-left-continuous.\n  \n\n\n\\begin{theorem} \\label{thm:main_decomp}\n  Suppose that $u = u_p$, $\\In_t(C_T)$ is a fair intrinsic price process and Assumption~\\ref{ass:sup-decomp} holds. Then there exists a feasible solution to \\eqref{eq:2} if and only if\n  \n  \n  \n  \n  \\begin{equation*}\n    \\Ebq{\\sup_{0 \\le u \\le T} J_u^\\zeta} \\le w_0 + \\Delta C .\n  \\end{equation*}\n  When this condition holds, the optimal terminal wealth $W_T^\\pi$ solving \\eqref{eq:2} is given by\n  \\begin{equation*}\n    W_T^\\pi = \\xi_T\\left[ \\left( \\sup_{0 \\le u \\le T} J_u^\\zeta\\right) \\vee M\\right],\n  \\end{equation*}\n  where $M$ is chosen such that $\\Ebq{\\left( \\sup_{0 \\le u \\le T} J_u^\\zeta\\right) \\vee M} = w_0 + \\Delta C$.\n\\end{theorem}\n\n\\begin{proof}\n  Under Assumption~\\ref{ass:sup-decomp}, it is immediate that $\\ol{\\zeta}_t := \\Ebq{\\sup_{0 \\le u \\le T} J_u^\\zeta|\\Fc_t}$ is a non-negative martingale which dominates $\\zeta^*$. Moreover, it is the smallest such martingale. \n  \n  In particular, if $\\ol{\\zeta}_0  \\le w_0 + \\Delta C$, then there exists a process $\\ol{Y}$ which is feasible for \\eqref{eq:5}. Moreover, since any admissible wealth process gives rise (via the arguments of Lemma~\\ref{lem:Ybar}) to a non-negative martingale which dominates $\\zeta^*$, this is also a necessary condition. The result now follows immediately from \\cite[Theorem~5.2]{El-Karoui:2008aa} \\footnote{Note that there is a typographical error in the first bullet point on p.685 of \\cite{El-Karoui:2008aa}, and this point is not in general correct: in our notation, the choice of $M$ will in general be less than $w_0 + \\Delta C$; we do not usually expect equality except in special cases.}\n\\end{proof}\n\nIt is now straightforward to deduce the form of the optimal $\\pi$, using classical methods, see for example~\\cite[Theorem~6.3, Corollary~6.5]{karatzas_methods_1998}."
+  },
+  {
+   "level": "subsection",
+   "title": "Long position in Call options",
+   "text": "In this section we consider the case where the derivative position is a long position in call options. Specifically, we suppose that the agent purchased $\\lambda > 0$ units of a call option with strike $K$. As we will see, in this case the form of the optimal terminal wealth can be identified.\n\nWe first consider the fair (replication) price of a call option with strike $K$ at time $t$, given by:\n\\begin{align*}\n H_t^{-1} \\Ep{H_T (S_T-K)_+|\\Fc_t} \n  & = \\xi_t \\Ebq{\\xi_T^{-1} (S_T-K)_+|\\Fc_t} \\\\ \n  & = D_t^{-1} \\Eq{D_T (S_T-K)_+|\\Fc_t}.\n\\end{align*} \n\nIn addition, from Example~\\ref{ex:Intrinsic}{\\it(\\ref{item:1})}, we know that $\\In_t(\\lambda(S_T-K)_+) = \\lambda \\left(S_t - K \\frac{D_T}{D_t}\\right)_+$, and so:\n\\begin{align*}\n  \\zeta_t = D_t^{-1} \\xi_t^{-1}   \\left[ - \\alpha-\\lambda (S_t D_t - K D_T)_+ +\\lambda \\Eq{(S_T D_T -KD_T )_+| \\Fc_t}    \\right].\n\\end{align*}\nObserving that $S_t^D:= D_t S_t$ is a $\\Q$-martingale, and writing $K^D :=  D_T K$, it follows that\n\\begin{equation}\n  \\label{eq:8}\n  \\zeta_t =\\lambda  \\xi_t^{-1} D_t^{-1} \\left(\\Eq{L_{T}^{S^D,K^D}-L_t^{S^D,K^D}|\\Fc_t}-\\frac{\\alpha}{\\lambda}\\right)\n\\end{equation}\nwhere $L^{S^D,K^D}$ is the local time of the process $S^D$ at the level $K^D$. Recalling again that $\\frac{\\di \\bQ}{\\di \\Q} = D_T \\xi_T$, we can also write\n\\begin{equation*}\n    \\zeta_t = \\Ebq{\\left(\\lambda \\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right)-\\alpha\\right) \\xi_T^{-1} D_T^{-1} |\\Fc_t}.\n\\end{equation*}\n\nLet us introduce $\\phi_t := \\xi_t^{-1} D_t^{-1}$, so we can write \n\\begin{align*}\n  \\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\phi_T\n  & = \\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\phi_t  + \\int_t^T  \\di L_s^{S^D,K^D} \\int_t^T \\di \\phi_s\n\\end{align*} \nand by integration by parts,\n\\begin{align*}\n  & \\int_t^T  \\di L_s^{S^D,K^D} \\int_t^T \\di \\phi_s\\\\\n  & \\quad = \\int_t^T (\\phi_s-\\phi_t) \\,\\di L_s^{S^D,K^D} + \\int_t^T \\left(L_{s}^{S^D,K^D}-L_t^{S^D,K^D}\\right)\\, \\di\\phi_s\\\\\n  & \\quad = \\int_t^T\\phi_s\\, \\di L_s^{S^D,K^D} - \\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\phi_t\n    + \\int_t^T \\left(L_{s}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\,\\di \\phi_s\n\\end{align*}\nand so \n\\begin{align*}\n  \\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\phi_T\n  & = \\int_t^T \\phi_s\\, \\di L_s^{S^D,K^D} + \\int_t^T \\left(L_{s}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\,\\di\\phi_s.\n\\end{align*}\nSince $\\phi$ is a $\\bQ$-martingale, it follows that \n\\begin{align*}\n    \\Ebq{\\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right)\\phi_T |\\Fc_t} = \\Ebq{\\int_t^T\\phi_s \\di L_s^{S^D,K^D}|\\Fc_t}.  \n\\end{align*}\n\nTo say more about the optimal strategy in this framework, we then make the following  assumption:\n\\begin{assumption} \\label{ass:barrier_markov}\n  Suppose that $S$ is a time-homogenous, Markov processes under $\\bQ$, and there exists a measurable function $\\phi(u)$ such that $\\phi_u = \\phi(u)$ when $S_u^D = K^D$.  That is, $\\xi_tD_t$ does not depend on the past of the process when the discounted price and the discounted strike are equal.\n\\end{assumption}\nBelow we will see that this assumption holds for the case of a\nBlack-Scholes-Merton model. In particular, it follows from Assumption~\\ref{ass:barrier_markov} that\n\\begin{align*}\n  \\rho(t) :=\n  \\begin{cases}\n    \\Ebq{\\int_t^T \\phi_s \\, \\di L_s^{S^D,K^D} | S_t^D = K^D}, \\quad & t < T\\\\\n    -\\infty, & t \\ge T\n  \\end{cases}\n\\end{align*}\nis well defined.\n\n \n\n\n\n\n \n\n\n\n\n\n\n\\begin{theorem} \\label{thm:long-position-call}\n  Suppose that Assumption~\\ref{ass:barrier_markov} holds, and in addition, $\\phi$ is a Markov process and\n  \\begin{align}\\label{def:z}\n    z(u; \\lambda) := \\lambda \\rho(u) - \\alpha \\phi(u)\n  \\end{align}\n  is decreasing in $u$, for $u \\in [0,T]$. Then the process  $J^\\zeta$ involved in the representation of $\\zeta^*$ in (\\ref{eq:7}),  the Snell envelope of $\\zeta^0$,\n  is given by \n   \\begin{align*}\n    J_u^\\zeta =\n    \\begin{cases}\n      z(u; \\lambda) & S_u^D = K^D\\\\\n      0 & u = T\\\\\n      - \\infty & \\text{ otherwise},\n    \\end{cases}\n  \\end{align*}\n  and so\n  \\begin{align*}\n    \\sup_{0 \\le u \\le T} J_u^\\zeta =\n    \\begin{cases}\n      z(H_{K^D}; \\lambda) \\vee 0 & \\quad H_{K^D} < T\\\\\n      0 & \\quad T \\wedge H_{K^D} = T.\n    \\end{cases}\n  \\end{align*}\n\\end{theorem}\n\n\\begin{proof}\n  \n Recall that the process $\\zeta$ is defined in \\eqref{eq:ZetaDef}, and   consider the process $J^\\zeta$ defined above.\nWe first note that the process $\\zeta$ can be described as follows.  Considering first $t=T$, we see immediately that $\\zeta_T = - \\alpha\\phi_T$. In addition, for $t < T$, define  the  stopping time\n\\begin{equation}\\label{def:stoppingtime}\nH_{K^D}^t := \\inf \\{s \\ge t: S_s^D = K^D\\},\n\\end{equation}\nthen $(\\zeta_{s \\wedge H_{K^D}^t})_{s \\in [t,T]}$ is a martingale, and $\\zeta_t = \\Ebq{\\zeta_{T \\wedge H_{K^D}^t}}$. \nNow, observe that $\\zeta_{H_{K^D}} = z(H_{K^D}; \\lambda)$ when $H_{K^D} < T$. \nSince $\\zeta^*_{H_{K^D}} \\ge \\zeta_{H_{K^D}}$, we have that, \n  $$\\zeta^*_{H_{K^D}} \\ge \\Ebq{\\sup_{{H_{K^D}} \\le u \\le T} J_u^\\zeta | \\Fc_{H_{K^D}}} = \\zeta_{{H_{K^D}}} \\vee 0 =z(H_{K^D};\\lambda)\\vee 0, \n  $$\nwhen $H_{K^D} < T$.  It follows that \n   $$\\zeta^*_0 \\ge \\Ebq{\\left(\\zeta^*_{H_{K^D}}\\vee 0 \\right)\\ind_{H_{K^D} < T}} \\ge \\Ebq{\\sup_{0\\le u \\le T} J_u^\\zeta}.$$\n \n    On the other hand, by construction, $\\Ebq{\\sup_{t \\le u \\le T} J_u^\\zeta | \\Fc_t}$ is a non-negative supermartingale dominating $\\zeta_t$, from which we conclude\n    \\[\n      \\zeta_t^* = \\Ebq{\\sup_{t \\le u \\le T} J_u^\\zeta | \\Fc_t},\n    \\]\n    as required.\n\n  \n\n  \n  \n  \n  \n  \n\n  \n  \n\\end{proof} \n\n\\begin{remark} The assumption that $z$ is decreasing is necessary to get an explicit expression. In general, we would expect the process $J^\\zeta$ to take a similar form, but it would no longer be the case that $\\sup_{0 \\le u \\le T} J_u^\\zeta = z(H_{K^D}; \\lambda) \\vee 0$, and rather, the right-hand side would be a maximum over all possible return times to the level $K^D$. In this case, we would expect the function $z$ at time $u$ to then only be defined recursively in terms of an expression involving its future values, $\\{z(s; \\lambda), s \\in (u,T]\\}$.\n\\end{remark}\n\nNext result is in fact a special case of the previous more general\nresult.\n\\begin{corollary} \\label{lem:rho-dec}\n  Suppose that Assumption~\\ref{ass:barrier_markov} holds, $\\alpha = 0$, and the function $\\rho(t)$ is strictly positive and decreasing. Then, we have\n  \\begin{align*}\n    \\sup_{0 \\le u \\le T} J_u^\\zeta = \\lambda \\rho(H_{K^D}) \\vee 0\n  \\end{align*}\n  where $H_{K^D} := \\inf \\{ t \\ge 0 : S_u^D = K^D\\}$.\n\\end{corollary}\n\\begin{proof}\n Taking $z(u,\\lambda)=\\lambda \\rho (u)$, and using the fact that $\\rho$ is decreasing and strictly positive, the result follows from the expression for $J^\\zeta_u$, taking $\\alpha=0$, since the maximum of this process within the interval $[t,T]$ will be achieved at the valuation in the  left limit $t$.\n\\end{proof}"
+  },
+  {
+   "level": "subsection",
+   "title": "Long positions in Call options in the Black-Scholes-Merton model",
+   "text": "We now restrict ourselves to the standard setting of the Black-Scholes-Merton model, so that $D_t = \\me^{-rt}$, $\\di S_t = \\sigma S_t \\di B_t + \\mu S_t \\dt$, for fixed constants $\\sigma, r, \\mu$, where $B_t$ is a $\\P$-Brownian motion. In this model, we know that \\[H_t = \\exp\\left\\{-\\theta B_t - \\left(\\half \\theta^2 +r\\right) t \\right\\},\\] where $\\theta = \\frac{\\mu-r}{\\sigma}$, the Sharpe ratio.\n\nUsing the fact that $\\xi_T = H_T^{-\\frac{1}{p}} \\left(\\Ep{H_T^{1-\\frac{1}{p}}}\\right)^{-1}$, and $H_t \\xi_t$ is a $\\P$-martingale, one can further see that\n\\begin{equation*}\n  \\xi_t = \\exp\\left\\{ \\frac{\\theta}{p} B_t + rt + \\half \\theta^2 (2 p^{-1} - p^{-2}) t\\right\\},\n\\end{equation*}\nand therefore\n\\begin{align}\n  \\phi_t^{-1} = D_t\\xi_t = \\exp\\left\\{ \\frac{\\theta}{p} B_t^{\\Q} - \\half \\frac{\\theta^2}{p^2}t\\right\\}, \\label{eq:11}\n\\end{align}\nwhere $B_t^\\Q := B_t + \\theta t$ is a $\\Q$-Brownian motion. It follows that $S_t^D = K^D$ if and only if:\n\\begin{align}\n  K^D & = S_0 \\exp\\left\\{ \\sigma B_t^\\Q - \\half \\sigma^2 t\\right\\} \\nonumber\\\\\n  \\iff B_t^\\Q & = \\frac{1}{\\sigma} \\left[ \\ln \\left( \\frac{K^D}{S_0}\\right) + \\half \\sigma^2 t\\right]       \\label{eq:10}\n\\end{align}\nand hence\n\\begin{align*}\n  \\phi(t) & = \\exp\\left\\{ -\\frac{\\theta}{p} \\frac{1}{\\sigma} \\left[ \\ln \\left( \\frac{K^D}{S_0}\\right) + \\half \\sigma^2 t\\right]  + \\half \\frac{\\theta^2}{p^2}t\\right\\}\\\\\n  & = \\left( \\frac{S_0}{K^D}\\right)^{\\frac{\\theta}{\\sigma p}} \\exp\\left\\{ \\frac{\\theta}{2p^2} \\left( \\theta-\\sigma p\\right)t\\right\\}.\n\\end{align*}\nNote that it follows that Assumption~\\ref{ass:barrier_markov} holds, and moreover $\\phi$ is decreasing in $t$ if $\\theta>0$ and $p \\sigma > \\theta$.\n\n\n\nUsing from above the fact that  $\\frac{\\di \\bQ}{\\di \\Q} = D_T \\xi_T$, which is given by \\eqref{eq:11}, we also see from Girsanov's Theorem that $B_t^{\\bQ} := B_t^\\Q - \\frac{\\theta}{p} t$ is a $\\bQ$-Brownian motion.\n\nIn addition, using the Black-Scholes formula, we have \n\\begin{equation*}\n  \\Eq{L_{T}^{S^D,K^D}-L_t^{S^D,K^D}|\\Fc_t} = \\left( \\Phi(d_1) S_t^D - \\Phi(d_1-\\sigma\\sqrt{T-t})K^D\\right) - (S_t^D-K^D)_+\n\\end{equation*}\nwhere $d_1 = \\left( \\log\\left( \\frac{S_t^D}{K^D}\\right) + \\sigma^2 \\sqrt{T-t}/2\\right) /(\\sigma \\sqrt{T-t})$, and it follows from the argument used to derive \\eqref{eq:8} that\n\\begin{equation*}\n  \\rho(t)  = \\phi(t) K^D \\left( 2 \\Phi\\left(\\half \\sigma \\sqrt{T-t} \\right) -1\\right).\n\\end{equation*}\nFrom the fact that $\\phi$ is decreasing, we deduce that Theorem~\\ref{thm:long-position-call} \n holds when $\\theta>0$ and $p \\sigma > \\theta$, since  in this case $z(\\cdot;\\lambda)$, defined by (\\ref{def:z}), is decreasing. This last fact follows from the following observation, using the previous display.  \n \\begin{align*}\n z(u;\\lambda)=&\\lambda\\rho(u)-\\alpha \\phi(u)\\\\\n =&-\\alpha\\phi(u)\\left[1-\\frac{\\lambda K^D}{\\alpha}\\left(2\\Phi(\\frac{1}{2}\\sigma\\sqrt{T-u})-1\\right)\\right]\\\\\n =:&-\\alpha\\phi(u)g(u),\n \\end{align*}\nwith $g(T)=1$, $g(0)<1$ and $g'(u)>0$, for $0<u<T$.  The functions $\\rho, \\phi$ and $z$ are shown in Figures~\\ref{fig:RhoPhi} and \\ref{fig:zPlot}. \n\n\n\n\n\n\n\n\n\nFor $y \\neq x$, $\\beta \\in \\R$, and for a standard Brownian motion $B$ with $B_0 = 0$, we introduce the hitting time\n\\begin{align*}\n  H_{y}^{\\beta} := \\inf \\{ t \\ge 0 :  x+ B_t = y + \\beta t\\}\n\\end{align*}\nand define the densities $\\gamma_0, \\gamma_1^\\beta, \\gamma_2^\\beta$ by:\n\\begin{align}\n  \\P(x+ B_t \\in A) & = \\int_A \\gamma_0(v,t,x) \\, \\di v \\nonumber\\\\\n  \\label{eq:BrownianHittingLine}\n  \\P(H_y^\\beta < t) & = \\int_0^t \\gamma_1^\\beta(u,x,y) \\, \\di u\\\\\n  \\P(H_y^\\beta > t, x+ B_t \\in A)  & = \\int_A \\gamma_2^\\beta(v,t,x,y) \\, \\di v\n                                  \\label{eq:BrownianNotHitting}\n\\end{align}\n\n\\begin{proposition} \\label{prop:BSM_M}\n  In the Black-Scholes-Merton model with $\\theta >0, p \\sigma > \\theta$, $z$ decreasing and $S_0 \\neq K^D$, we can write \n  \\begin{align}\n   \\Ebq{\\left( \\sup_{0 \\le u \\le T} J_u^\\zeta\\right) \\vee M}\n    & = M + \\int_0^T \\gamma_1^\\beta(u,x,y)  (z(u; \\lambda) - M)_+  \\, \\di u \\nonumber\n    \\\\\n    & = M + \\int_0^{r^*(M;\\lambda)} \\gamma_1^\\beta(u,x,y)  (z(u; \\lambda) - M) \\, \\di u\n    \n    \\label{eq:12}\n  \\end{align}\n  where $x = \\sigma^{-1} \\log(S_0), y = \\sigma^{-1} \\log(K^D), \\beta = \\sigma/2-\\theta/p$, and\n  \\begin{equation*}\n    r^*(M;\\lambda) := \\inf\\{ u < T : z(u; \\lambda) < M\\} \\wedge T.\n  \\end{equation*}\n  \n  \n  \n\\end{proposition}\n\n\\begin{proof}\n  First note that the parameters $x, y$ and $\\beta$ come from the relevant terms in \\eqref{eq:10} together with $B_t^{\\bQ} := B_t^\\Q - \\frac{\\theta}{p} t$.\n  \n  From Theorem~\\ref{thm:long-position-call} we observe that\n  \\begin{align*}\n    \\sup_{0 \\le u \\le T} J_u^\\zeta = z(H_{K^D};\\lambda) \\vee 0\n  \\end{align*}\n  holds, and therefore \n  \\begin{align*}\n    \\sup_{0 \\le u \\le T} J_u^\\zeta \\vee M = M + (z(H_{K^D};\\lambda) - M)_+.\n  \\end{align*}\n  The result now follows upon noting that $z$ is decreasing and the observation that $H_{K^D}$ has distribution given by $\\gamma_1^\\beta$.\n\\end{proof}\n\n\n\nWe now put together the results of this section to give a complete characterisation of the optimal wealth in the case of a long position in call options.\n\n\\begin{theorem}\n  Suppose the conditions of Proposition~\\ref{prop:BSM_M} and Theorem~\\ref{thm:main_decomp} hold.\n  Then there exists an admissible trading strategy which is long $\\lambda$ units of the Call option with strike $K$ if and only if\n  \\[\n    w_0 + \\lambda \\Delta C  \\ge \\int_0^{r^*(0;\\lambda)} \\gamma_1^\\beta(u,x,y)  z(u; \\lambda) \\, \\di u.\n  \\]\n  If this holds then the value of $M$ in the trader's optimal portfolio is the unique solution to the equation\n  \\begin{align}\n    w_0 + \\lambda \\Delta C & = M + \\int _0^{r^*(M;\\lambda)} \\gamma_1^\\beta(u,x,y) \\left\\{z(u;\\lambda)-M\\right\\} \\, \\di u, \\label{eq:M-BSM-Simplified}\n  \\end{align}\n  and the optimal utility is given by\n  \\begin{equation*}\n     \\Ep{u_p(W_T^{\\pi,C})} = c_p \\cdot \\left( u_p(M) + \\int _0^{r^*(M;\\lambda)} \\gamma_1^\\beta(s,x,y) \\left\\{u_p(z(s;\\lambda))-u_p(M)\\right\\} \\, \\di s\\right),\n  \\end{equation*}\n  where $M:= M(\\lambda)$ is the value given by~\\eqref{eq:M-BSM-Simplified} and $c_p = \\left(\\Ep{H_T^{1-\\frac{1}{p}}}\\right)^{p}$.\n\n\\end{theorem}\n\n\n\n\n\n\n\n\n\n\\begin{proof}\n  The first claim follows from Proposition~\\ref{prop:BSM_M} and Theorem~\\ref{thm:main_decomp}. It also follows from this and the fact that with positive probability, since $S_0 \\neq K^D$, $H_{K^D} \\ge T$ that a unique value of $M$ satisfying \\eqref{eq:M-BSM-Simplified} exists.\n  \n  The form of the optimal utility now follows from applying the known distribution of $\\left( \\sup_{0 \\le u \\le T} J_u^\\zeta\\right) \\vee M$, and the arguments of Lemma~\\ref{lem:Ybar}.\n\\end{proof}\n\n\\begin{remark}\n  In general the expression for $\\gamma_1^\\beta$ does not exist in closed form (unless $\\beta = 0$), however it is well known that its Laplace transform can be given in closed form. In combination with the fact that the right hand side of \\eqref{eq:M-BSM-Simplified} is increasing in $M$, this means that the optimal value of $M$ can be found quickly via simple numerical methods.\n\\end{remark}\n\n\\begin{remark}\n  In the case where the initial value of the asset is equal to the at-the-money strike, $S_0 = K^D$, then $H_{K^D} \\equiv 0$ and so the resulting $\\sup_{0 \\le u \\le T} J^\\zeta_u$ is fixed. Hence the optimal wealth will also be deterministic, and there hence this case is trivial. \n\\end{remark}"
+  },
+  {
+   "level": "subsection",
+   "title": "Numerical Results",
+   "text": "In the context of the above results, it is possible now to numerically compute various relevant quantities to get a sense of the typical behaviour. We show the results of such numerical computations below.\n\n\n\n\n\n\n\nWe observe that $M$ appears to be concave in $\\lambda$, and we see similar behaviour when we plot the utility, where the optimal value utility is attained for $\\lambda$ approximately equal to $3.1$. The value of $r^*(M,\\lambda)$ is increasing in $\\lambda$, although there is an initial interval where it is equal to zero, since $M(\\lambda) \\ge z(0;\\lambda)$, and the intermediate wealth constraint is never binding. Note that this interval also corresponds to linear behaviour for the value of $M$ as a function of $\\lambda$, since here we can directly hedge the exposure, and we always guarantee a terminal wealth equal to $w_0 + \\lambda \\Delta C \\equiv M$.\n\nThe explanation for this behaviour can be seen in Figure~\\ref{fig:CDF_YT}, which shows the cumulative distribution function of the optimal wealth $Y_T$ for the optimal strategy. We see that as we increase $\\lambda$, the mean of the distribution increases, but the variance also increases. The large jump on the left of each distribution function corresponds to the value of $M$, and for small values of $\\lambda$, then this step corresponds to a large proportion of the distribution. As $\\lambda$ increases, the proportion of the distribution that is at $M$ decreases, and the distribution becomes more spread out. As we increase $\\lambda$, the mean of the distribution also increases. The optimal choice of $\\lambda$ is then determined through a trade-off between the mean and variability of the resulting distribution."
+  },
+  {
+   "level": "section",
+   "title": "Effect of static/dynamic hedging under intrinsic wealth constraints: One-touch options",
+   "text": "\\label{sec:one-touch}\n\nIn this section we consider the impact of intrinsic wealth constraints when hedging a path-dependent option. Specifically, in the case of a one-touch option, we are able to compare the case of hedging dynamically using the underlying asset alone, with the case of completing the hedge using a static position in vanilla options. In this case, we exploit the classical example of a static superhedge of a one-touch option using vanilla options and dynamic trading in the underlying asset due to Hobson~\\cite{Hobson:1998aa}. As we will see, there is strong numerical evidence that even in a complete market setting, where the vanilla options are priced at their replication price, the impact of the static position on the intrinsic wealth constraint is significant, and leads to notable benefits to the trader who looks to sell a one-touch option."
+  },
+  {
+   "level": "subsection",
+   "title": "Max-plus representation for the one-touch option",
+   "text": "We begin by recalling the definition of the one-touch option, and Hobson's static superhedging strategy.\n\nA one-touch option is a path-dependent option which pays out a fixed amount if the underlying asset price hits a pre-specified barrier level at any time before maturity. For simplicity, we suppose the barrier crossing is determined in forward price units, and our discount process is $D_t=e^{-rt}$, with $r$ a positive constant, under the hypotheses stated in the previous section. From Example~\\ref{ex:Intrinsic}-\\ref{item:3}, the \\emph{one-touch} option has payoff $\\OT^B_T := \\ind_{\\{S_T^* \\ge B\\}}$, where $S_t^* = \\sup_{r \\le t} S_r$ is the maximum process and $B >0$ is a fixed barrier. Recall that the discounted version of $S$ and $B$ is denoted by $S^D_t=D_tS_t$  and $B^D=D_T B$. Define $H_{B}=\\inf\\{t\\geq 0: S_t^D\\geq B^D\\}$ and the one-touch option can alternatively be written as\n\\begin{align*}\n    C^0_T&=\\ind_{\\{S_t\\geq   BD_t^{-1}D_T,\\;\\text{for\\;some}\\;  t\\in[0,T]\\}}\\\\\n    &=\\ind_{\\{S_t^D\\geq   B^D,\\;\\text{for\\;some}\\;  t\\in[0,T]\\}}.\n\\end{align*}\n\nHobson's superhedging strategy for the one-touch option consists of a short position in the one-touch option itself, combined with a static position in vanilla Call options and dynamic trading in the underlying asset. Specifically, given  $K<B$ fixed, we can consider the portfolio with a payoff $\\tilde{C}^0_T$ composed by a long position of  $\\frac{1}{B-K}$ Call options with strike $K$  and, if $S^D$ hits $B^D$ before terminal time $T$, short sell $\\frac{1}{B-K}$ units of asset, that is, \n\\begin{align*}\n\\tilde{C}^0_T=\\frac{1}{B-K}(S_T-K)_+ +\\frac{1}{B-K}\\{(BD_TD^{-1}_{H_B})D_{H_B}D_T^{_-1}-S_T\\}\\ind_{\\{H_{B}\\leq T\\}}.\n\\end{align*}\nThen, putting together the above expressions, the portfolio value at time $T$ is given by\n\\begin{align*}\n\\tilde{C}^0_T-C^0_T&=\\frac{1}{B-K}[(S_T-K)_+ +(B-S_T)\\ind_{H_B\\leq T}]-\\ind_{\\{H_B\\leq T\\}}\\\\\n&=\n\\begin{cases}\n\\frac{1}{B-K}(S_T-K)_+,\\;\\;&H_B>T\\\\\n\\frac{1}{B-K}(K-S_T)_+,\\;\\;&H_B\\leq T.\n\\end{cases}\n\\end{align*}\nSince the right-hand side is always non-negative, we deduce that $\\tilde{C}^0_T$ is a superhedge for the one-touch option.\n \nIn \\cite{Hobson:1998aa} it is shown moreover that the superhedging strategy is optimal in the sense that there exists a model under which $\\tilde{C}^0_T = C^0_T$ almost surely, and hence the cost of the superhedge is equal to the arbitrage-free price of the one-touch option. Note that the choice of $K$ is not fixed, but there is a choice of $K$ which minimises the cost of the superhedge, and this choice of $K$ corresponds to the model which attains equality.\n\n\n Notice that from this expression we can deduce that its intrinsic value at time $t$ has the form\n \\begin{align*}\n \\In_t(\\tilde{C}^0_T-C^0_T) &=\n \\begin{cases}\n\n \\frac{D_T}{D_t}\\cdot\\frac{1}{B-K}(K-\\frac{D_t}{D_T}S_t)_+,\\;\\;&H_B\\leq t \\leq T\\\\\n 0, \\;\\;&t<H_B\\wedge T \n\\end{cases}\\\\\n&=\n\\begin{cases}\n\n  \\frac{1}{B-K}(K\\frac{D_T}{D_t}-S_t)_+,\\;\\;&H_B\\leq t\\leq T\\\\\n0, \\;\\;&t<H_B\\wedge T ,\n\\end{cases}\n\\end{align*}\nand hence\n\\begin{align*}\nD_t \\In_t(\\tilde{C}^0_T-C^0_T) &=\n\\begin{cases}\n\n  \\frac{1}{B-K}(K^D-S^D_t)_+,\\;\\;&H_B\\leq t\\leq T\\\\\n0, \\;\\;&t<H_B\\wedge T,\n\\end{cases}\n \\end{align*}\n which is clearly a $\\Q$-submartingale.\n Then,  the intrinsic wealth constraint process (see (\\ref{eq:ZetaDef})),   is given by\n  \\begin{equation} \\label{eq:ZetaDef2}\n  \\zeta_t := -\\alpha D_t^{-1}\\xi_t^{-1} - \\xi_t^{-1} \\In_t(\\tilde{C}^0_T-C^0_T) + \\Ebq{ \\xi_T^{-1} (\\tilde{C}^0_T-C^0_T) | \\Fc_t},\\;\\;\\;t\\in[0,T),\n  \\end{equation}\nwith $\\xi_t$ as in (\\ref{eq:4}). Following the same arguments given in Remark \\ref{rem:restprop}, we get that $ \\zeta_t$ is a $\\bQ$-supermartingale, and hence\n$$\n\\hat{\\zeta}_t:=D_t\\xi_t\\zeta_t=-\\alpha-D_t \\In_t(\\tilde{C}^0_T-C^0_T) + \\Eq{ D_T (\\tilde{C}^0_T-C^0_T) | \\Fc_t},\\;\\;t\\in[0,T],\n$$\nis a $\\Q$-supermartingale  with terminal condition $\\hat{\\zeta}_T=-\\alpha$. To include the non-negativity constraint on the intrinsic wealth at the terminal time, as above we define \n \\begin{align*}\n    \\hat{\\zeta}_t^0 &:=\\hat{\\zeta}_t  \\ind_{\\{t<T\\}}=\n    \\begin{cases}\n      \\hat{\\zeta}_t ,& t < T\\\\\n      0, & t = T.\n    \\end{cases}\n\\end{align*}\n From the previous calculations of the intrinsic value of the derivative, for $t<T$, we have that\n   \\begin{align*}\n   \\hat{\\zeta}_t^0  =&-\\alpha- \\frac{1}{B-K}(K^D-S^D_t)_+\\ind_{\\{H_B\\leq t< T\\}}\\\\\n  &+ \\frac{D_T}{B-K}\\left\\{\\Eq{(S_T-K)_+ \\ind_{\\{H_B> T\\}}+(K-S_T)_+\\ind_{\\{H_B\\leq T\\}}| \\Fc_t}\\right\\}\n  \n   \\end{align*}\n  \n\nAs a first step, we provide a Max-plus representation for the Snell envelope of  $ \\hat{\\zeta}_t^0$, denoted as $ \\hat{\\zeta}_t^{0,*}$, under measure $\\Q$, meaning that there exists a process $J_u^\\zeta$ such that\n\\[\n \\hat{\\zeta}_t^{0,*}=\\Eq{\\sup_{t \\le u \\le T} J_u^\\zeta | \\Fc_t}.\n \\]\n  Note that the Snell envelope of $ \\hat{\\zeta}^0$ is equal to the Snell envelope of $ \\hat{\\zeta}\\vee 0$,  and using the last part of Lemma \\ref{lemma:A1}, we can get the representation for the later once we have the one for  $\\hat{\\zeta}$. The ideas to do this have been already implemented in the proof of Theorem \\ref{thm:long-position-call}, and \n  Corollary \\ref{lem:rho-dec} for the case when $\\alpha=0$,  therefore, we will simply outline the line of argument that should be followed.\n  \n  \n\nFirst, using the fact that $\\hat{\\zeta}$ is a supermartingale, its Max-plus representation can be obtained using the first part of  Lemma   \\ref{lemma:A1}, using the analogous  class of stopping times as in (\\ref{def:stoppingtime}). Defining \n$$\n\\varphi_{\\Q}(u)=\\frac{1}{B-K}\n\\Eq{(K^D-S^D_T)_+\\;|\\;S_u^D=K^D}-\\alpha,\n$$\nit is given by\n$$\n  J_u^{\\hat{\\zeta}}=\n   \\begin{cases}\n   -\\alpha, &u=T\\\\\n   \n   \\varphi_{\\Q}(u), &u=H^*<T,\\\\\n   -\\infty, &\\text{otherwise}.\n   \\end{cases}\n$$\n\n\n\n\n\n\n\n\n\n\n\nFrom here, we can now use   Lemma   \\ref{lemma:A1} part (ii), to get the representation for  $ \\hat{\\zeta}_t^{0,*}$,\n$$\n  J_u^{\\zeta^{0,*}}=\n   \\begin{cases}\n   \\left(-\\alpha+\\frac{D_T}{B-K}(S_T-K)_+ \\right)_+ \\ind_{\\{H_B > T\\}}, &u=T\\\\\n   \\varphi_{\\Q}^*(u), &H_B < u<T, S_u^D=K^D\\\\\n   -\\infty, &\\text{otherwise},\n   \\end{cases}\n$$\nwhere \n$$\n\\varphi_{\\Q}^*(u) = \\max\\left\\{\\varphi_{\\Q}(u),0\\right\\}.\n$$\n\nIn this case we can apply Lemma~\\ref{lemma:A1} part (i) with $\\tau_t := \\inf\\{u \\ge t : S_u^D = K^D, H_B \\le u < T\\} \\wedge T$.\n\n \\begin{remark}\nNotice that  the Max-plus representation is needed  under measure $\\bQ$, and it can be obtained using Lemma \\ref{lem:MaxPlusLemma} part (ii), applying to the corresponding Radon-Nikodym derivative martingale $\\{D_t\\xi_t\\}$; see Remark \\ref{rem:restprop}. This result was not needed in the proof of Theorem \\ref{thm:long-position-call}\nbecause the process $\\{\\phi_t := \\xi_t^{-1} D_t^{-1}\\}$ was implicit in all the calculations where it was involved; see, in particular,  \\ref{def:z}, so that we could obtain the representation under  the measure  $\\bQ$.\n \n\\end{remark}"
+  },
+  {
+   "level": "subsection",
+   "title": "Numerical results",
+   "text": "We now present some numerical results which illustrate the impact of the intrinsic wealth constraint when hedging a one-touch option, comparing the case where the trader uses only dynamic trading in the underlying asset, with the case where the trader also holds a static position in vanilla Call options as described above.\n\nUsing the max-plus representation described above, we can numerically compute the optimal terminal portfolio wealth for the trader in both cases. Computing this requires numerical evaluation of hitting time densities for Brownian motion with drift, which can be done using standard numerical methods for inversion of the Laplace transform. \n\nIn the numerical results below, we consider a trader who sells one-touch options with barrier $B=1.9$ and maturity $T=2$, in a Black-Scholes-Merton model with parameters $S_0=1.2, r=0.01, \\sigma=0.5, \\theta = 0.05$. The trader has initial wealth $w_0=0.1$, risk aversion parameter $p=0.75$, and intrinsic wealth constraint parameter $\\alpha=0.1$. In this model, the arbitrage-free price of the one-touch option is approximately $0.41$.\n\nSince we believe the trader will benefit from holding a short position in the one-touch option, we consider the case where the trader is able to sell the one-touch option for a premium to the cost of dynamically replicating. Specifically, we suppose that the trader is able to sell the one-touch option for a premium of $\\Delta C = 0.02$ above the replication cost.\n\n\n\nIn Figure~\\ref{fig:OT_UtilityPlot}, we can see the expected utility of the trader under different scenarios. We observe that when the trader's initial wealth is small, the benefit of selling the call option does not outweigh the loss that is incurred because the trader must trade in such a way as to avoid breaching the intrinsic wealth constraint. When the wealth is large, both the case with and without the semi-static hedge outperform the case where the trader does not sell the one-touch option, and in both cases the trader is able to exploit the premium received from selling the one-touch at a premium with minimal effect of the intrinsic wealth constraint. Notably, however, the case where the trader holds the semi-static position in vanilla Call options is much more impactful in the case where the trader's initial wealth is moderate. Moreoever, the initial wealth at which the trader is even able to implement the strategy is much lower in the semi-static case ($w_0 \\approx 0.08$) than in the case without the static hedge ($w_0 \\approx 0.18$). \n\n\n\n\n\nWe can also examine the impact of different choices of the parameter $K$. Figure~\\ref{fig:OT_UtilityPlot_K} shows the expected utility of the trader as a function of initial wealth for a range of different strikes $K$ used in the semi-static hedge. We observe that there is no uniformly best choice of $K$. However there is some evidence in Figure~\\ref{fig:OT_CertaintyEquivalent_vs_K} that suggests the optimal choice of $K$ is not exactly the `Hobson-optimal' strike, but this choice is close to optimal."
+  },
+  {
+   "level": "section",
+   "title": "Summary and Future Work",
+   "text": "In this paper we consider the problem of optimal investment in a portfolio which combines dynamic trading and a static position in options. The novelty in our work comes from a trading constraint which is based on the intrinsic, or worst case value of the option. This setting allows us to develop a framework for hedging which sits between classical and robust settings for option pricing. We are able to develop explicit characterisations of the optimal trading strategy in certain cases, and we are able to see in simple examples how the optimal strategy finds a balance between the desire to maximise expected profit, and the risk associated with extreme positions relative to the trader's capacity to sustain short-term mark-to-market losses.\n\nNotably, we see in our numerical results that even in a complete market setting, the presence of the intrinsic wealth constraint can have a significant impact on the optimal strategy. In particular, in the case of the one-touch option, we are able to see the benefit of holding semi-static hedging positions in vanilla options, even when these options are priced at their replication cost. This suggests that even in complete market settings, the presence of intrinsic wealth constraints could justify  the use of semi-static hedging strategies.\n\nWhile our explicit results make fairly strong assumptions (for example, complete markets), our framework is flexible, and future work to understand the impact of considering a larger class of possible hedging models (e.g. moving to an incomplete market setting), or allowing for uncertain volatility models, for example, would be interesting to understand.\n\n\\bigskip\n\n\\filbreak\n\n\\noindent\n{\\bf Acknowledgements:}\n\n\\noindent\nAC and DHH acknowledge the support of the Royal Society, through the Newton International Fellowship scheme NI160069.  The second author is very grateful for the hospitality of the University of Bath.\n\n\\appendix"
+  },
+  {
+   "level": "section",
+   "title": "Results on Max-Plus Representations",
+   "text": "In this appendix we prove some results on Max-plus representations for c\\'adl\\`ag supermartingales under specific assumptions on the structure of the supermartingale.\n\nWe suppose specifically that the c\\'adl\\`ag supermartingale $(X_t)_{t \\in [0,T]}$ can be written as a martingale up to a specific exit time. That is, we suppose there exists a maximal family of increasing stopping times $\\{\\tau_t; t\\in[0,T]\\}$ such that $\\tau_t \\in [t,T]$, $\\tau_t \\le \\tau_s$ for $t \\le s$, \n\\begin{equation} \\label{eq:TauCond}\nX_t = \\Eq{X_{\\tau_t} | \\Fc_t},\n\\end{equation}\nand such that \n\\begin{equation} \\label{eq:TauCond2}\n  X_t > \\Eq{X_{\\sigma} | \\Fc_t}, \\text{ for all stopping times } \\sigma \\ge \\tau_t \\text{ with } \\P(\\sigma > \\tau_t) > 0. \n\\end{equation} \nIn canonical cases, we may consider $\\tau_t$ to be the first hitting time after time $t$ by a process to a specific region, for example. We note that the case where $\\tau_t = t$ is not excluded, although in the following result it will imply a very specific structure for $X$.\n\nThen we have the following result.\n\n\\begin{lemma}\\label{lemma:A1}\n  Suppose there exists a family of increasing stopping times $\\{\\tau_t; t\\in[0,T]\\}$ such that $\\tau_t \\in [t,T]$ \\eqref{eq:TauCond} and \\eqref{eq:TauCond2} hold, and a decreasing function $\\varphi:[0,T] \\to \\R$ such that if $\\tau_t = s$ for some $t$, then\n  \\begin{equation*}\n    X_s \\ge \\varphi(s) \\ge X_u, \\quad \\text{ for all } u > s.\n  \\end{equation*}\n  Then $(X_t)_{t \\in [0,T]}$ has Max-plus representation\n  \\begin{equation*}\n    X_t = \\Eq{\\sup_{t \\le u \\le T} J_u | \\Fc_t},\n  \\end{equation*}\n  where\n  \\begin{equation*}\n    J_u = \n    \\begin{cases}\n      X_{\\tau_u}, & u= \\tau_u < T, \\\\\n      X_T, & u = T, \\\\\n      -\\infty, & \\text{ otherwise}.\n    \\end{cases}\n  \\end{equation*}\n  Moreover, the smallest (in convex increasing order) martingale dominating $(X_t)_{t \\in [0,T]}$ is given by\n  \\begin{equation*}\n    M_t = \\Eq{\\sup_{0 \\le u \\le T} J_u | \\Fc_t},\n  \\end{equation*}\n  and for any constant $c \\in \\R$, the smallest (in convex increasing order) martingale dominating $(X_t \\vee c)_{t \\in [0,T]}$ is given by\n  \\begin{equation*}\n    M_t^c = \\Eq{\\left(\\sup_{0 \\le u \\le T} J_u\\right) \\vee c | \\Fc_t},\n  \\end{equation*}\n  that is, the Max-plus representation is given by $J_u^c = J_u \\vee c$, or equivalently\n  \\begin{equation*}\n    J_u = \n    \\begin{cases}\n      X_{\\tau_u}, & u= \\tau_u < T, X_{\\tau_u} \\ge c \\\\\n      X_T \\vee c, & u = T, \\\\\n      -\\infty, & \\text{ otherwise}.\n    \\end{cases}\n  \\end{equation*}\n\\end{lemma}\n\nObserve that in the trivial case where $\\tau_t = t$, then the conditions of the lemma imply that $X$ is a decreasing process, and hence the Max-plus representation is trivially given by $J_u = X_u$ for $u \\le T$.\n\n\\begin{proof}\n  First observe that defining \n  \\begin{equation*}\n    \\tilde{J}_u = \n    \\begin{cases}\n      X_{u}, & u= \\tau_s < T, \\text{ some } s \\le u, \\\\\n      X_T, & u = T, \\\\\n      -\\infty, & \\text{ otherwise}.\n    \\end{cases}\n  \\end{equation*}\n  then\n  \\begin{equation*}\n    X_t = \\Eq{\\sup_{t \\le u \\le T} \\tilde{J}_u | \\Fc_t},\n  \\end{equation*}\n  since if $s = \\tau_t$ for some $t \\le s$ then for $u \\ge s$ we have $X_u \\le \\varphi(s) \\le X_s$, and hence $X_s = \\Eq{X_{\\tau_s}| \\Fc_s} \\ge \\Eq{X_u | \\Fc_s}$ with equality if and only if $X_{\\tau_s} = X_u = X_s$ almost surely. In particular, $\\sup_{t \\le u \\le T} \\tilde{J}_u = X_s$. On the other hand, if $s \\neq \\tau_t$ for some $t \\le s$, then in particular $s < \\tau_s$, and $X_s = \\Eq{X_{\\tau_s} | \\Fc_s} = \\Eq{\\tilde{J}_{\\tau_s} | \\Fc_s} \\ge \\Eq{\\sup_{\\tau_s \\le u \\le T} \\tilde{J}_u | \\Fc_s}$. Moreover, by the maximality of $\\tau_t$, if there exists $t < s$ such that $s < \\tau_t$ with positive probability, then $\\tau_t = \\tau_s$ on $\\{s < \\tau_t\\}$ since $X_s = \\Eq{X_{\\tau_s \\wedge \\tau_t}|\\Fc_s} = \\Eq{X_{\\tau_t}|\\Fc_s}$ on this set.\n\n  The rest of the proof now follows immediately from the fact that $X_t = J_t = J^c_t$ whenever $J_t > c$, and properties of max-plus martingales.\n\n  \n    \n  \n  \n  \n  \n  \n\\end{proof}\n\nTo help us in the verification of some results, we will make use of the following result.\n\\begin{lemma}\\label{lem:MaxPlusLemma}\n  Let $(X_t)_{t\\in[0,T]}$ be a $\\Q$-supermartingale with c\\`adl\\`ag paths. \n  \\begin{enumerate}\n    \\item Suppose $X = Y + Z$ where $Y$ and $Z$ are both also c\\`adl\\`ag $\\Q$-supermartingales such that $Y_T, Z_T \\ge 0$. Suppose in addition that there exists a stopping time $\\tau \\le T$ and an $\\Fc_{\\tau}$-measurable set $A$ such that:\n    \\begin{enumerate}\n      \\item $X_{t \\wedge \\tau}$ is a $\\Q$-martingale;\n      \\item $Y_t = 0$ on $A$ for all $t \\ge \\tau$;\n      \\item $Z_t = 0$ on $A^c$ for all $t \\ge \\tau$. \n    \\end{enumerate}\n    Then $X_t = \\Eq{\\sup_{t \\le u \\le T} J_u | \\Fc_t}$, where\n    \\begin{align*}\n      J_u & = J_u^Y + J_u^Z,\n    \\end{align*}\n    and $J_u^Y$ and $J_u^Z$ are the Max-plus representations of $Y$ and $Z$ respectively.\n\n    \\item Let $(X_t)_{t\\in[0,T]}$ be a $\\Q$-supermartingale with Max-plus representation $J_u^X$, and suppose $\\overline{\\Q}$ is an equivalent probability measure to $\\Q$ with Radon-Nikodym derivative $\\frac{\\di \\overline{\\Q}}{\\di \\Q} = M_T$, where $(M_t)_{t\\in[0,T]}$ is a strictly positive $\\Q$-martingale.\n    \n    Suppose in addition that there exists a maximal family of stopping times $\\{\\tau_t; t\\in[0,T]\\}$ such that $\\tau_t \\in [t,T]$ for each $t$, $\\tau_t \\le \\tau_s$ when $t \\le s$ and $X_t = \\Eq{J_{\\tau_t}^X | \\Fc_t}$. If in addition\n    \\begin{align*}\n      J_{\\tau_t}^X M^{-1}_{\\tau_t} & \\ge J_{u}^X M^{-1}_{u}, \\quad u \\in [t,T], \n    \\end{align*}\n    then $(XM^{-1})_{t\\in[0,T]}$ is a $\\overline{\\Q}$-supermartingale with Max-plus representation $J_u^{\\overline{X}} = \\frac{1}{M_u} J_u^X$, i.e.\n    \\begin{align*}\n      X_t & =  M_t \\Ebq{\\sup_{t \\le u \\le T} \\left(J_u^{X} M_u^{-1}\\right) | \\Fc_t}.\n    \\end{align*}\n  \\end{enumerate}\n\\end{lemma}\n\n\\begin{proof}\n\\begin{enumerate}\n  \\item First observe since $Y$ and $Z$ are non-negative, we have $J_T^Y, J_T^Z \\ge 0$, and hence $J_T = J_T^Y + J_T^Z \\ge 0$. Further, it follows from the fact that $X_{t \\wedge \\tau}$ is a $\\Q$-martingale that both $Y_{t \\wedge \\tau}$ and $Z_{t \\wedge \\tau}$ are also $\\Q$-martingales. Therefore, for $t \\le \\tau$, we have almost surely\n  \\begin{align*}\n    J_u^Y & \\le \\sup_{\\tau \\le v \\le T} J_v^Y, \\quad u \\in [0,\\tau],\n  \\end{align*} \n  and similarly for $J_u^Z$. In addition, on $A$, for $u \\ge \\tau$ we have $J_u^Z = 0$, and similarly on $A^c$ for $J_u^Y$. Hence\n  \\begin{align*}\n    \\sup_{t \\le u \\le T} (J_u^Y + J_u^Z) & = \\sup_{t \\vee \\tau \\le u \\le T} (J_u^Y + J_u^Z) \\\\\n    & =\n    \\begin{cases}\n      \\sup_{t \\vee \\tau \\le u \\le T} J_u^Y, & \\text{ on } A, \\\\\n      \\sup_{t \\vee \\tau \\le u \\le T} J_u^Z, & \\text{ on } A^c,\n    \\end{cases}\n    \\\\\n    & =\n      \\sup_{\\tau \\vee t \\le u \\le T} J_u^Y + \\sup_{\\tau \\vee t \\le u \\le T} J_u^Z,\\\\\n    & = \\sup_{t \\le u \\le T} J_u^Y + \\sup_{t \\le u \\le T} J_u^Z.\n  \\end{align*}  \n\n  \\item Since $X_t = \\Eq{J_{\\tau_t}^X | \\Fc_t}$ we have \n  \\begin{align*}\n    M_t^{-1} X_t & = M_t^{-1} \\Eq{J_{\\tau_t}^X | \\Fc_t} \\\\\n    & = \\Ebq{J_{\\tau_t}^X M_{T}^{-1} | \\Fc_t} \\\\\n    & = \\Ebq{J_{\\tau_t}^X M_{\\tau_t}^{-1} | \\Fc_t}\\\\\n    & = \\Ebq{\\sup_{t \\le u \\le T} (J_u^X M_u^{-1}) | \\Fc_t},\n  \\end{align*}\n  where in the second last step we have used the fact that $M^{-1}$ is\n  a $\\bQ$-martingale, and in the final step we have used the\n  assumption that for all $u \\in [t,T]$,\n  $J_{\\tau_t}^X M^{-1}_{\\tau_t} \\ge J_{u}^X M^{-1}_{u}$.\n\\end{enumerate}\n\n\\end{proof}\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\\bibliographystyle{plain}\n\\bibliography{UtilityPlus}"
+  }
+ ],
+ "figures": [
+  {
+   "caption": "\\label{fig:RhoPhi} Plots of the functions $\\rho$ and $\\phi$ in the case of the Black-Scholes-Merton model. In this example, $\\rho$ represents the additional cost of hedging that needs to be held when $S_t^D = K^D$, $\\phi$ is the value of the process $\\phi_t$ along the same line.",
+   "label": "fig:RhoPhi",
+   "images": [
+    "RhoPhi.pdf"
+   ]
+  },
+  {
+   "caption": "\\label{fig:zPlot} The plot above shows the function $z(t,\\lambda)$. The level $z$ represents the value of the process $J^\\zeta$ which we will score when we hit the line $S_t^D = K^D$ in order to get the correct form of the process defined in \\eqref{eq:7}.",
+   "label": "fig:zPlot",
+   "images": [
+    "z.pdf"
+   ]
+  },
+  {
+   "caption": "\\label{fig:MPlot} The figure shows the value of $M$ as a function of $\\lambda$. The parameters used are $S_0 = 1.2, K = 0.85, T=2, \\sigma = 0.5, r = 0.01, \\alpha = 0.4, \\Delta C = 0.02, p=0.75, \\theta = 0.05$.",
+   "label": "fig:MPlot",
+   "images": [
+    "M_vs_lambda.pdf"
+   ]
+  },
+  {
+   "caption": "\\label{fig:RStarPlot} The figure shows the value of $r^*(M(\\lambda),\\lambda)$ as a function of $\\lambda$.  The parameters are the same as in Figure~\\ref{fig:MPlot}. Note that for $\\lambda$ small, then $M(\\lambda) \\ge z(0;\\lambda)$, the intermediate wealth constraint is never binding, and $r^*(M,\\lambda) = 0$.",
+   "label": "fig:RStarPlot",
+   "images": [
+    "r_star_vs_lambda.pdf"
+   ]
+  },
+  {
+   "caption": "\\label{fig:UtilityPlot} The figure shows the value of the utility as a function of $\\lambda$. The parameters are the same as in Figure~\\ref{fig:MPlot}. In this case, the optimal utility occurs when $\\lambda \\approx 3.1$.",
+   "label": "fig:UtilityPlot",
+   "images": [
+    "ExpectedUtility.pdf"
+   ]
+  },
+  {
+   "caption": "\\label{fig:CDF_YT} The figure shows the cumulative distribution function of the optimal wealth $Y_T$ for the optimal strategy. In this case, different curves show the effect of different values of $\\lambda$. The parameters are the same as in Figure~\\ref{fig:MPlot}.",
+   "label": "fig:CDF_YT",
+   "images": [
+    "CDF_YT.pdf"
+   ]
+  },
+  {
+   "caption": "\\label{fig:OT_UtilityPlot} The figure shows the expected utility of the trader as a function of the trader's initial wealth, $w_0$. The solid blue line shows the expected utility when the trader holds a static position in vanilla Call options as part of a superhedging strategy for the one-touch option, while the solid green line shows the expected utility when the trader does not hold the static position. The dashed orange line shows the utility of the trader if they were not to sell the one-touch option at all. Here the superhedge uses call options with strike $K=0.1.3$.",
+   "label": "fig:OT_UtilityPlot",
+   "images": [
+    "ExpectedUtilityOT_WithWithoutSH.png"
+   ]
+  },
+  {
+   "caption": "\\label{fig:OT_UtilityPlot_K} The figure shows the expected utility of the trader as a function of the wealth $w_0$ of trader for different strikes. The utiliy is shown in terms of the difference between the certainty equivalent of the utility with and without the hedge. The plots are shown for a range of stikes $K$ for the vanilla Call options used in the semi-static hedge.",
+   "label": "fig:OT_UtilityPlot_K",
+   "images": [
+    "ExcessCertaintyEquivalent_vs_M.pdf"
+   ]
+  },
+  {
+   "caption": "\\label{fig:OT_CertaintyEquivalent_vs_K} The plot shows the certainty equivalent of the trader when holding the semi-static hedge as a function of the strike $K$ of the vanilla Call options used in the hedge. Highlighted is the choice of semi-static hedge which corresponds to the minimal-cost superhedge ('Hobson-optimal $K$'). The initial wealth is $w_0=0.1$.",
+   "label": "fig:OT_CertaintyEquivalent_vs_K",
+   "images": [
+    "CertaintyEquivalent_vs_K.pdf"
+   ]
+  }
+ ],
+ "tables": [],
+ "equations": [
+  {
+   "env": "equation",
+   "latex": "\\label{eq:MainProb}\n  \\sup_{ \\pi} \\inf_{ \\P \\in \\Pc} \\Edot{\\P}{U\\left(w_0 + X_T^\\pi\\right)},"
+  },
+  {
+   "env": "align*",
+   "latex": "(S_T-K)_+ + (S_t-S_{T \\wedge H^t_K}) \n  & = \n    \\begin{cases}\n      (S_T - K)_+ + (S_t - K) & H^t_K \\le T\\\\\n      (S_T - K) + (S_t-S_T) & H^t_K > T\n    \\end{cases}\n  \\\\\n  & \\ge S_t - K."
+  },
+  {
+   "env": "equation*",
+   "latex": "\\In_u((S_T-K)_+) + (S_t-S_{u \\wedge H^t_K}) \\ge S_u."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:Wdefn}\n  W_t^{\\pi,h} := D_t^{-1}(w_0  - \\int h(x) \\, \\mu(\\dx))+ \\In_t(h(S_T)) + X_t^{\\pi} \\ge -\\alpha."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{def:P0}\n  \\Pcc := \\{ \\P: D S \\text{ is a non-negative, uniformly integrable martingale}\\}."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:6}\n D_t \\In_t(C_T) := \\sup \\{ x \\in \\R: \\exists (\\pi) \\text{ s.t. } x + \\int_t^T \\pi_r \\, \\di (D_r S_r ) \\le D_T C_T \\quad \\Pc-\\as{}\\}."
+  },
+  {
+   "env": "equation*",
+   "latex": "\\In_t\\left(\\frac{(S_T-K)_+}{B-K} - \\OT_T^B\\right) =\n      \\begin{cases}\n        0, &\\quad \\text{ if } S_t^* < B\\\\\n        \\frac{1}{B-K} \\left[ (S_t - S_{H_B}) + (K-S_t)_+\\right], & \\quad \\text{ if } S_t^* \\ge B\n      \\end{cases},"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:MainProb2}\n  \\sup_{ \\pi\\in\\Vc} \\inf_{ \\P \\in \\Pc} \\Edot{\\P}{U\\left(D_T^{-1}(w_0 - c_0) + C_T + X_T^\\pi\\right)},"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:Wdefn2}\n  W_t^{\\pi,C} := D_t^{-1}(w_0-c_0) + \\In_t(C_T)  + X_t^{\\pi} \\ge -D_t^{-1} \\alpha, \\qquad \\Pc-\\as{}, \\forall\\; 0\\le t \\le T,"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\kappa + \\int_0^T \\psi_r \\, \\di (D_r S_r) \\ge D_T C_T, \\quad \\Pc-\\as{},"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:1}\n      c_0 + \\int_0^t \\psi_r \\, \\di (D_r S_r) \\ge D_t \\In_t(C_T), \\quad \\forall t, \\Pc-\\as{}"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\kappa + \\int_0^T \\psi_r \\, \\di (D_r S_r) \\le D_T C_T, \\quad \\Pc-\\as{},"
+  },
+  {
+   "env": "equation*",
+   "latex": "c_0 +  \\int_0^t \\psi_r \\, \\di (D_r S_r) \\le D_t \\In_t(C_T),  \\quad \\forall t, \\Pc-\\as{}"
+  },
+  {
+   "env": "align*",
+   "latex": "-D_t^{-1} \\alpha\n      & \\le D_t^{-1}(w_0-c_0) + \\In_t(C_T)  + X_t^{\\pi} \\\\\n      & \\le  D_t^{-1}(w_0-c_0) + \\left(X_t^\\psi + D_t^{-1} c_0\\right)  + X_t^{\\pi}\\\\\n       & = D_t^{-1}w_0 + X_t^{\\pi+\\psi}"
+  },
+  {
+   "env": "equation*",
+   "latex": "W_T^{-\\lambda \\psi, \\lambda C} = D_T^{-1} w_0 + \\lambda\\left( C_T - X_T^\\psi - D_T^{-1} \\kappa\\right) + \\lambda (\\kappa - c_0)."
+  },
+  {
+   "env": "equation*",
+   "latex": "D_t^{-1}w_0 + \\lambda \\In_t(C_T) - \\lambda X_t^{\\psi} - \\lambda D_t^{-1} c_0 \\ge D_t^{-1}w_0\\ge -D_t^{-1} \\alpha,"
+  },
+  {
+   "env": "align*",
+   "latex": "\\kappa + D_t X_t^{\\psi} \\ge \\kappa + \\Eq{D_T X_T^{\\psi}|\\Fc_t} \\ge  \\Eq{D_T C_T|\\Fc_t} \\ge \\In_t(C_T) ."
+  },
+  {
+   "env": "align*",
+   "latex": "W_t^{\\pi,h} & := D_t^{-1} (w_0-c_0) +  \\In_t(h(S_T))  + X_t^{\\pi} \\\\\n              & \\;= D_t^{-1} (w_0-c_0)  + \\frac{D_T}{D_t} h^*\\left(S_t \\frac{D_t}{D_T}\\right) + D_t^{-1}\\BS(h,0,T,S_0) - \\BS(h,t,T,S_t)."
+  },
+  {
+   "env": "align*",
+   "latex": "D_t^{-1}\\left(w_0 + \\Delta C(K)\\right)  + \\left(S_t-K \\frac{D_T}{D_t}\\right)_+ - \\BS^C(K,t,T,S_t) & \\ge -\\frac{\\alpha}{D_t}\\\\\n   \\iff  \\quad  \\left(w_0 + \\Delta C(K) \\right) + \\left(S_tD_t-K D_T\\right)_+ - D_t\\BS^C(K,t,T,S_t) & \\ge -\\alpha."
+  },
+  {
+   "env": "align*",
+   "latex": "\\inf_{\\substack{t \\in [0,T]\\\\ s \\in [0,\\infty)}}\n  \\Big\\{(sD_t- KD_T&)_+  - D_t\\BS^C(K,t,T,s)\\Big\\} \\\\\n  & = \\inf_{\\substack{t \\in [0,T]\\\\ s \\in [0,\\infty)}}\n  \\left\\{(s-KD_T)_+ - D_t\\BS^C(K,t,T,sD_t^{-1})\\right\\} \\\\\n  & = \\inf_{ s \\in [0,\\infty)}\n  \\left\\{(s-KD_T)_+ - \\BS^C(K,0,T,s)\\right\\} \\\\\n& = -\\BS^C(K,0,T,KD_T)."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:9}\n    w_0 + \\Delta C(K)  \\ge \\BS^C(K,0,T,KD_T) -\\alpha,"
+  },
+  {
+   "env": "equation*",
+   "latex": "w_0 + \\alpha - \\Delta C(K) \\ge K D_T."
+  },
+  {
+   "env": "align*",
+   "latex": "W_t^{-\\pi,h} & := D_t^{-1} (w_0+c_0(K)) + \\In_t(-(S_T-K)_+) + X_t^{-\\pi} \\\\\n                & \\; = -S_t + \\BS^C(K,t,T,S_t) + D_t^{-1} (w_0 + c_0(K) - \\BS^C(K,0,T,S_0))."
+  },
+  {
+   "env": "align*",
+   "latex": "\\inf_{\\substack{t \\in [0,T]\\\\ s \\in [0,\\infty)}} \\Big\\{-sD_t +  D_t\\BS^C(K,t,T,s) \\Big\\}\n    &  = \\inf_{t \\in [0,T]} \\left\\{D_t\\inf_{s \\in [0,\\infty)}\\left[ -s + \\BS^C(K,t,T,s)\\right] \\right\\}\\\\\n    & = \\inf_{t \\in [0,T]} \\left\\{ - D_t \\left(K D_T D_t^{-1}\\right)\\right\\}\\\\\n    & = - K D_T."
+  },
+  {
+   "env": "equation*",
+   "latex": "g(S_T) := \n    \\begin{cases}\n      0 & S_T \\not\\in( K_1,K_3)\\\\\n      \\lambda (S_T-K_1) & S_T \\in (K_1,K_2]\\\\\n      (1-\\lambda)(K_3-S_T) & S_T \\in (K_2,K_3)\n    \\end{cases}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:2}\n  \\text{maximise } \\Ep{u(W_T^{\\pi,C})}, \\; \\text{ subject to } \\pi \\in \\Vc(w_0, \\alpha, c_0, C_T),"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{Representation}\n  J_t = \\Ep{\\sup_{t \\le u \\le T} J^*_u | \\Fc_t}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:3}\n   D_t^{-1}(w_0 - c_0)  + \\In_t(C_T) + H_t^{-1}\\Ep{H_T X_T^\\pi|\\Fc_t} \\ge -D_t^{-1}\\alpha, \\quad 0 \\le t < T."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{def:Y1}\n  Y_T := D_T^{-1}(w_0 - c_0)+C_T+X_T^\\pi ,"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\In_t(C_T) + H_t^{-1}\\Ep{H_T Y_T|\\Fc_t} - H_t^{-1}\\Ep{H_T C_T | \\Fc_t} \\ge -D_t^{-1}\\alpha ,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{def:Y2}\nY_t := H_t^{-1} \\Ep{H_T Y_T|\\Fc_t},"
+  },
+  {
+   "env": "equation*",
+   "latex": "D_t Y_t \\ge -\\alpha + (D_t H_t^{-1}) \\Ep{H_T C_T|\\Fc_t} - D_t \\In_t(C_T), \\quad Y_ 0 = w_0 + \\Delta C."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:4}\n  \\xi_T := \\frac{H_T^{-\\frac{1}{p}}}{\\Ep{H_T^{1-\\frac{1}{p}}}}, \\quad \\xi_t := H_t^{-1} \\Ep{\\xi_T H_T | \\Fc_t}."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:5}\n  \\begin{cases}\n    \\ol{Y} &\\text{ is a non-negative $\\bQ$-martingale}, \\\\\n     \\ol{Y}_0 &=  w_0 + \\Delta C,\\\\%\\label{eq:5}\\\\\n     \\ol{Y}_t &\\ge  -\\alpha \\xi_t^{-1} D_t^{-1} -\\xi_t^{-1} \\In_t(C_T)  + \\Ebq{C_T \\xi_T^{-1}| \\Fc_t}.\n    \\end{cases}"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\Ep{u_p(D_T^{-1}(w_0 - c_0) + C_T + X_T^\\pi)} = \\Ep{u_p(Y_T)}."
+  },
+  {
+   "env": "align*",
+   "latex": "\\Ep{u_p(Y_T)} \n    & = \\Ep{\\frac{Y_T^{1-p}}{1-p}}\\\\\n    & = \\Ebq{(H_T \\xi_T)^{-1} \\frac{(\\ol{Y}_T\\xi_T)^{1-p}}{1-p}}\\\\\n    & = \\Ebq{\\frac{\\xi_T^{-p}}{H_T} u_p(\\ol{Y}_T)}\\\\\n    & = \\left(\\Ep{H_T^{1-\\frac{1}{p}}}\\right)^{p} \\Ebq{u_p(\\ol{Y}_T)}."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:ZetaDef}\n    \\zeta_t := -\\alpha D_t^{-1}\\xi_t^{-1} - \\xi_t^{-1} \\In_t(C_T) + \\Ebq{ \\xi_T^{-1} C_T | \\Fc_t}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:7}\n    \\zeta_t^* = \\Ebq{\\sup_{t \\le u \\le T} J_u^\\zeta | \\Fc_t}."
+  },
+  {
+   "env": "equation*",
+   "latex": "\\Ebq{\\sup_{0 \\le u \\le T} J_u^\\zeta} \\le w_0 + \\Delta C ."
+  },
+  {
+   "env": "equation*",
+   "latex": "W_T^\\pi = \\xi_T\\left[ \\left( \\sup_{0 \\le u \\le T} J_u^\\zeta\\right) \\vee M\\right],"
+  },
+  {
+   "env": "align*",
+   "latex": "H_t^{-1} \\Ep{H_T (S_T-K)_+|\\Fc_t} \n  & = \\xi_t \\Ebq{\\xi_T^{-1} (S_T-K)_+|\\Fc_t} \\\\ \n  & = D_t^{-1} \\Eq{D_T (S_T-K)_+|\\Fc_t}."
+  },
+  {
+   "env": "align*",
+   "latex": "\\zeta_t = D_t^{-1} \\xi_t^{-1}   \\left[ - \\alpha-\\lambda (S_t D_t - K D_T)_+ +\\lambda \\Eq{(S_T D_T -KD_T )_+| \\Fc_t}    \\right]."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:8}\n  \\zeta_t =\\lambda  \\xi_t^{-1} D_t^{-1} \\left(\\Eq{L_{T}^{S^D,K^D}-L_t^{S^D,K^D}|\\Fc_t}-\\frac{\\alpha}{\\lambda}\\right)"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\zeta_t = \\Ebq{\\left(\\lambda \\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right)-\\alpha\\right) \\xi_T^{-1} D_T^{-1} |\\Fc_t}."
+  },
+  {
+   "env": "align*",
+   "latex": "\\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\phi_T\n  & = \\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\phi_t  + \\int_t^T  \\di L_s^{S^D,K^D} \\int_t^T \\di \\phi_s"
+  },
+  {
+   "env": "align*",
+   "latex": "& \\int_t^T  \\di L_s^{S^D,K^D} \\int_t^T \\di \\phi_s\\\\\n  & \\quad = \\int_t^T (\\phi_s-\\phi_t) \\,\\di L_s^{S^D,K^D} + \\int_t^T \\left(L_{s}^{S^D,K^D}-L_t^{S^D,K^D}\\right)\\, \\di\\phi_s\\\\\n  & \\quad = \\int_t^T\\phi_s\\, \\di L_s^{S^D,K^D} - \\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\phi_t\n    + \\int_t^T \\left(L_{s}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\,\\di \\phi_s"
+  },
+  {
+   "env": "align*",
+   "latex": "\\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\phi_T\n  & = \\int_t^T \\phi_s\\, \\di L_s^{S^D,K^D} + \\int_t^T \\left(L_{s}^{S^D,K^D}-L_t^{S^D,K^D}\\right) \\,\\di\\phi_s."
+  },
+  {
+   "env": "align*",
+   "latex": "\\Ebq{\\left(L_{T}^{S^D,K^D}-L_t^{S^D,K^D}\\right)\\phi_T |\\Fc_t} = \\Ebq{\\int_t^T\\phi_s \\di L_s^{S^D,K^D}|\\Fc_t}."
+  },
+  {
+   "env": "align*",
+   "latex": "\\rho(t) :=\n  \\begin{cases}\n    \\Ebq{\\int_t^T \\phi_s \\, \\di L_s^{S^D,K^D} | S_t^D = K^D}, \\quad & t < T\\\\\n    -\\infty, & t \\ge T\n  \\end{cases}"
+  },
+  {
+   "env": "align",
+   "latex": "\\label{def:z}\n    z(u; \\lambda) := \\lambda \\rho(u) - \\alpha \\phi(u)"
+  },
+  {
+   "env": "align*",
+   "latex": "J_u^\\zeta =\n    \\begin{cases}\n      z(u; \\lambda) & S_u^D = K^D\\\\\n      0 & u = T\\\\\n      - \\infty & \\text{ otherwise},\n    \\end{cases}"
+  },
+  {
+   "env": "align*",
+   "latex": "\\sup_{0 \\le u \\le T} J_u^\\zeta =\n    \\begin{cases}\n      z(H_{K^D}; \\lambda) \\vee 0 & \\quad H_{K^D} < T\\\\\n      0 & \\quad T \\wedge H_{K^D} = T.\n    \\end{cases}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{def:stoppingtime}\nH_{K^D}^t := \\inf \\{s \\ge t: S_s^D = K^D\\},"
+  },
+  {
+   "env": "align*",
+   "latex": "\\sup_{0 \\le u \\le T} J_u^\\zeta = \\lambda \\rho(H_{K^D}) \\vee 0"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\xi_t = \\exp\\left\\{ \\frac{\\theta}{p} B_t + rt + \\half \\theta^2 (2 p^{-1} - p^{-2}) t\\right\\},"
+  },
+  {
+   "env": "align",
+   "latex": "\\phi_t^{-1} = D_t\\xi_t = \\exp\\left\\{ \\frac{\\theta}{p} B_t^{\\Q} - \\half \\frac{\\theta^2}{p^2}t\\right\\}, \\label{eq:11}"
+  },
+  {
+   "env": "align",
+   "latex": "K^D & = S_0 \\exp\\left\\{ \\sigma B_t^\\Q - \\half \\sigma^2 t\\right\\} \\nonumber\\\\\n  \\iff B_t^\\Q & = \\frac{1}{\\sigma} \\left[ \\ln \\left( \\frac{K^D}{S_0}\\right) + \\half \\sigma^2 t\\right]       \\label{eq:10}"
+  },
+  {
+   "env": "align*",
+   "latex": "\\phi(t) & = \\exp\\left\\{ -\\frac{\\theta}{p} \\frac{1}{\\sigma} \\left[ \\ln \\left( \\frac{K^D}{S_0}\\right) + \\half \\sigma^2 t\\right]  + \\half \\frac{\\theta^2}{p^2}t\\right\\}\\\\\n  & = \\left( \\frac{S_0}{K^D}\\right)^{\\frac{\\theta}{\\sigma p}} \\exp\\left\\{ \\frac{\\theta}{2p^2} \\left( \\theta-\\sigma p\\right)t\\right\\}."
+  },
+  {
+   "env": "equation*",
+   "latex": "\\Eq{L_{T}^{S^D,K^D}-L_t^{S^D,K^D}|\\Fc_t} = \\left( \\Phi(d_1) S_t^D - \\Phi(d_1-\\sigma\\sqrt{T-t})K^D\\right) - (S_t^D-K^D)_+"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\rho(t)  = \\phi(t) K^D \\left( 2 \\Phi\\left(\\half \\sigma \\sqrt{T-t} \\right) -1\\right)."
+  },
+  {
+   "env": "align*",
+   "latex": "z(u;\\lambda)=&\\lambda\\rho(u)-\\alpha \\phi(u)\\\\\n =&-\\alpha\\phi(u)\\left[1-\\frac{\\lambda K^D}{\\alpha}\\left(2\\Phi(\\frac{1}{2}\\sigma\\sqrt{T-u})-1\\right)\\right]\\\\\n =:&-\\alpha\\phi(u)g(u),"
+  },
+  {
+   "env": "align*",
+   "latex": "H_{y}^{\\beta} := \\inf \\{ t \\ge 0 :  x+ B_t = y + \\beta t\\}"
+  },
+  {
+   "env": "align",
+   "latex": "\\P(x+ B_t \\in A) & = \\int_A \\gamma_0(v,t,x) \\, \\di v \\nonumber\\\\\n  \\label{eq:BrownianHittingLine}\n  \\P(H_y^\\beta < t) & = \\int_0^t \\gamma_1^\\beta(u,x,y) \\, \\di u\\\\\n  \\P(H_y^\\beta > t, x+ B_t \\in A)  & = \\int_A \\gamma_2^\\beta(v,t,x,y) \\, \\di v\n                                  \\label{eq:BrownianNotHitting}"
+  },
+  {
+   "env": "align",
+   "latex": "\\Ebq{\\left( \\sup_{0 \\le u \\le T} J_u^\\zeta\\right) \\vee M}\n    & = M + \\int_0^T \\gamma_1^\\beta(u,x,y)  (z(u; \\lambda) - M)_+  \\, \\di u \\nonumber\n    \\\\\n    & = M + \\int_0^{r^*(M;\\lambda)} \\gamma_1^\\beta(u,x,y)  (z(u; \\lambda) - M) \\, \\di u\n    \n    \\label{eq:12}"
+  },
+  {
+   "env": "equation*",
+   "latex": "r^*(M;\\lambda) := \\inf\\{ u < T : z(u; \\lambda) < M\\} \\wedge T."
+  },
+  {
+   "env": "align*",
+   "latex": "\\sup_{0 \\le u \\le T} J_u^\\zeta = z(H_{K^D};\\lambda) \\vee 0"
+  },
+  {
+   "env": "align*",
+   "latex": "\\sup_{0 \\le u \\le T} J_u^\\zeta \\vee M = M + (z(H_{K^D};\\lambda) - M)_+."
+  },
+  {
+   "env": "align",
+   "latex": "w_0 + \\lambda \\Delta C & = M + \\int _0^{r^*(M;\\lambda)} \\gamma_1^\\beta(u,x,y) \\left\\{z(u;\\lambda)-M\\right\\} \\, \\di u, \\label{eq:M-BSM-Simplified}"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\Ep{u_p(W_T^{\\pi,C})} = c_p \\cdot \\left( u_p(M) + \\int _0^{r^*(M;\\lambda)} \\gamma_1^\\beta(s,x,y) \\left\\{u_p(z(s;\\lambda))-u_p(M)\\right\\} \\, \\di s\\right),"
+  },
+  {
+   "env": "align*",
+   "latex": "C^0_T&=\\ind_{\\{S_t\\geq   BD_t^{-1}D_T,\\;\\text{for\\;some}\\;  t\\in[0,T]\\}}\\\\\n    &=\\ind_{\\{S_t^D\\geq   B^D,\\;\\text{for\\;some}\\;  t\\in[0,T]\\}}."
+  },
+  {
+   "env": "align*",
+   "latex": "\\tilde{C}^0_T=\\frac{1}{B-K}(S_T-K)_+ +\\frac{1}{B-K}\\{(BD_TD^{-1}_{H_B})D_{H_B}D_T^{_-1}-S_T\\}\\ind_{\\{H_{B}\\leq T\\}}."
+  },
+  {
+   "env": "align*",
+   "latex": "\\tilde{C}^0_T-C^0_T&=\\frac{1}{B-K}[(S_T-K)_+ +(B-S_T)\\ind_{H_B\\leq T}]-\\ind_{\\{H_B\\leq T\\}}\\\\\n&=\n\\begin{cases}\n\\frac{1}{B-K}(S_T-K)_+,\\;\\;&H_B>T\\\\\n\\frac{1}{B-K}(K-S_T)_+,\\;\\;&H_B\\leq T.\n\\end{cases}"
+  },
+  {
+   "env": "align*",
+   "latex": "\\In_t(\\tilde{C}^0_T-C^0_T) &=\n \\begin{cases}\n\n \\frac{D_T}{D_t}\\cdot\\frac{1}{B-K}(K-\\frac{D_t}{D_T}S_t)_+,\\;\\;&H_B\\leq t \\leq T\\\\\n 0, \\;\\;&t<H_B\\wedge T \n\\end{cases}\\\\\n&=\n\\begin{cases}\n\n  \\frac{1}{B-K}(K\\frac{D_T}{D_t}-S_t)_+,\\;\\;&H_B\\leq t\\leq T\\\\\n0, \\;\\;&t<H_B\\wedge T ,\n\\end{cases}"
+  },
+  {
+   "env": "align*",
+   "latex": "D_t \\In_t(\\tilde{C}^0_T-C^0_T) &=\n\\begin{cases}\n\n  \\frac{1}{B-K}(K^D-S^D_t)_+,\\;\\;&H_B\\leq t\\leq T\\\\\n0, \\;\\;&t<H_B\\wedge T,\n\\end{cases}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:ZetaDef2}\n  \\zeta_t := -\\alpha D_t^{-1}\\xi_t^{-1} - \\xi_t^{-1} \\In_t(\\tilde{C}^0_T-C^0_T) + \\Ebq{ \\xi_T^{-1} (\\tilde{C}^0_T-C^0_T) | \\Fc_t},\\;\\;\\;t\\in[0,T),"
+  },
+  {
+   "env": "align*",
+   "latex": "\\hat{\\zeta}_t^0 &:=\\hat{\\zeta}_t  \\ind_{\\{t<T\\}}=\n    \\begin{cases}\n      \\hat{\\zeta}_t ,& t < T\\\\\n      0, & t = T.\n    \\end{cases}"
+  },
+  {
+   "env": "align*",
+   "latex": "\\hat{\\zeta}_t^0  =&-\\alpha- \\frac{1}{B-K}(K^D-S^D_t)_+\\ind_{\\{H_B\\leq t< T\\}}\\\\\n  &+ \\frac{D_T}{B-K}\\left\\{\\Eq{(S_T-K)_+ \\ind_{\\{H_B> T\\}}+(K-S_T)_+\\ind_{\\{H_B\\leq T\\}}| \\Fc_t}\\right\\}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:TauCond}\nX_t = \\Eq{X_{\\tau_t} | \\Fc_t},"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:TauCond2}\n  X_t > \\Eq{X_{\\sigma} | \\Fc_t}, \\text{ for all stopping times } \\sigma \\ge \\tau_t \\text{ with } \\P(\\sigma > \\tau_t) > 0."
+  },
+  {
+   "env": "equation*",
+   "latex": "X_s \\ge \\varphi(s) \\ge X_u, \\quad \\text{ for all } u > s."
+  },
+  {
+   "env": "equation*",
+   "latex": "X_t = \\Eq{\\sup_{t \\le u \\le T} J_u | \\Fc_t},"
+  },
+  {
+   "env": "equation*",
+   "latex": "J_u = \n    \\begin{cases}\n      X_{\\tau_u}, & u= \\tau_u < T, \\\\\n      X_T, & u = T, \\\\\n      -\\infty, & \\text{ otherwise}.\n    \\end{cases}"
+  },
+  {
+   "env": "equation*",
+   "latex": "M_t = \\Eq{\\sup_{0 \\le u \\le T} J_u | \\Fc_t},"
+  },
+  {
+   "env": "equation*",
+   "latex": "M_t^c = \\Eq{\\left(\\sup_{0 \\le u \\le T} J_u\\right) \\vee c | \\Fc_t},"
+  },
+  {
+   "env": "equation*",
+   "latex": "J_u = \n    \\begin{cases}\n      X_{\\tau_u}, & u= \\tau_u < T, X_{\\tau_u} \\ge c \\\\\n      X_T \\vee c, & u = T, \\\\\n      -\\infty, & \\text{ otherwise}.\n    \\end{cases}"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\tilde{J}_u = \n    \\begin{cases}\n      X_{u}, & u= \\tau_s < T, \\text{ some } s \\le u, \\\\\n      X_T, & u = T, \\\\\n      -\\infty, & \\text{ otherwise}.\n    \\end{cases}"
+  },
+  {
+   "env": "equation*",
+   "latex": "X_t = \\Eq{\\sup_{t \\le u \\le T} \\tilde{J}_u | \\Fc_t},"
+  },
+  {
+   "env": "align*",
+   "latex": "J_u & = J_u^Y + J_u^Z,"
+  },
+  {
+   "env": "align*",
+   "latex": "J_{\\tau_t}^X M^{-1}_{\\tau_t} & \\ge J_{u}^X M^{-1}_{u}, \\quad u \\in [t,T],"
+  },
+  {
+   "env": "align*",
+   "latex": "X_t & =  M_t \\Ebq{\\sup_{t \\le u \\le T} \\left(J_u^{X} M_u^{-1}\\right) | \\Fc_t}."
+  },
+  {
+   "env": "align*",
+   "latex": "J_u^Y & \\le \\sup_{\\tau \\le v \\le T} J_v^Y, \\quad u \\in [0,\\tau],"
+  },
+  {
+   "env": "align*",
+   "latex": "\\sup_{t \\le u \\le T} (J_u^Y + J_u^Z) & = \\sup_{t \\vee \\tau \\le u \\le T} (J_u^Y + J_u^Z) \\\\\n    & =\n    \\begin{cases}\n      \\sup_{t \\vee \\tau \\le u \\le T} J_u^Y, & \\text{ on } A, \\\\\n      \\sup_{t \\vee \\tau \\le u \\le T} J_u^Z, & \\text{ on } A^c,\n    \\end{cases}\n    \\\\\n    & =\n      \\sup_{\\tau \\vee t \\le u \\le T} J_u^Y + \\sup_{\\tau \\vee t \\le u \\le T} J_u^Z,\\\\\n    & = \\sup_{t \\le u \\le T} J_u^Y + \\sup_{t \\le u \\le T} J_u^Z."
+  },
+  {
+   "env": "align*",
+   "latex": "M_t^{-1} X_t & = M_t^{-1} \\Eq{J_{\\tau_t}^X | \\Fc_t} \\\\\n    & = \\Ebq{J_{\\tau_t}^X M_{T}^{-1} | \\Fc_t} \\\\\n    & = \\Ebq{J_{\\tau_t}^X M_{\\tau_t}^{-1} | \\Fc_t}\\\\\n    & = \\Ebq{\\sup_{t \\le u \\le T} (J_u^X M_u^{-1}) | \\Fc_t},"
+  },
+  {
+   "env": "display",
+   "latex": "h^*(x) = \\lim_{n \\to \\infty} \\left[ \\frac{(z_n-x) h(y_n) + (x-y_n)h(z_n)}{z_n-y_n}\\right]."
+  },
+  {
+   "env": "display",
+   "latex": "\\Eq{((1+D_T S_T) \\log (1+D_T|S_T|))_+} < \\infty,\\;\\;\\;\\text{ for all}\\;\\;\\; \\Q \\in \\Qc(\\Pc)."
+  },
+  {
+   "env": "display",
+   "latex": "\\int_0^t \\pi_s \\, \\di(D_sS_s) :=\\pi_t D_tS_t-\\pi_0 S_0-\\int_0^tD_sS_s d\\pi_s."
+  },
+  {
+   "env": "display",
+   "latex": "-\\pi \\in \\Vc(w_0, \\alpha, -c_0(K), -(S_T-K)_+)"
+  },
+  {
+   "env": "display",
+   "latex": "\\Ep{u_p(D_T^{-1}(w_0 - c_0) + C_T + X_T^\\pi)}"
+  },
+  {
+   "env": "display",
+   "latex": "\\text{maximise } \\Ebq{u_p(\\ol{Y}_T)},"
+  },
+  {
+   "env": "display",
+   "latex": "\\zeta_t^0 :=\n    \\begin{cases}\n      \\zeta_t & t < T\\\\\n      0 & t = T\n    \\end{cases}."
+  },
+  {
+   "env": "display",
+   "latex": "\\zeta^*_{H_{K^D}} \\ge \\Ebq{\\sup_{{H_{K^D}} \\le u \\le T} J_u^\\zeta | \\Fc_{H_{K^D}}} = \\zeta_{{H_{K^D}}} \\vee 0 =z(H_{K^D};\\lambda)\\vee 0,"
+  },
+  {
+   "env": "display",
+   "latex": "\\zeta^*_0 \\ge \\Ebq{\\left(\\zeta^*_{H_{K^D}}\\vee 0 \\right)\\ind_{H_{K^D} < T}} \\ge \\Ebq{\\sup_{0\\le u \\le T} J_u^\\zeta}."
+  },
+  {
+   "env": "display",
+   "latex": "\\zeta_t^* = \\Ebq{\\sup_{t \\le u \\le T} J_u^\\zeta | \\Fc_t},"
+  },
+  {
+   "env": "display",
+   "latex": "H_t = \\exp\\left\\{-\\theta B_t - \\left(\\half \\theta^2 +r\\right) t \\right\\},"
+  },
+  {
+   "env": "display",
+   "latex": "w_0 + \\lambda \\Delta C  \\ge \\int_0^{r^*(0;\\lambda)} \\gamma_1^\\beta(u,x,y)  z(u; \\lambda) \\, \\di u."
+  },
+  {
+   "env": "display",
+   "latex": "\\hat{\\zeta}_t:=D_t\\xi_t\\zeta_t=-\\alpha-D_t \\In_t(\\tilde{C}^0_T-C^0_T) + \\Eq{ D_T (\\tilde{C}^0_T-C^0_T) | \\Fc_t},\\;\\;t\\in[0,T],"
+  },
+  {
+   "env": "display",
+   "latex": "\\hat{\\zeta}_t^{0,*}=\\Eq{\\sup_{t \\le u \\le T} J_u^\\zeta | \\Fc_t}."
+  },
+  {
+   "env": "display",
+   "latex": "\\varphi_{\\Q}(u)=\\frac{1}{B-K}\n\\Eq{(K^D-S^D_T)_+\\;|\\;S_u^D=K^D}-\\alpha,"
+  },
+  {
+   "env": "display",
+   "latex": "J_u^{\\hat{\\zeta}}=\n   \\begin{cases}\n   -\\alpha, &u=T\\\\\n   \n   \\varphi_{\\Q}(u), &u=H^*<T,\\\\\n   -\\infty, &\\text{otherwise}.\n   \\end{cases}"
+  },
+  {
+   "env": "display",
+   "latex": "J_u^{\\zeta^{0,*}}=\n   \\begin{cases}\n   \\left(-\\alpha+\\frac{D_T}{B-K}(S_T-K)_+ \\right)_+ \\ind_{\\{H_B > T\\}}, &u=T\\\\\n   \\varphi_{\\Q}^*(u), &H_B < u<T, S_u^D=K^D\\\\\n   -\\infty, &\\text{otherwise},\n   \\end{cases}"
+  },
+  {
+   "env": "display",
+   "latex": "\\varphi_{\\Q}^*(u) = \\max\\left\\{\\varphi_{\\Q}(u),0\\right\\}."
+  }
+ ],
+ "stats": {
+  "n_sections": 19,
+  "n_figures": 9,
+  "n_tables": 0,
+  "n_equations": 111,
+  "n_chars": 95725
+ }
+}

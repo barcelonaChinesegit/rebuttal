@@ -1,0 +1,359 @@
+\section{Complexity of Counting} \label{theory}
+
+In this section, we prove our theoretical hardness results on the (Approximate) Counting Problem. We begin by proving the hardness of the Counting Problem, i.e., Theorem~\ref{thm:counting-problem-hardness}.
+
+\subsection{Proof of Theorem~\ref{thm:counting-problem-hardness}} \label{theory:A}
+
+In order to prove that the Counting Problem is $\sharpP$-complete, we first recall
+the definition of the complexity class $\sharpP$. Suppose we are given some relation $R(x,y)$ over some set. For each $x$, we can associate the number $\#R(x)$ as the number
+of possible $y$ such that $R(x,y)$ is true. Intuitively, if we think of $x$ as some problem instance and $y$ as a possible solution to the problem instance $x$, then 
+$\#R(x)$ simply counts the number of possible solutions for $x$.
+
+\begin{example}
+    Let CNF be the relation such that CNF$(x,y)$ is true iff $x$ denotes a formula in CNF
+    and $y$ denotes a satisfying assignment for $x$. Then $\#\text{CNF}(x)$ is simply the number
+    of satisfying assignments of $x$.
+\end{example}
+
+This definition of $\#R(x)$ now leads us to the definition of $\sharpP$.
+For any relation $R$, we say that the function $\#R$ belongs to $\sharpP$ if there is a non-deterministic polynomial-time Turing machine that, for any input $x$, has exactly $\#R(x)$ many accepting paths.
+
+\begin{example}
+    Note that $\#\text{CNF} \in \sharpP$: We can have a non-deterministic Turing machine 
+    that on input $x$, simply guesses an assignment $y$ of $x$ and accepts iff $y$ satisfies $x$. This example already illustrates the power of $\sharpP$ : If we can efficiently count $\#\text{CNF}$, then we can easily decide if a formula $x$ is satisfiable
+    by simply checking if $\#\text{CNF}(x) > 0$. 
+\end{example}
+
+Now, similar to the notion of NP-hardness, we also have a notion of $\sharpP$-hardness.
+For a relation $R$, the function $\#R$ is said to be $\sharpP$-hard if every 
+function in $\sharpP$ can be reduced to $\#R$ by means of polynomial-time Turing reductions. $\#R$ is then said to be $\sharpP$-complete if it is both in $\sharpP$
+and $\sharpP$-hard.
+
+We will not formally define Turing reductions here, but for the purposes of the paper, only the following two notions are important. 
+\begin{itemize}
+    \item The function $\#\text{CNF}$ is $\sharpP$-complete.
+\item Suppose we have two functions $\#R_1$ and $\#R_2$ such that
+$\#R_1$ is $\sharpP$-hard. Further, suppose there exist two
+polynomial-time computable functions $f$ and $g$ such that, for every
+input $x$,
+\[
+    \#R_1(x)=\#R_2(f(x))-\#R_2(g(x)).
+\]
+Then $\#R_2$ is $\sharpP$-hard as well, since this equality gives a
+two-query non-adaptive polynomial-time Turing reduction from $\#R_1$
+to $\#R_2$.
+\end{itemize}
+
+Note that proving that counting a function $\#R$ is $\sharpP$-complete is evidence of intractability. Indeed, if we can efficiently count $\#R$ for some $\sharpP$-complete
+function $\#R$, then we can also efficiently count $\#\text{CNF}$, and by the argument above,
+we can also efficiently decide satisfiability of propositional formulas, which is NP-hard.
+
+As our first result, we prove the $\sharpP$-completeness of the Counting Problem
+that we consider in this paper. To this end, let us consider the relation $\mathcal{R}(P,G)$, which is true iff $P$ is a (bounded) program and $G$ is a reachable maximal execution graph of $P$. Then $\#\mathcal{R}$ is precisely the Counting Problem that
+we defined in Problem {prob1}. We now show that
+
+\begin{theorem}
+    The Counting Problem $\#\mathcal{R}$ is $\sharpP$-complete. Moreover, the hardness holds even when the number of threads of the given program is 2.
+\end{theorem}
+
+\begin{proof}
+    First, we will prove $\#\mathcal{R}$ is in $\sharpP$. Indeed, it is easy to see that there is a non-deterministic Turing machine, that on input a program $P$, simply simulates $P$ with some schedule among the threads and records the execution trace. 
+    %Any such schedule will be of length at most $B \times T$ where $B$ is the bound of $P$ and $T$ is the number of threads of $P$. 
+    Once this is done, it checks if this trace is canonical. 
+    Since this can be achieved in polynomial time, we can conclude
+    that the Counting Problem is in $\sharpP$.
+
+    To prove $\sharpP$-hardness, we give a two-query non-adaptive
+polynomial-time Turing reduction from $\#$CNF.
+    To this end, let $\varphi$ be a formula in CNF over $n$ variables. We will construct
+    two bounded concurrent programs $P_\varphi$ and $P'$ such that $\#$CNF$(\varphi) = \#\mathcal{R}(P') - \#\mathcal{R}(P_\varphi)$. This will then establish the required
+    Turing reduction.
+
+    The intuitive idea behind $P_\varphi$ and $P'$ will be the following.
+    We will construct $P_\varphi$ in such a way so that  every satisfying
+    assignment of $\varphi$ will correspond to exactly one complete execution graph,
+    every unsatisfying assignment of $\varphi$ will correspond to exactly two
+    complete execution graphs and then there will be some remaining complete execution
+    graphs called garbage execution graphs. Then, we will construct $P'$ so that
+    every assignment of $\varphi$ will correspond to exactly two complete execution graphs
+    and then there will be some garbage execution graphs which will be of the same magnitude as the number of garbage execution graphs of $P_\varphi$. It would then follow that $\#$CNF$(\varphi) = \#\mathcal{R}(P') - \#\mathcal{R}(P_\varphi)$,
+    thereby proving the claim.
+
+    First, we show how to construct $P_\varphi$. $P_\varphi$ will have 2 threads $t_1, t_2$
+    and $n+2$ locations $x_1,x_2,r_1,\dots,r_n$. The set of values of the locations will be $\{T,F,\$\}$. Initially, we assume that all the locations have the value $F$.
+
+    The thread $t_1$ will work as follows: It will have $n$ iterations
+    and in each iteration it will do three writes to $x_1$ - First it
+    will write $T$, then $F$ and finally $\$$.
+    After the $n$ iterations, it will terminate by writing $T$ into $x_2$. 
+    
+    The thread $t_2$ will work as follows: It will have $n$ iterations and in each $i^{th}$ iteration it will do a read from $x_1$ and it will store this value into $r_i$. If this value is $\$$, it will read from $x_2$ and terminate.
+    Otherwise, it will read from $x_1$ again. If this new value is not $\$$, it will
+    read from $x_2$ and terminate. Otherwise, it will continue with the $(i+1)^{th}$ iteration. 
+    Finally, after all the $n$ iterations are over, it would have stored either $T$ or $F$
+    in each $r_i$. It will then check if the formula $\varphi$ is satisfiable
+    with the assignment where the $i^{th}$ variable of $\varphi$ is assigned the value of $r_i$. If so,
+    it will terminate. Otherwise, it will read from $x_2$ and terminate.
+
+    To fully understand how $P_\varphi$ conforms to the intuition mentioned before,
+    we first define \emph{lockstep execution graphs}. A reachable maximal execution graph of $P_\varphi$ is a lockstep execution graph if, whenever $t_2$ reads for the first time from $x_1$ in its $i^{th}$ iteration, the corresponding write was $t_1$ writing $T$ or $F$ into $x_1$
+    in its $i^{th}$ iteration. Furthermore, whenever $t_2$ reads for the second time from $x_1$ in its $i^{th}$ iteration, the corresponding write was $t_2$ writing $\$$ into $x_1$ in its $i^{th}$ iteration.
+    These are precisely the reachable maximal execution graphs of $P_\varphi$ which do not allow $t_2$ to terminate within any of its $n$ iterations. 
+    All the other type of reachable maximal execution graphs correspond precisely to those executions in which $t_2$ will terminate within any one of its $n$ iterations.
+
+    Based on the definition of lockstep execution graphs, it is now easy to
+    show how to relate assignments of $\varphi$ to lockstep execution graphs
+    of $P_\varphi$.
+    \begin{itemize}
+        \item For every satisfying assignment $A$ of $\varphi$, we can construct 
+        a lockstep execution graph as follows: If $A$ assigns the $i^{th}$ variable of $\varphi$ to $T$, then we let $t_2$ read for the first time from $x_1$ in its $i^{th}$ iteration after $t_1$ has written $T$ in its $i^{th}$ iteration; otherwise we let $t_2$ read for the first time from $x_1$ in its $i^{th}$ iteration
+        after $t_1$ has written $F$ in its $i^{th}$ iteration. Note that, in this way, after the $n$ iterations of $t_2$, $t_2$ will check that the assignment stored in $r_1,\dots,r_n$ satisfies the formula $\varphi$ and then terminate without reading from $x_2$. Hence, it does not matter when we let $t_1$ write into $x_2$, since that will never be read by $t_2$. 
+
+        \item For every unsatisfying assignment $A$ of $\varphi$, we can construct
+        two lockstep execution graphs as follows: If $A$ assigns the $i^{th}$ variable of $\varphi$ to $T$, then we let $t_2$ read for the first time from $x_1$ in its $i^{th}$ iteration after $t_1$ has written $T$ in its $i^{th}$ iteration; otherwise we let $t_2$ read for the first time from $x_1$ in its $i^{th}$ iteration
+        after $t_1$ has written $F$ in its $i^{th}$ iteration. Note that, in this way, after the $n$ iterations of $t_2$, $t_2$ will check that the assignment stored in $r_1,\dots,r_n$ does not satisfy the formula $\varphi$.
+        Hence, it will terminate only after reading from $x_2$. Depending on whether
+        we allow $t_1$ to write into $x_2$ before $t_2$ reads from $x_2$ or not, we will 
+        get two lockstep execution graphs.
+
+        \item Finally, every other way of scheduling $t_1$ and $t_2$ will result
+        in a maximal execution graph that is not a lockstep execution graph. Such graphs
+        will be called garbage execution graphs and will correspond to exactly
+        those maximal execution graphs in which $t_2$ terminates during one of its $n$ iterations.
+    \end{itemize}
+
+    This completes the description behind the behavior of $P_\varphi$. Now, we show how to construct $P'$. $P'$ will work in exactly the same way as $P_\varphi$, except that
+    it will always read from $x_2$ before terminating, i.e., after it checks
+    whether the values in $r_1,\dots,r_n$ satisfy the formula $\varphi$, it will
+    read from $x_2$ and then terminate. Based on exactly the same argument as before,
+    we can show that $P'$ has exactly two lockstep execution graphs corresponding to 
+    every assignment of $\varphi$ and every other maximal execution graph
+    is a garbage execution graph that is present in $P_\varphi$ as well.
+    Hence, the number of satisfying assignments of $\varphi$ is precisely $\#\mathcal{R}(P') - \#\mathcal{R}(P_\varphi)$, which completes the proof.
+\end{proof}
+
+We now present a different construction which shows that hardness holds when the number of locations is a constant, but the number of threads is unbounded. 
+
+\begin{theorem}
+    The Counting Problem is $\#P$-hard, even when the number of locations is a constant.
+\end{theorem}
+
+\begin{proof}
+    We once again construct a Turing reduction from $\#$CNF. Our proof is inspired by the construction in 
+    \cite{sharedMem}, which shows that testing sequential consistency is $\mathsf{NP}$-hard for execution traces with only a constant number of locations. However, our reduction introduces several nontrivial modifications.
+
+    Let $\varphi$ be a CNF formula with $n$ variables
+    and $m$ clauses. Similar to the previous proof, we will construct
+    two programs $P_\varphi$ and $P'$ such that  $\#$CNF$(\varphi) = \#\mathcal{R}(P') - \#\mathcal{R}(P_\varphi)$. The intuition behind these programs will
+    be the same as in the previous proof.
+
+    First, we describe the program $P_\varphi$. $P_\varphi$ will have $m+4$ threads
+    denoted by $\{T_1,T_2,T_3,T_4,C_1,C_2,\dots,C_m\}$ and four locations $d,e,f,g$. 
+    Furthermore, the set of values will be $\{T_j : 1 \le j \le n+m\} \cup \{F_j : 1 \le j \le n+m\} \cup  \{\$\}$. All of the locations will initially have the value $\$$.
+    
+    Intuitively, the threads $T_1$ and $T_2$ will be responsible for choosing either $T$ or $F$ for each variable of $\varphi$. The thread $T_3$ will act as a tiebreaker between $T_1$ 
+    and $T_2$, by choosing one of their values for each variable of $\varphi$.
+    Each thread $C_i$ will be responsible for checking that the assignment
+    chosen by $T_3$ satisfies the $i^{th}$ clause of $\varphi$.
+    Finally thread $T_4$ collects all the votes from all of the $C_i$ threads and 
+    ensures that all the clauses are satisfied.
+
+    More precisely, the thread $T_1$ will behave as follows: It will have $n$ iterations
+    and in each $i^{th}$ iteration it will first write $T_i$ to the location $d$. Then, it will read from $d$.
+    If this value is not $F_i$, then it will read from $g$ and terminate.
+    Otherwise, it will continue with the $(i+1)^{th}$ iteration.
+
+    The thread $T_2$ will behave as follows: It will also have $n$ iterations
+    and in each $i^{th}$ iteration it will first read from the location $d$.
+    If this value is not $T_i$, it will read from $g$ and terminate.
+    Otherwise, it will write $F_i$ to the location $d$ and continue with the $(i+1)^{th}$ iteration.
+
+    The thread $T_3$ will behave as follows: It will also have $n$ iterations
+    and in each $i^{th}$ iteration it will first read from the location $d$.
+    If this value is neither $T_i$ or $F_i$ it will read from $g$ and terminate.
+    Otherwise, it will write the value that it read into the location $e$
+    and continue with the $(i+1)^{th}$ iteration.
+    At the end of $n$ iterations, it will write $T_1$ onto the location $g$.
+
+    Each thread $C_j$ will behave as follows: It will have a single Boolean local variable $flag$ which is initially set to false. Furthermore, it will have $n$ iterations
+    and in each $i^{th}$ iteration it will first read from location $e$.
+    If this value is neither $T_i$ or $F_i$, it will read from $g$ and terminate.
+    Otherwise, 
+    \begin{itemize}
+        \item If the $i^{th}$ variable of $\varphi$ appears in the $j^{th}$ clause positively (resp. negatively) and it read $T_i$ (resp. $F_i$), then it will 
+        set its $flag$ variable to true.
+        \item If the $i^{th}$ variable of $\varphi$ appears in the $j^{th}$ clause positively (resp. negatively) and it read $F_i$ (resp. $T_i$), then it will do nothing.
+    \end{itemize}
+    At the end of the $n^{th}$ iteration, $C_j$ will read check if its $flag$ variable is true.
+    If so, then it will write $T_{n+j}$ onto the location $f$.
+    Otherwise, it will write $F_{n+j}$ onto the location $f$.
+
+    Finally, the thread $T_4$ will behave as follows: It will also have a single Boolean local variable $flag$ which is initially set to true. Furthermore, it will have $m$ iterations
+    and in each $i^{th}$ iteration it will read from the location $f$.
+    If this value is not $T_{n+i}$, then it will set $flag$ to false; otherwise, it will not do anything. It will then continue
+    with the $(i+1)^{th}$ iteration.
+    Finally, at the end of the $m^{th}$ iteration, it will check if $flag$ is true. 
+    If it is, it will terminate; otherwise it will read from $g$ and terminate.
+
+    Similar to the previous reduction, we define \emph{lockstep execution graphs}
+    as reachable maximal execution graphs obtained where each thread finishes only after executing
+    all of its iterations. Again similar to the previous reduction, we can 
+    map one lockstep execution graph for every satisfying assignment
+    and two lockstep execution graphs for every unsatisfying assignment
+    (and all the other remaining execution graphs will not be lockstep execution graphs).
+    Now, if we define $P'$ to be the same as $P_\varphi$, except thread $T_4$ always
+    reads from $g$ and terminates, then similar to the previous reduction
+    we have $\#$CNF$(\varphi) = \#\mathcal{R}(P') - \#\mathcal{R}(P_\varphi)$.
+    This completes the reduction.
+\end{proof}
+
+% Hence, we have shown that, even if any two among the number of threads, number of locations and number of local registers is a constant, then the Counting Problem
+% remains $\sharpP$-hard. Note that when all of them are a constant, then the Counting Problem is in P. Indeed, in this case, simulating an execution of the given concurrent program $P$ (under sequential consistency) upto a given bound $B$, can be easily done in non-deterministic logarithmic space (in the size of $P$ and $B$): Indeed, to store an execution graph, we just need to remember
+% which line of $P$ each thread is executing, what the contents of each of the local registers of each thread are and what the contents of each of the shared locations are.
+% All of these contents can be stored in logarithmic space. This allows us to simulate the canonical executions of a $P$ in non-deterministic logarithmic space. Since non-deterministic logarithmic space machines can be simulated in polynomial time,
+% the result follows.
+
+Having proved our hardness results for the Counting Problem, we now move to the Approximate Counting problem.
+
+\subsection{Proof of Theorem~\ref{thm:approximate-counting-problem-hardness}} \label{theory:B}
+
+Suppose there exists a polynomial-time randomized algorithm and some $\epsilon > 0$
+and $\rho > 1/2$
+with the following property: For every program $P$ of size $n$,
+the algorithm returns a number $N$ such that $N/2^{n^{1-\epsilon}} \le C(P) \le N \times 2^{n^{1-\epsilon}}$ with probability at least $\rho$. Pick $k$ such that $k\epsilon > 1$. By definition of $k\epsilon$, it follows that for any constant $D$ and for all sufficiently large $n$,
+$n^k > D(n^{k(1-\epsilon)+1})$. Using this, we now show that SAT can be decided in randomized polynomial time, which would prove that RP = NP. 
+
+Let $\varphi$ be a Boolean formula in CNF over $n$ variables and $m$ clauses.
+We construct a program $P_\varphi$ with threads $t_0,t_1,\dots,t_{n+n^k}$ and locations $x_1,\dots,x_{n+n^k}, r_1,\dots,r_n$. 
+The values of the locations
+will be $\{T,F\}$, with $F$ being the default value. 
+
+Each thread $t_i$ for $1 \le i \le n+n^k$, simply writes $T$ into the location $x_i$
+and terminates. The thread $t_0$ has $n$ iterations and in each $i^{th}$ iteration
+it will copy the value in the location $x_i$ to $r_i$. Note that
+after $n$ iterations, $t_0$ will store an assignment of the formula $\varphi$
+in $r_1,\dots,r_n$. It will then check if this assignment satisfies $\varphi$.
+If the assignment satisfies $\varphi$, it will do $n^k$ more steps, where in each $i^{th}$ iteration it will read from the location $x_{n+i}$ and at the end of all of 
+these iterations, it will terminate.
+If the assignment does not satisfy $\varphi$, it will simply terminate at that point.
+Note that this program can be easily encoded in a way so that its size is $O(n^k)$.
+
+For each assignment $A$ of $\varphi$, we can construct reachable maximal execution graph(s) of $P_\varphi$ as follows: If $A$ assigns the $i^{th}$ variable to true, then we let $t_i$
+execute before the $i^{th}$ iteration of $t_0$; otherwise, we let $t_i$ execute after
+the $i^{th}$ iteration of $t_0$. This ensures that when $t_0$ finishes its $n$ iterations,
+the assignment stored in $r_1,\dots,r_n$ is the same as $A$. Then, we let
+$t_0$ check whether $A$ satisfies $\varphi$. If it does not then $t_0$ immediately terminates and we schedule all of the remaining threads $t_{n+1},\dots,t_{n+n^k}$
+to get a maximal execution graph. Suppose $A$ satisfies $\varphi$. Then, we can generate $2^{n^k}$ different maximal execution graphs by scheduling $t_0,t_{n+1},\dots,t_{n+n^k}$ in all possible ways.
+Hence, for each unsatisfying assignment, we get one reachable maximal execution graph
+and for each satisfying assignment, we get $2^{n^k}$ reachable maximal execution graphs.
+From the construction of $P_\varphi$, it can be easily inferred that these are the only possible reachable maximal execution graphs of $P_\varphi$.
+
+
+It follows then that if $\varphi$ is unsatisfiable, then $C(P_\varphi) = 2^n$
+and if $\varphi$ is satisfiable, then $C(P_\varphi) \ge 2^n - 1 + 2^{n^k}$.
+Hence, if $\varphi$ is unsatisfiable, then our assumed algorithm, on input $P_\varphi$, returns a number $N$ such that $N/2^{|P_\varphi|^{1-\epsilon}} \le 2^n$ and so $N \le 2^n \times 2^{|P_\varphi|^{1-\epsilon}} \le
+2^{O(n^{k(1-\epsilon)}) + 1}$. On the other hand, if $\varphi$ is satisfiable,
+then our assumed algorithm, on input $P_\varphi$,
+returns a number $N$ such that $2^{n^k} \le N \times 2^{|P_\varphi|^{1-\epsilon}}$
+and so $2^{n^k}/2^{|P_\varphi|^{1-\epsilon}} \le N$ which implies that
+$2^{n^k-O(n^{k(1-\epsilon)})} \le N$.
+If we can show that $2^{O(n^{k(1-\epsilon)}) + 1} \le 2^{n^k-O(n^{k(1-\epsilon)})}$ (for all sufficiently large $n$), then we can clearly decide whether $\varphi$ is satisfiable
+with probability $\rho$, by getting the number $N$ from our assumed algorithm and checking whether it is lower than the first quantity
+or higher than the second quantity. Hence, the only thing left to show is this inequality.
+
+To this end, it suffices to show that $O(n^{k(1-\epsilon)}) + 1 \le n^k-O(n^{k(1-\epsilon)})$. For showing this, it suffices to show that $O(n^{k(1-\epsilon)+1}) \le n^k - O(n^{k(1-\epsilon)+1})$ which is the same as showing
+$2O(n^{k(1-\epsilon)+1}) \le n^k$. Since $k\epsilon > 1$,
+it follows that $k(1-\epsilon) + 1 < k$. Hence, for all sufficiently large $n$,
+$n^k$ will eventually dominate $2O(n^{k(1-\epsilon)+1})$, which completes the proof.
+
+Hence, with probability $\rho$, we can correctly decide whether $\varphi$ is satisfiable or not. By using the standard machinery of self-reducibility~\cite{aroraBarak}, it follows
+that we can convert such an algorithm into one that always rejects when $\varphi$ is unsatisfiable and accepts with probability $> 1/2$ when $\varphi$ is satisfiable.
+It then follows that RP = NP. 
+
+Furthermore, the same proof implies that, if a deterministic algorithm exists
+which would always output an estimate $N$ such that $N/2^{n^{1-\epsilon}} \le C(P) \le N \times 2^{n^{1-\epsilon}}$, then P = NP. (This is because in that case $\rho$ would be 1 and so we would be able to decide with probability 1, i.e., deterministically, whether
+$\varphi$ is satisfiable).
+
+% \section{Complexity of Counting} \label{theory}
+% In this section, we prove several theoretical hardness results on the counting problem we consider in this paper. These results examine how the complexity of the problem depends on different instances where some parameters are restricted to be constant. 
+
+
+% \subsection{Hardness of Exact Counting }
+
+% To analyze the computational hardness of the counting problem, we adopt the standard framework of counting complexity. A counting problem, in general, asks for a given input $x$, how many distinct witnesses $y$ satisfy a specified relation $R(x, y)$. The witness set of $x$ under $R$ is defined as $w_R(x) = \{ y \mid R(x, y) \}$, and the associated counting function $C_R$ is defined by $C_R(x) = |w(x)|$.
+
+% A counting problem belongs to the class $\sharpP$ if there exists a nondeterministic Turing machine that runs in polynomial time such that, for every input $x$, the number of accepting computation paths equals $|w(x)|$. A problem is said to be $\sharpP$-hard if every problem in $\sharpP$ can be reduced to it via a polynomial-time Turing reduction. A problem that is both in $\sharpP$ and $\sharpP$-hard is called $\sharpP$-complete. A canonical example of a $\sharpP$-complete problem is $\#\mathsf{CNF}$, which asks for the number of satisfying assignments of a Boolean formula in conjunctive normal form.
+
+% It is also known that the counting problems whose decision problem are solvable in polynomial time can be $\sharpP$-complete. One typical example, is  $\#\mathsf{DNF}$, which asks for the number of satisfying assignments of a Boolean formula in disjunctive normal form. 
+
+% Therefore, constructing reductions for counting problems to show $\sharpP$-hardness can be subtle. Apparently, there does not exist any parsimonious reduction from $\#\mathsf{CNF}$ to $\#\mathsf{DNF}$, even though they are both $\sharpP$-complete since $\mathsf{CNF}$ is NP-hard and $\mathsf{DNF}$ is in P. One effective way to prove hardness results in counting complexity is via subtractive reductions. A counting problem $C_A$ reduces to a counting problem $C_B$ via a (strong) subtractive reduction if there exist polynomial-time computable functions 
+% $f$ and $g$ such that for every input $x$, we have $C_A(x)=C_B(f(x))-C_B(g(x))$ and $w_B(g(x))\subseteq w_B(f(x))$. It has been shown that $\sharpP$ is closed under subtractive reductions.
+
+% In this paper, the relation we consider is $\mathcal{R}(P, G)$, where $P$ is a bounded program and $G$ is a finite encoding of an execution graph. Intuitively, $\mathcal{R}(P, G)$ is true if $P$ admits $G$ and $G$ is an complete execution graph in $M_{SC}^{P}$. The witness set is therefore defined as $w_\mathcal{R}(P) = \{ G \mid P \text{ admits } G \text{ and } G \text{ is a complete execution graph} \}$ and our goal is to characterize the complexity of the counting function $C_\mathcal{R}$.
+% We first observe that when the number of registers is not bounded (i.e., part of the input), the counting problem $C_\mathcal{R}$ is $\sharpP$-complete. 
+% \begin{theorem}
+% The counting problem $C_\mathcal{R}$ is $\sharpP$-complete, when the number of local registers and the program bound are parts of the input but the number of threads and memory locations are constant.
+% \end{theorem}
+% \begin{proof}
+% Our proof will be a subtractive reduction from $\#\mathsf{CNF}$ to $C_\mathcal{R}$. 
+% For a given CNF formula $\varphi$ with $n$ variables,
+%  we construct a concurrent program $P_\varphi$ with two threads $t_1$, $t_2$ and two shared location $\loc=\{x_1,x_2\}$. 
+%     The set of values is given as $\val=\{\true,\false,\#\}$ where $\false$ is the default value of the shared locations and the set of local registers is given as $\reg=\{r_1,r_2,\dots r_n\}$. The sequential program $P(t_1)$ repeatedly writes $\true,\#$ into $x$ for $n+1$ iterations and then writes $\true$ into $x_2$ while $P(t_2)$ performs  pairs of reads from $x_1$ for at most $n$ iterations. Then 
+%     During the $i$-th iteration, the first read stores the value of $x_1$ into $r_i$, if the value read is $\#$, $P(t_2)$ reads from $x_2$ and terminates; Otherwise, it reads from $x_1$ again and if the value read by the second read is not $\#$, it reads from $x_2$ and terminates; After the $2n$ reads, if $\varphi[v_i\leftarrow r_i]=\true$, $P(t_2)$ terminates otherwise it reads from $x_2$ terminates. Note that $P$ is bounded by $O(n)$ steps. 
+    
+%     Similarly, let $P'$ be the program that is identical to $P_\varphi$ except that $P'(t_2)$ always read from $x_2$ before terminates. 
+%     It is obvious that the number of satisfying assignment to $\varphi$ equals $C_\mathsf{R}(P')-C_\mathsf{R}(P_\varphi)$, which establishes the hardness result. 
+%     To show that problem \ref{prob1} is $\sharpP$-complete, we construct a nondeterministic Turing machine $M$ that takes as input an encoding $\langle P \rangle$, where $P$ is a bounded concurrent program. The machine $M$ simply nondeterministically simulates $P$ with some random scheduling and records the execution trace. It then deterministically verifies the trace is canonical with respect to some fixed lexicographic ordering.  Since both steps can be achieved in polynomial time, we conclude that the problem is $\sharpP$-complete. 
+%     We also remark that the $\sharpP$-completeness result extends to the general case where all parameters—such as the number of threads, memory locations, and registers—are unbounded.
+    
+% \end{proof}
+% The second result we have is that when only the program bound is not constant, the problem yields polynomial solutions. 
+
+% \begin{theorem}
+% The counting problem $C_\mathcal{R}$ has a polynomial solution with respect to the bound of the program, when the number of local registers, the number of threads and memory locations are constant.
+% \end{theorem}
+% \begin{proof}
+%     Our proof relies on the result from \cite{ } which implies that if $\mathcal{R}$ can be produced by an unambiguous log space (UL) transducer, then $C_\mathcal{R}$ can be solved in polynomial time. An UL transducer is a nondeterministic Turing Machine that has an input tape which is read only, a working tape where only first $O(\log n)$ cells can be used and a output tape that is write only with the head moving to the right only. For every input $x$, an UL transducer will output a different string for every accepting run of $x$. An UL transducer produces an relation $R$, if for every $x$, the set of outputs the transducer output on $x$ is exactly $w_R(x)$.
+%    Therefore, let $M$ be UL transducer such that takes an encoding of a concurrent program $P$ as input. Since $P$ has a constant number of threads, memory locations, and registers, simulating $P$ can be done in logarithmic space. $M$ only needs to maintain the program counter of each thread, and since the total number of threads is constant, all counters can be stored using logarithmic space. During the simulation, $M$ also maintains the most recently emitted event and compares each newly generated event against it using a fixed lexicographic order that defines a canonical form for execution graphs. This order can be stored in constant space. If the new event is lexicographically greater than the last emitted event, $M$ rejects the run; otherwise, it appends the new event to the output tape and updates the stored event to the current one. 
+   
+   
+% \end{proof}
+% The third result we provided shows that when restricted to the instances with constantly variables and constant local registers per thread, the counting problem remains $\sharpP$-complete. 
+% \begin{theorem}
+% The counting problem $C_\mathcal{R}$ remains $\sharpP$-complete.
+% when constant local registers per thread and shared memory locations are constant.
+% \end{theorem}
+% \begin{proof}
+% Since the available memory is limited, we cannot evaluate an entire $\mathsf{CNF}$ formula as in the proof of Theorem~\ref{}. Therefore, we construct a subtractive reduction from the $\#3\mathsf{SAT}$ problem. Our proof is inspired by the construction in \cite{sharedMem}, which shows that testing sequential consistency is $\mathsf{NP}$-hard for execution traces with only a constant number of shared locations. However, our reduction introduces several nontrivial modifications and innovations.
+
+% Let $\varphi$ be $3\mathsf{SAT}$  formula with $n$ variables and $m$ clauses. We construct a program $P_\varphi$ with $m+3$ threads $T=\{t_1,t_2,t_3,c_{1},c_{2},....c_{m}\}$ and four variables $\loc=\{a,b,c,d\}$. Let $\false$ be the default value of every shared location.  The high level idea is that $t_1$ and $t_2$ encodes a possible assignment of $\varphi$ by alternatively writing into the variable $a$. More specially, the write in $t_1$ will set the variables to true and the write in $t_2$ will set the variables to false. The one that occurs later establishes the assignment.  Each clause $C_i$ induces the thread $c_{i}$.  The thread evaluates the truth value of the literal under the truth setting established by $t_1$ and $t_2$ and write the result into $c$. $t_3$ will aggregates the result by performing a sequence of read on $c$. 
+% Let dummyTerminate denote a fixed sequence of instructions that each thread executes to read from $d$ and then terminate. Let each sequential program to be constructed as the follows:
+% \begin{enumerate}
+%     \item $t_1$ performs the following instructions for each $i$ from $1$ to $n$. It writes $\true_i$ into $a$, then writes $2*i-1$ into $b$, then reads from $b$, if the value is not $2*i$, then $t_1$ ends with dummyTerminate. $t_1$ then writes $\#$ into $b$, and write $\true$ into $d$.
+%     \item  Similarly, $P(t_2)$ performs the following instructions for each $i$ from $1$ to $n$.   It writes $\false_i$ into $a$, then reads from $b$, if the value is not $2*i-1$, then $t_2$ ends with dummyTerminate. Otherwise, it write $2*i$ into $b$.
+%     \item The thread $c_{i}$ corresponds the $i$ the clause $C_i$. Let $u$,$v$,$w$ be the variables appearing in these literals and we may assume without loss of generality that $u\leq v \leq w$. $c_{i}$ starts by reading from $b$, if it reads $2*u$, then it reads from $a$, if either the value from $b$ is not $2*u$ or the value from $a$ is not a truth valued marked by $u$, then it ends with dummyTerminate. $c_{i}$ repeats the process for the three variables, and if the clause is satisfied by the assignment, it writes $\true_{2n+j}$ into $c$.
+
+%    \item For $j = 1$ to $m$, thread $t_3$ reads from $c$; if at any step the value read is not $\true_{2n + j}$, then $t_3$ ends with dummyTerminate. Otherwise, it terminates normally after completing all $m$ reads.
+   
+    
+% \end{enumerate}
+% We remark that, for every satisfying assignment of $\varphi$, there can be multiple schedules that lead to a normal termination of $t_3$, however, all the schedules will lead to the same execution graph. 
+% Then let $P'$ be the program that is identical to $P_\varphi$, but $t_3$ always end with dummyTerminate. It is easy to see that $C_\mathcal{R}(P')-C_\mathcal{R}(P_\varphi)$ equal to the number of satisfying assignments to $\varphi$.
+% \end{proof}
+
+% \subsection{hardness of approximate counting}
+% Note that a key idea in our proofs is that one can separate the partial orders corresponding to satisfying assignments of a CNF formula from those corresponding to unsatisfying assignments via dummy reads and writes on the same variable. This idea has also been repeatedly explored in the study of hardness of approximation. For example, \cite{Danroth} shows that determining whether a $\#\text{CNF}$ approximation is within a multiplicative factor of $2^{n^{1-\epsilon}}$ is already deciding SAT. This result is significantly stronger than the well known result that the $\#\text{CNF}$ problem admits no FPRAS.
+% Here we present a similar proof which shows that the problem we consider in this paper is almost as hard as $\#\text{CNF}$ and hence consequently yields no FPRAS or any efficient approximation algorithm.
+
+% \begin{theorem}
+%  let $d>0$ be any constant, there is no polynomial algorithm which always output an approximation $\mathcal{A}$ for $C_\mathcal{R}(P)$ such that
+%    $\mathcal{A}/2^{n^{d}}\leq  C_\mathcal{R}(P)\leq \mathcal{A}*2^{n^{d}}$ for every concurrent program $P$ unless P=NP.
+% \end{theorem}
+
+% \begin{proof}
+% We will show that if there does exist such an polynomial algorithm, then NP=P. Let $\phi$ be an arbitrary CNF formula with $n$ variables.
+% Let $P_\phi$ with a concurrent program with threads $t_0,t_1....t_{n^k}$ and $n+n^k$ variables for some integer constant $k>1$. Assume without loss of generality that the default value of all variables is $\false$. The sequential program of $t_0$ will read the first $n$ variables, and if the values read satisfies $\phi$, it then reads from the rest $n^k$ variables. The threads $t_1....t_n$ would writes $\true$ into the first $n$ variables and threads $t_1....t_{n^k}$ writes $\true$ into the other $n^k$ variables. Note that for every unsatisfying assignment of $\phi$, there is exactly one counting instance of a complete execution graph. For every satisfying assignment, we have $2^{n^k}$ many count instances of complete executions. Therefore, 
+% we note that when $\phi$ is unsatisfiable, we have $\mathcal{C}_R(P_\phi)=2^n$. When $\phi$ has at least one satisfying assignments, we have $\mathcal{C}_R(P_\phi)\geq 2^n-1+2^{n^k}$.
+% Assume that there is a polynomial algorithm that always output an approximation  $\mathcal{A}$ for $\mathcal{C}_R(P_\phi)$. Then we have that when $\phi$ is unsatisfiable, $\mathcal{A}\leq 2^{n^d}*2^n=2^{n^d+n}$ and when $\phi$ is satisfiable we have $\mathcal{A}\geq 2^{n^k}*/2^{n^d}=2^{n^k-n^d}$. To separate the two bounds, we simply need to separate $n^d+n$ from $n^k-n^d$. Taking $k=2d+1$, it is easy to see that $n^{2d+1}-n^d>n^d+n$ for sufficiently large $n$, Therefore, taking any $T$ between $n^d+n$ and $n^{2d+1}-n^d$ would determine SAT in polynomial time, which means NP=P.
+% \end{proof}
+

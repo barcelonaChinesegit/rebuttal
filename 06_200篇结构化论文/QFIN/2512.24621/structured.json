@@ -1,0 +1,184 @@
+{
+ "title": "Forward-Oriented Causal Observables for Non-Stationary Financial Markets",
+ "abstract": "We study short-horizon forecasting in financial time series under strict causal constraints, treating the market as a non-stationary stochastic system in which any predictive observable must be computable online from information available up to the decision time.\nRather than proposing a machine-learning predictor or a direct price-forecast model, we focus on \\emph{constructing} an interpretable causal signal from heterogeneous micro-features that encode complementary aspects of the dynamics (momentum, volume pressure, trend acceleration, and volatility-normalized price location).\nThe construction combines (i) causal centering, (ii) linear aggregation into a composite observable, (iii) causal stabilization via a one-dimensional Kalman filter, and (iv) an adaptive ``forward-like'' operator that mixes the composite signal with a smoothed causal derivative term.\nThe resulting observable is mapped into a transparent decision functional and evaluated through realized cumulative returns and turnover.\nAn application to high-frequency EURUSDT (1-minute) illustrates that causally constructed observables can exhibit substantial economic relevance in specific regimes, while degrading under subsequent regime shifts, highlighting both the potential and the limitations of causal signal design in non-stationary markets.",
+ "sections": [
+  {
+   "level": "preamble",
+   "title": "",
+   "text": "\\begin{frontmatter} \n\n\\title{Forward-Oriented Causal Observables for Non-Stationary Financial Markets}\n \n\n\\author[aff1]{Lucas A.~Souza\\corref{cor1}}\n\\cortext[cor1]{Corresponding author}\n\\ead{lasouza@if.usp.br}\n\n\\affiliation[aff1]{\n  organization={S\\~ao Paulo},\n  \n  state={SP},\n  country={Brazil}\n}\n\n\\begin{abstract}\n\nWe study short-horizon forecasting in financial time series under strict causal constraints, treating the market as a non-stationary stochastic system in which any predictive observable must be computable online from information available up to the decision time.\nRather than proposing a machine-learning predictor or a direct price-forecast model, we focus on \\emph{constructing} an interpretable causal signal from heterogeneous micro-features that encode complementary aspects of the dynamics (momentum, volume pressure, trend acceleration, and volatility-normalized price location).\nThe construction combines (i) causal centering, (ii) linear aggregation into a composite observable, (iii) causal stabilization via a one-dimensional Kalman filter, and (iv) an adaptive ``forward-like'' operator that mixes the composite signal with a smoothed causal derivative term.\nThe resulting observable is mapped into a transparent decision functional and evaluated through realized cumulative returns and turnover.\nAn application to high-frequency EURUSDT (1-minute) illustrates that causally constructed observables can exhibit substantial economic relevance in specific regimes, while degrading under subsequent regime shifts, highlighting both the potential and the limitations of causal signal design in non-stationary markets.\n\\end{abstract}\n\n\n\n\n\n\n\n\n\n\n\n\n\\begin{keyword}\n\nCausality\\sep Financial time series\\sep Signal construction\\sep Regime dependence\\sep Kalman filtering\\sep Non-stationarity\n\n\n\n\n\n\n\\end{keyword}\n\n\n\\end{frontmatter}"
+  },
+  {
+   "level": "section",
+   "title": "Introduction and Related Literature",
+   "text": "\\label{sec:intro} \nFinancial markets can be viewed as complex stochastic systems, where collective dynamics, information flow, and feedback effects give rise to non-trivial temporal correlations and non-stationary behavior, a perspective long explored in statistical physics and nonlinear dynamics \\cite{schreiber2000,marschinski2002}.\nWithin this framework, price dynamics emerge from the interaction of heterogeneous agents and exhibit noisy, nonlinear, and time-varying features that challenge equilibrium-based descriptions.\nThe application of tools from statistical physics to financial markets has revealed well-documented empirical regularities, including heavy-tailed return distributions, volatility clustering, and excess kurtosis \\cite{bouchaud2003theory, cont2000herd, mantegna1995}.\nSuch emergent collective effects deviate markedly from the Gaussian benchmark and motivate modeling approaches that explicitly account for feedback mechanisms, clustering, and non-stationarity.\n\n\nA central modeling question concerns the origin of large price moves and volatility bursts: to what extent are they driven by exogenous information shocks (e.g., macroeconomic news) versus endogenous dynamics arising from internal amplification mechanisms?\nRecent empirical evidence supports a clear dynamical distinction between exogenous and endogenous jumps.\nExogenous events typically manifest as abrupt volatility spikes followed by power-law relaxation reminiscent of Omori's law for earthquake aftershocks, whereas endogenous events are often preceded by a gradual build-up of volatility, consistent with self-exciting feedback mechanisms\n\\cite{Lallouache2020,Marcaccioli_2022}.\nThis perspective naturally connects to the broader literature on endogenous market activity and reflexivity, in which self-exciting point processes—most notably Hawkes processes—provide a parsimonious mathematical framework to represent event clustering and cascading behavior \\cite{hawkes1971}.\n\nIn parallel, the analysis of causality and information flow across market variables has become an important tool for studying short-horizon predictability in noisy environments.\nNonlinear dependence measures such as transfer entropy offer a principled way to quantify directed information flow between observables beyond linear correlation \\cite{schreiber2000,marschinski2002}.\nBuilding on these ideas, recent forecasting pipelines have combined causality-based covariates with modern sequence models to improve predictive performance in multivariate financial settings \\cite{berenguer2024}.\nMoreover, even at the microstructural level, physical constraints on information transmission impose irreducible limits on simultaneity across geographically separated trading venues, with direct implications for high-frequency trading and market regulation \\cite{Angel2014physicsAndFinancial}.\n\nAgainst this background, a strict practical constraint is often under-emphasized: any tradable predictive observable must be computed \\emph{online}, using exclusively information available up to the decision time.\nIn practice, seemingly innocuous steps—such as smoothing, normalization, or label and target construction—can introduce subtle look-ahead biases that materially inflate backtest performance.\nWhile recent work has increasingly employed machine learning and statistical learning techniques to extract patterns from financial time series\n\\cite{zahedi2015,rounaghi2015,roostaee2023,wood2024},\nrobustness under regime shifts remains a persistent challenge, including well-documented breakdowns of trend and momentum effects during market stress episodes \\cite{daniel2016}.\n\nMotivated by the need for signals that preserve strict causal validity while remaining economically meaningful, this paper focuses on engineering an interpretable composite observable from heterogeneous technical features, including momentum, volume pressure, trend acceleration, and volatility-normalized price location.\nRather than performing direct price prediction, we construct a causal signal stabilized via a one-dimensional Kalman filter~\\cite{kalman1960} and introduce an adaptive forward-like operator that combines the filtered signal with a smoothed causal derivative component.\nThe resulting signal is evaluated through a transparent threshold-based decision rule applied to high-frequency EURUSDT (1-minute) data.\n\nEmpirically, we find that the proposed causal signal exhibits substantial economic relevance over specific market regimes.\nHowever, its effectiveness is strongly regime-dependent and degrades following structural changes in the underlying dynamics.\nThese findings reinforce the non-stationary and adaptive nature of financial markets and motivate the methodological focus of this study on causal signal construction, filtering, and regime sensitivity under strict information constraints."
+  },
+  {
+   "level": "section",
+   "title": "Methodology",
+   "text": "This section formalizes the causal forecasting setup adopted in this study.\nAll signals, transformations, and decision rules are constructed under strict causal constraints, relying exclusively on information available up to time $t$.\nThe focus is on signal design and causal filtering rather than on explicit price prediction."
+  },
+  {
+   "level": "subsection",
+   "title": "Forecasting Under Causal Constraints",
+   "text": "\\label{subsec:causal_constraints}\n\nUnder strict causality, forecasting at short horizons is constrained by the limited information content available at the decision time.\nSignals must be constructed from contemporaneous and past observations only, while remaining sufficiently stable to support decisions and sufficiently responsive to reflect regime changes.\nThis tension between responsiveness and stability constitutes a central challenge in causal signal design.\n\nA second challenge arises from the use of technical indicators and filtering operations.\nMany standard preprocessing steps---such as smoothing, normalization, or target construction---implicitly rely on future information when applied naively.\nIn a causal setting, these operations must be reformulated so that no information beyond time $t$ enters the signal at any stage of construction.\n\nFinally, economic relevance imposes an additional constraint.\nA causally valid signal may exhibit appealing statistical properties while failing to translate into meaningful realized performance under a decision rule.\nFor this reason, the methodology emphasizes constructions that can be mapped into transparent decision functionals and evaluated through realized outcomes (returns and turnover), rather than relying solely on forecast error metrics."
+  },
+  {
+   "level": "subsection",
+   "title": "Causal Signal Construction",
+   "text": "\\label{subsec:causal_signal}\n\nWe construct a predictive observable by aggregating heterogeneous sources of market information in a fully causal manner.\nRather than relying on a single indicator, we combine representative measures of momentum, volume pressure, trend acceleration, and volatility-normalized price location.\n\nEach component captures a distinct informational dimension: relative strength (RSI), volume-adjusted momentum (MFI), trend acceleration (MACD difference) and volatility-normalized price position (BB \\%).\nThe indicators are not used as standalone trading rules, but as features entering a unified signal construction. Throughout the analysis, all indicator lookback windows and parameter ranges are fixed to conventional values widely adopted in the technical analysis literature and in market practice, with no optimization performed.\n\n\nTo ensure comparability across indicators and avoid look-ahead bias, each series is centered using a causal median operator:\n\\begin{equation}\n\\tilde I_t^{(k)} = I_t^{(k)} - \\operatorname{median}\\{ I_\\tau^{(k)} : \\tau < t \\}.\n\\end{equation}\n\nThe centered indicators are linearly combined into a raw composite signal:\n\\begin{equation}\n\\mathscr{F}_0(t) = \\frac{1}{K} \\sum_{k=1}^K \\alpha_k \\tilde I_t^{(k)}.\n\\end{equation}\nAs the present study employs four indicators, the aggregation takes the explicit form\n\\begin{equation}\n\\mathscr{F}_0(t)\n = \\frac{1}{4}\\Big(\n\\alpha_{\\text{MFI}} \\, \\tilde I_t^{(\\text{MFI})}\n+ \\alpha_{\\text{RSI}} \\, \\tilde I_t^{(\\text{RSI})}\n+ \\alpha_{\\text{BB}\\%} \\, \\tilde I_t^{(\\text{BB}\\%)}\n+ \\alpha_{\\text{MACD}} \\, \\tilde I_t^{(\\text{MACD})}\n\\Big),\n\\end{equation}\nwhere the coefficients $\\alpha_k$ are fixed scaling constants chosen to account for the typical magnitude of each indicator.\n\nFigure~\\ref{fig:indicators} illustrates the intermediate stages of the causal signal construction using a representative 1-minute EURUSDT excerpt.\nThe figure displays the indicator components after causal centering and the resulting composite $\\mathscr{F}_0(t)$.\nBecause the raw aggregation remains sensitive to high-frequency fluctuations, a causal smoothing step based on a one-dimensional Kalman filter is applied, yielding a stabilized indicator-level observable that serves as an intermediate building block for the final predictive signal.\nThe Kalman filter parameters are fixed to $q = 0.01$ and $r = 0.1$; further implementation details are provided in~\\ref{app:kalman}.\nThe dependence of the resulting signal on the Kalman filter parameters is acknowledged, but not explored systematically in this work."
+  },
+  {
+   "level": "subsection",
+   "title": "Approximate Forward Operator",
+   "text": "\\label{subsec:forward_operator}\n\nThe raw composite signal $\\mathscr{F}_0(t)$ is fully causal and constructed exclusively from information available up to time $t$.\nWhile $\\mathscr{F}_0(t)$ captures contemporaneous structure, it does not necessarily yield economically meaningful performance when mapped directly into positions over short horizons.\nFigure~\\ref{fig:target_pnl_example} illustrates this behavior in a representative interval, where $\\mathscr{F}_0(t)$ underperforms compared to forward-shifted versions.\n\n\n\nMotivated by this empirical observation, we introduce a causal transformation that injects forward-oriented structure while preserving online computability.\nSpecifically, we define\n\\begin{equation}\n\\mathscr{F}(t) = c_1(t)\\,\\mathscr{F}_0(t) + 2c_2(t)\\,\\widetilde{\\partial_t \\mathscr{F}_0}(t),\n\\end{equation}\nwhere $\\widetilde{\\partial_t \\mathscr{F}_0}(t)$ denotes a smoothed causal approximation\n(moving average with span 4) of the first derivative $\\mathscr{F}'_0(t)$.\nIn practice, the derivative is computed via a causal finite-difference estimate,\nfollowed by a short-span moving-average smoothing (span equal to four observations),\nwhich mitigates high-frequency oscillations while preserving local anticipatory structure. The numerical factor $2$ multiplying the derivative term is a fixed scaling constant,\nintroduced to balance the typical magnitudes of $\\mathscr{F}_0(t)$ and\n$\\widetilde{\\partial_t \\mathscr{F}_0}(t)$ and kept constant throughout the analysis.\n\nThe inclusion of a derivative-based term is motivated by its ability to encode local forward tendency.\nIn smooth dynamical systems, the first derivative provides local information about the direction of evolution; for a sinusoid, the derivative corresponds to a phase-shifted signal.\nWhile financial time series are neither deterministic nor periodic,\nthis analogy motivates the use of derivative information as a local\nforward proxy under causality constraints, particularly in transition\nregions where $\\mathscr{F}_0(t)$ fluctuates around zero and directional\ninformation becomes most relevant.\n\nThe mixing coefficients $c_1(t)$ and $c_2(t)$ are made state-dependent through $\\mathscr{F}_0(t)$.\nWhen $|\\mathscr{F}_0(t)|$ is large, indicating a persistent regime, greater weight is assigned to $\\mathscr{F}_0(t)$ itself.\nWhen $\\mathscr{F}_0(t)$ is near zero, derivative information becomes relatively more informative.\nAccordingly,\n\\begin{equation}\nc_1(t) = \\tanh\\!\\left( \\lvert \\mathscr{F}_0(t) \\rvert \\right),\n\\qquad\nc_2(t) = 1 - \\tanh\\!\\left( \\left\\lvert \\frac{\\mathscr{F}_0(t)}{2} \\right\\rvert \\right).\n\\end{equation}\n\nGiven the guiding observable $\\mathscr{F}(t)$, the remaining step is to specify how it is translated into an actionable decision functional. We therefore proceed to define the decision rule and state update mechanism used in the empirical analysis."
+  },
+  {
+   "level": "subsection",
+   "title": "Decision Rule and State Update",
+   "text": "\\label{subsec:trading_rule}\n\nGiven the guiding signal $\\mathscr{F}(t)$, we specify a transparent state-based decision rule with a neutral zone controlled by a threshold $\\theta > 0$.\n\nLet $s_t = \\mathscr{F}(t)$ denote the signal value at time $t$.\nThe state variable $p_t \\in \\{0,1\\}$ indicates whether the system is in the ``active'' (invested/long) state or in the ``inactive'' (flat) state, respectively.\nState updates follow a two-state hysteresis rule:\n\\begin{equation}\np_t =\n\\begin{cases}\n1, & \\text{if } p_{t-1}=0 \\text{ and } s_t > \\theta,\\\\\n0, & \\text{if } p_{t-1}=1 \\text{ and } s_t < -\\theta,\\\\\np_{t-1}, & \\text{otherwise}.\n\\end{cases}\n\\label{eq:state_machine}\n\\end{equation}\nThis prevents rapid switching when the signal fluctuates around zero and ensures that state changes occur only when the signal crosses sufficiently strong positive or negative levels.\n\nTo preserve strict causality in the evaluation, the realized state applied at time $t$ is $p_{t-1}$ (one-step delay).\nDenoting the simple return of the underlying asset by\n\\begin{equation}\nr_t = \\frac{P_t - P_{t-1}}{P_{t-1}},\n\\end{equation}\nthe realized response is computed as\n\\begin{equation}\nR_t = p_{t-1}\\, r_t.\n\\label{eq:strategy_return}\n\\end{equation}\n\nCumulative performance is reported via the compounded return series\n\\begin{equation}\nV_t = V_0 \\prod_{\\tau=1}^{t} (1 + R_\\tau),\n\\end{equation}\nwith $V_0$ normalized to one.\nThe buy-and-hold benchmark is computed analogously using $r_t$ in place of $R_t$.\n\nTrading activity is quantified by counting state changes. Define\n\\begin{equation}\n\\Delta p_t = |p_t - p_{t-1}|,\n\\end{equation}\nand total activity up to time $t$ by $\\sum_{\\tau=1}^t \\Delta p_\\tau$."
+  },
+  {
+   "level": "section",
+   "title": "Experimental Results",
+   "text": "\\label{sec:results_eurusdt}\n\nThis section reports empirical results for the EURUSDT exchange rate at the 1-minute frequency.\nImportantly, all results in this section are computed without transaction costs.\nThis isolates the intrinsic economic relevance of the proposed causal observable from market frictions; the implications of even minimal fees are discussed in the concluding section.\n\nPrior to computing any indicators, the raw price series is filtered to retain only active Forex trading hours (local time).\nSaturdays are removed entirely, as well as Sundays before 18:00 and Fridays after 18:00.\nThis avoids distortions caused by weekend closures and illiquid periods and ensures that all indicators entering $\\mathscr{F}_0(t)$ and $\\mathscr{F}(t)$ are computed from contiguous market activity.\n\nFigure~\\ref{fig:pnl_F_vs_bnh} compares the cumulative returns induced by the proposed decision rule when applied to the forward-oriented causal observable $\\mathscr{F}(t)$ and to the raw composite signal $\\mathscr{F}_0(t)$, alongside a buy-and-hold benchmark.\nThe lower panel reports cumulative trading activity.\nThe threshold value $\\theta = 0.06$ was chosen as a representative scale of the signal fluctuations, corresponding to a moderate percentile of the empirical distribution of $\\mathscr{F}(t)$, and was kept fixed throughout the analysis; no parameter tuning or performance-based optimization was performed.\n\nThe figure reveals a pronounced regime dependence.\nDuring the period from 2023 to approximately September~2024, the $\\mathscr{F}$-based rule exhibits strong cumulative growth relative to buy-and-hold, whereas performance partially retraces and subsequently fluctuates around a near-plateau in the later period.\nThis behavior is quantified in Table~\\ref{tab:regime_metrics}, which highlights the contrast between early growth and subsequent degradation, accompanied by sustained—and even increasing—trading activity in the second subperiod (around $10^3$ trades per month).\nThe persistence of high turnover despite diminishing gains indicates that the causal observable continues to trigger frequent state changes even as its incremental economic relevance deteriorates.\n\nImportantly, Fig.~\\ref{fig:pnl_F_vs_bnh} also shows that applying the same decision rule directly to the raw composite signal $\\mathscr{F}_0(t)$ results in substantially weaker growth and earlier saturation.\nWhile $\\mathscr{F}_0(t)$ captures contemporaneous market structure, it lacks forward-oriented content.\nThis contrast demonstrates that the derivative-based component is essential: a purely smoothed or delayed version of $\\mathscr{F}_0(t)$ does not introduce additional predictive structure, whereas the causal derivative contributes local directional information, particularly around regime transition regions.\n\n \n\nTwo empirical features are noteworthy. First, the induced dynamics exhibit substantial outperformance relative to buy-and-hold during extended intervals, most visibly throughout 2023 and up to approximately September~2024.\nSecond, from late 2024 onward, the cumulative performance partially retraces and then fluctuates around a near-plateau, while trading activity remains elevated. This combination of high turnover and limited incremental gains is consistent with the view that a fixed causal construction can become misaligned with the prevailing regime in a non-stationary environment."
+  },
+  {
+   "level": "section",
+   "title": "Summary and Conclusion",
+   "text": "\\label{sec:conclusion}\n\nWe proposed a transparent framework for constructing short-horizon predictive observables under strict causal constraints.\nThe methodology emphasizes signal engineering: (i) causal centering of heterogeneous indicator-level features, (ii) linear aggregation into a composite observable $\\mathscr{F}_0(t)$, (iii) causal stabilization via a one-dimensional Kalman filter, and (iv) an adaptive forward-like operator that combines $\\mathscr{F}_0(t)$ with a smoothed causal derivative term.\nA key message is that economically relevant structure can be extracted without resorting to black-box predictors, provided causality is enforced and evaluation is disciplined.\n\nIn high-frequency EURUSDT, the induced dynamics show strong outperformance relative to buy-and-hold from 2023 through approximately September~2024, followed by a pronounced plateau thereafter.\nThis pattern is consistent with regime-dependent relevance in a non-stationary environment and motivates explicit mechanisms for regime adaptivity.\nImportantly, results are intentionally reported without transaction costs to isolate intrinsic signal effects. Given the high turnover, even small frictions would materially reduce net performance, so the reported outcomes should be interpreted as evidence of predictive structure under idealized conditions rather than as an execution-ready trading strategy.\n\nFuture work naturally follows three directions: (i) friction-aware evaluation (spreads, slippage, latency) and turnover control; \n(ii) explicit regime adaptivity via change detection and time-varying thresholds or mixing functions $c_1(t),c_2(t)$; and \n(iii) generalizing the forward operator to a small causal basis of local features (multi-scale differences, short moving averages, or compact state-space augmentations), as well as a systematic investigation of the role of filtering choices and Kalman parameter sensitivity, while preserving interpretability and strict online computability.\nThese extensions keep the central philosophy intact: causal construction first, model complexity later.\n\n \n\n\n \n\n\\bibliographystyle{elsarticle-num}\n\\bibliography{bib}\n\n\n\n\n\\appendix"
+  },
+  {
+   "level": "section",
+   "title": "Technical Indicators",
+   "text": "\\label{app:indicators}\n\nThis appendix documents the technical indicators employed in the construction.\nAll indicators rely exclusively on information available up to time~$t$, ensuring strict causality, n line with classical definitions of technical indicators in financial time series (see, e.g., \\cite{murphy1999technical})."
+  },
+  {
+   "level": "subsection",
+   "title": "Relative Strength Index (RSI)",
+   "text": "The Relative Strength Index (RSI) is used as a bounded momentum measure and is defined \\cite{wilder1978} as \n\\begin{equation}\n\\text{RSI}_t = 100 \\left( 1 - \\frac{1}{1 + \\frac{G_t}{L_t}} \\right),\n\\end{equation}\nwhere $G_t$ and $L_t$ denote average gains and losses, respectively."
+  },
+  {
+   "level": "subsection",
+   "title": "Money Flow Index (MFI)",
+   "text": "The Money Flow Index (MFI) is a volume-weighted momentum indicator defined as\n\\begin{equation}\n\\text{MFI}_t = 100 \\left( 1 - \\frac{1}{1 + \\frac{\\text{Positive Money Flow}}{\\text{Negative Money Flow}}} \\right).\n\\end{equation}"
+  },
+  {
+   "level": "subsection",
+   "title": "Moving Average Convergence Divergence (MACD Difference)",
+   "text": "The MACD difference captures short-term trend acceleration \\cite{appel1979}:\n\\begin{equation}\n\\text{MACD Diff}_t =\n\\bigl(\\text{EMA}_{\\text{fast}}(t) - \\text{EMA}_{\\text{slow}}(t)\\bigr)\n- \\text{Signal}_t.\n\\end{equation}"
+  },
+  {
+   "level": "subsection",
+   "title": "Bollinger Band Percent (BB\\%)",
+   "text": "The Bollinger Band Percent (BB\\%) provides a volatility-adjusted measure of price location:\n\\begin{equation}\n\\text{BB\\%}_t =\n\\frac{P_t - (\\mu_t - k\\sigma_t)}{(\\mu_t + k\\sigma_t) - (\\mu_t - k\\sigma_t)}.\n\\end{equation}"
+  },
+  {
+   "level": "section",
+   "title": "Kalman Filter",
+   "text": "\\label{app:kalman}\n\nTo reduce high-frequency noise while preserving strict causality, the composite signal is smoothed using a one-dimensional Kalman filter \\cite{kalman1960}.\nThe latent state follows a random-walk model,\n\\begin{equation}\nx_t = x_{t-1} + w_t, \\qquad w_t \\sim \\mathscr{N}(0,q),\n\\end{equation}\nand observations are noisy measurements,\n\\begin{equation}\nz_t = x_t + v_t, \\qquad v_t \\sim \\mathscr{N}(0,r).\n\\end{equation}\nThe filter is implemented recursively using information available up to time~$t$ only, initialized with $x_0 = z_0$, and no backward smoothing is applied."
+  }
+ ],
+ "figures": [
+  {
+   "caption": "Causal construction of the composite observable. The causally centered indicators are linearly aggregated into the raw composite signal $\\mathscr{F}_0$ and subsequently smoothed via a one-dimensional Kalman filter. The linear scaling coefficients ($\\alpha$) are indicated in the figure.",
+   "label": "fig:indicators",
+   "images": [
+    "indicators.pdf"
+   ]
+  },
+  {
+   "caption": "Cumulative returns for the raw signal $\\mathscr{F}_0(t)$ and its forward-shifted versions, illustrating that advancing the signal in time produces larger cumulative gains.",
+   "label": "fig:target_pnl_example",
+   "images": [
+    "cumulative_returns_target_horizons.pdf"
+   ]
+  },
+  {
+   "caption": "Performance induced by applying the same threshold-based decision rule to the forward-oriented causal observable $\\mathscr{F}(t)$ and to the raw composite signal $\\mathscr{F}_0(t)$ for EURUSDT at the 1-minute frequency.\nThe upper panel shows cumulative returns relative to buy-and-hold, while the lower panel reports the cumulative number of state changes (trades).\nThe threshold is fixed at $\\theta = 0.06$ for both signals.",
+   "label": "fig:pnl_F_vs_bnh",
+   "images": [
+    "pnl_F_vs_bnh.pdf"
+   ]
+  }
+ ],
+ "tables": [
+  {
+   "caption": "Incremental performance and activity metrics computed separately within each subperiod, with the cumulative return curve normalized to $V_0 = 1$ at the beginning of each regime. End equity $V$ denotes the final value.",
+   "label": "tab:regime_metrics",
+   "latex": "\\begin{tabular}{lrrrr}\n\\toprule\nPeriod & End $V$ & Cum.\\ ret.\\ (\\%) & MDD (\\%) & Trades/mo \\\\\n\\midrule\n2023--Sep 2024 & 3.14 & 214 & -4 & 959 \\\\\nPost-Sep 2024  & 2.74 &  -13 & -17 & 1117 \\\\\n\\bottomrule\n\\end{tabular}"
+  }
+ ],
+ "equations": [
+  {
+   "env": "equation",
+   "latex": "\\tilde I_t^{(k)} = I_t^{(k)} - \\operatorname{median}\\{ I_\\tau^{(k)} : \\tau < t \\}."
+  },
+  {
+   "env": "equation",
+   "latex": "\\mathscr{F}_0(t) = \\frac{1}{K} \\sum_{k=1}^K \\alpha_k \\tilde I_t^{(k)}."
+  },
+  {
+   "env": "equation",
+   "latex": "\\mathscr{F}_0(t)\n = \\frac{1}{4}\\Big(\n\\alpha_{\\text{MFI}} \\, \\tilde I_t^{(\\text{MFI})}\n+ \\alpha_{\\text{RSI}} \\, \\tilde I_t^{(\\text{RSI})}\n+ \\alpha_{\\text{BB}\\%} \\, \\tilde I_t^{(\\text{BB}\\%)}\n+ \\alpha_{\\text{MACD}} \\, \\tilde I_t^{(\\text{MACD})}\n\\Big),"
+  },
+  {
+   "env": "equation",
+   "latex": "\\mathscr{F}(t) = c_1(t)\\,\\mathscr{F}_0(t) + 2c_2(t)\\,\\widetilde{\\partial_t \\mathscr{F}_0}(t),"
+  },
+  {
+   "env": "equation",
+   "latex": "c_1(t) = \\tanh\\!\\left( \\lvert \\mathscr{F}_0(t) \\rvert \\right),\n\\qquad\nc_2(t) = 1 - \\tanh\\!\\left( \\left\\lvert \\frac{\\mathscr{F}_0(t)}{2} \\right\\rvert \\right)."
+  },
+  {
+   "env": "equation",
+   "latex": "p_t =\n\\begin{cases}\n1, & \\text{if } p_{t-1}=0 \\text{ and } s_t > \\theta,\\\\\n0, & \\text{if } p_{t-1}=1 \\text{ and } s_t < -\\theta,\\\\\np_{t-1}, & \\text{otherwise}.\n\\end{cases}\n\\label{eq:state_machine}"
+  },
+  {
+   "env": "equation",
+   "latex": "r_t = \\frac{P_t - P_{t-1}}{P_{t-1}},"
+  },
+  {
+   "env": "equation",
+   "latex": "R_t = p_{t-1}\\, r_t.\n\\label{eq:strategy_return}"
+  },
+  {
+   "env": "equation",
+   "latex": "V_t = V_0 \\prod_{\\tau=1}^{t} (1 + R_\\tau),"
+  },
+  {
+   "env": "equation",
+   "latex": "\\Delta p_t = |p_t - p_{t-1}|,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{RSI}_t = 100 \\left( 1 - \\frac{1}{1 + \\frac{G_t}{L_t}} \\right),"
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{MFI}_t = 100 \\left( 1 - \\frac{1}{1 + \\frac{\\text{Positive Money Flow}}{\\text{Negative Money Flow}}} \\right)."
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{MACD Diff}_t =\n\\bigl(\\text{EMA}_{\\text{fast}}(t) - \\text{EMA}_{\\text{slow}}(t)\\bigr)\n- \\text{Signal}_t."
+  },
+  {
+   "env": "equation",
+   "latex": "\\text{BB\\%}_t =\n\\frac{P_t - (\\mu_t - k\\sigma_t)}{(\\mu_t + k\\sigma_t) - (\\mu_t - k\\sigma_t)}."
+  },
+  {
+   "env": "equation",
+   "latex": "x_t = x_{t-1} + w_t, \\qquad w_t \\sim \\mathscr{N}(0,q),"
+  },
+  {
+   "env": "equation",
+   "latex": "z_t = x_t + v_t, \\qquad v_t \\sim \\mathscr{N}(0,r)."
+  }
+ ],
+ "stats": {
+  "n_sections": 14,
+  "n_figures": 3,
+  "n_tables": 1,
+  "n_equations": 16,
+  "n_chars": 25368
+ }
+}

@@ -1,0 +1,149 @@
+\section{Theory}\label{sec:theory}
+In this section, we provide a theoretical derivation of how bidders value the express lane (EL). We model each round of the express lane auction (ELA) as a second-price sealed-bid auction for a single, exclusive right to use the EL for a one-minute period, within a conditionally independent private value (CIPV) framework. We assume the winner captures the arbitrage opportunity solely during this period.
+
+We first review how CEX-DEX arbitrage profit is related to the volatility of risky assets. We then specify the auction environment and timing and derive the bidders' payoffs. From the payoff, we infer bidders' valuations and their bids, and finally present a reduced-form model and hypotheses for empirical testing.
+
+\subsection{Arbitrageurs' Profit}
+Since the value of the express lane is closely related to MEV, and most of that MEV comes from CEX-DEX arbitrage, it is important to understand arbitrageurs' profits to correctly value the express lane. In this section, as mentioned earlier, we review the theory of CEX-DEX arbitrage. For simplicity, consider a single constant product market maker (CPMM) pool with an invariant \(L^2\) that consists of a risky asset and a stablecoin. We assume the log price of the risky asset at CEX, which is a \emph{true} price, follows a semi-martingale process with stochastic volatility, \[
+    d\left(\log P_t \right)= \mu_t dt + \sigma_t dW_t \, .
+\] \cite{milionis2022automated} then showed that loss-versus-rebalancing, which is the arbitrageur's revenue under ideal settings (i.e., no gas fee and no friction in trading), is proportional to the pool value and volatility of the risky asset.
+\begin{prop}[\cite{milionis2022automated}]
+    The instantaneous rate of loss-versus-rebalancing \(\overline{\mathrm{LVR}}\) is \[
+    \overline{\mathrm{LVR}} = \frac{L\sqrt{P_t}}{4} \sigma^2_t,
+    \] where \(P_t\) and \(\sigma_t\) are price and volatility of risky asset at time \(t\), respectively.
+\end{prop}
+Thus, for interval \([0,T]\), the arbitrageur's revenue \(\mathrm{ARB}\)is
+\begin{align}
+    \mathrm{ARB} &= \int^T_0 \overline{\mathrm{LVR}} \, dt \\
+        &=  \int^T_0 \frac{L\sqrt{P_t}}{4} \sigma^2_t \, dt \\
+        &\approx \frac{L\sqrt{P_0}}{4} \int^T_0 \sigma^2_t \, dt \\
+        &= \frac{L\sqrt{P_0}}{4} \IV,
+\end{align}
+where integrated variance \(\IV \equiv \int^T_0 \sigma^2_t \, dt \), with assumption that \(T\) is small enough so that \(P_0 \approx P_t \) for all \(t \in [0,T]\). In practice, a block is not generated continuously, and the arbitrageur has to bear the gas fees and trading costs. However, as shown in works including \cite{milionis2024automated} and \cite{nezlobin2025loss}, it remains true that an arbitrageur's revenue is proportional to the pool's value and the square of the asset's volatility.
+
+\subsection{Express Lane Auction}
+Here, we clarify the mechanism of the express lane auction (ELA) and its timing. Participants in ELA compete in each round, lasting a minute, for the exclusive right to use the express lane. They want such a right because those with access to the express lane can win all the CEX-DEX arbitrage opportunities. The auction is conducted as a sealed-bid second-price auction, with the bidding deadline strictly before the start of each round. Therefore, the bidders should calculate the value of the express lane based on both public and private information provided to each bidder, and submit a bid before the value is realized. We begin with the following definitions.
+\begin{defn}[Rounds, Periods, Bidders, Information, and Reward]
+    Let: \begin{itemize}
+        \item \(r \in \mathbb N\) be each round of ELA,
+        \item \([T_r, T_{r+1})\) be period of each round,
+        \item \(D_r < T_r\) be the deadline of bid submission for each round,
+        \item \(S \equiv \{1, 2, \cdots, N\}\) be set of bidders,
+        \item \(\mathcal F_r\) and \(\mathcal S_{ir}\) be public and private information for bidder \(i\) available at \(D_r\), respectively,
+        \item \(v_{ir} \) be bidder \(i\)'s valuation at round \(r\), and
+        \item \(b_{ir}\) be bidder \(i\)'s bid at round \(r\).
+    \end{itemize}
+\end{defn}
+
+\subsection{Bidders' Payoff and Valuation}
+
+We now derive how bidders value the right to use the express lane in a given
+round. For notational convenience, write
+\[
+  \IV_r \equiv \IV_{[T_r, T_{r+1})}
+  = \int_{T_r}^{T_{r+1}} \sigma_t^2 \, dt
+\]
+for the integrated variance over round $r$. The winner at round \(r\) will earn profit from arbitrage opportunities within that round. Thus the reward \(R_r\) is \[
+R_r = \int^{T_{r+1}}_{T_r} \overline{\mathrm{LVR}} \, dt \approx \frac{L\sqrt{P_{T_r}}}{4} \IV_r,
+\] where \(L\) is liquidity available and \(\IV_{[T_r, T_{r+1})}\) is integrated variance of risky asset from \(T_r\) to \(T_{r + 1}\).\footnote{While traders use the entire liquidity available, beyond a single CPMM pool, if the price does not move much within a round, we can still locally approximate it as a single big CPMM pool; see \cite{Dan2021UniswapV3Universal}. Through the paper, we assume that \(L\) is constant. It is roughly true, since the majority of liquidity is provided by professional LPs who concentrate liquidity near the current price most of the time.} Note that \(R_r\) is random variable and only fully realized after time \(T_{r+1}\). In practice, even with express lane access, a bidder may only capture a fraction of the available arbitrage, and may face idiosyncratic costs or benefits (e.g., private order flow, infrastructure frictions).\footnote{Note that this does not necessarily imply that others can take advantage of it and earn profit. If such friction exists, it is very likely that others will have to bear that friction as well, which makes trade unprofitable.} We model the \emph{net} profit of bidder $i$ from winning round $r$ as
+\begin{equation}\label{eq:profit-def}
+  \Pi_{ir}
+  = \alpha_{ir} + \beta_{ir} \IV_r \sqrt{P_{T_r}},
+\end{equation}
+where:
+\begin{itemize}
+  \item $\alpha_{ir}$ collects components of profit and cost that do not scale with volatility (e.g., fixed costs, long-tail MEV),
+  \item $\beta_{ir}$ is bidder $i$'s \emph{extraction efficiency} in round $r$, summarizing how effectively the bidder converts volatility into arbitrage revenue. In particular, $\beta_{ir}$ subsumes both the liquidity factor $L/4$ and the bidder's share of the total arbitrage $R_r$.
+\end{itemize}
+Both $\alpha_{ir}$ and $\beta_{ir}$ are measurable with respect to bidder $i$'s private information $\mathcal S_{ir}$ and the public information $\mathcal F_r$ available at the bidding deadline $D_r$.
+
+Conditional on $(\mathcal F_r, \mathcal S_{ir})$, bidder $i$ forms a belief on the distribution over $\IV_r$ and thus over $\Pi_{ir}$. Let
+\begin{equation}
+m^{\IV}_{ir} \equiv \E\left[\IV_r \mid \mathcal F_r, \mathcal S_{ir} \right] \quad \text{and} \quad v^{\IV}_{ir} \equiv \Var\left(\IV_r \mid \mathcal F_r, \mathcal S_{ir} \right)
+\end{equation}
+denote bidder $i$'s forecast mean and variance of integrated variance for round $r$. Since $P_{T_r}$ is (approximately) known at $D_r$, we obtain
+\begin{align}
+  \E\!\left[\Pi_{ir} \mid \mathcal F_r, \mathcal S_{ir} \right]
+    &= \alpha_{ir} + \beta_{ir} m^{\IV}_{ir} \sqrt{P_{T_r}} \, , \label{eq:profit-mean} \\
+  \Var\!\left(\Pi_{ir} \mid \mathcal F_r, \mathcal S_{ir} \right)
+    &= \beta_{ir}^2 v^{\IV}_{ir} P_{T_r} \, . \label{eq:profit-var}
+\end{align}
+We now introduce a key assumption: the conditional independence of bidders' valuation and risk aversion.
+
+\begin{assump}[CIPV]\label{ass:cipv}
+Conditional on the public information $\mathcal F_r$, bidders' valuations parameters \[\{(\alpha_{ir}, \beta_{ir}, \gamma_{ir}, m^{\IV}_{ir}, v^{\IV}_{ir})\}_{i=1}^N\] are independently drawn.
+\end{assump}
+
+\noindent Assumption~\ref{ass:cipv} formalizes the ``conditionally independent private values'' (CIPV) environment: public information $\mathcal F_r$ is common to all bidders, while private signals $\mathcal S_{ir}$ generate heterogeneous valuations through the parameters \[(\alpha_{ir}, \beta_{ir}, \gamma_{ir}, m^{\IV}_{ir}, v^{\IV}_{ir}),\] which reflects the reality: while there are public signals observable to everyone, such as recent prices and order flow on exchanges, each firm relies on one's proprietary models to forecast future volatility, and each firm's edge or alpha of finding optimal route or executing trades remain private.
+
+\begin{assump}[Preferences]\label{ass:preferences}
+Each bidder $i$ is risk-averse and evaluates random profits using a mean--variance functional. That is, there exists a risk-aversion parameter $\rho_{ir} > 0$ such that the certainty equivalent (CE) of any profit random variable $X$ in round $r$ is
+\[
+  \CE_{ir}(X)
+  = \E[X] - \frac{\rho_{ir}}{2} \Var(X).
+\]
+\end{assump}
+
+Under Assumption~\ref{ass:preferences}, bidder $i$'s valuation of the express lane in round $r$ is the certainty equivalent of $\Pi_{ir}$:
+\begin{equation}\label{eq:valuation-def}
+  v_{ir}
+  \equiv \CE_{ir}(\Pi_{ir})
+  = \E\!\left[\Pi_{ir} \mid \mathcal F_r, \mathcal S_{ir} \right]
+    - \frac{\rho_{ir}}{2}
+      \Var\!\left(\Pi_{ir} \mid \mathcal F_r, \mathcal S_{ir} \right).
+\end{equation}
+Substituting \eqref{eq:profit-mean} and \eqref{eq:profit-var} into
+\eqref{eq:valuation-def} yields
+\begin{align}
+  v_{ir}
+    &= \alpha_{ir}
+       + \beta_{ir} m^{\IV}_{ir} \sqrt{P_{T_r}}
+       - \frac{\rho_{ir}}{2} \beta_{ir}^2 v^{\IV}_{ir} P_{T_r} \nonumber \\
+    &= \alpha_{ir}
+       + \beta_{ir} m^{\IV}_{ir} \sqrt{P_{T_r}}
+       - \gamma_{ir} v^{\IV}_{ir} P_{T_r},
+       \label{eq:valuation}
+\end{align}
+where we define
+\[
+  \gamma_{ir} \equiv \frac{\rho_{ir}}{2} \beta_{ir}^2 > 0.
+\]
+Equation~\eqref{eq:valuation} makes explicit that higher expected volatility (integrated variance) increases valuations, while greater uncertainty about volatility lowers valuations through the risk-aversion term.
+
+\subsection{Auction Equilibrium and Empirical Implications}
+
+Given the valuation structure in \eqref{eq:valuation}, we now describe bidding behavior in the express lane auction. In each round $r$, bidders simultaneously submit sealed bids $\{b_{ir}\}_{i=1}^N$. The bidder with the highest bid wins the right to use the express lane during $[T_r, T_{r+1})$ and pays the second-highest bid, while all other bidders pay zero. The following proposition justifies the use of the submitted bid as the bidder's valuation.
+
+\begin{prop}[Equilibrium Bidding]\label{prop:truthful}
+Under Assumptions~\ref{ass:preferences} and~\ref{ass:cipv}, in each round $r$ of the express lane auction, it is a (weakly) dominant strategy for each bidder to bid her valuation:
+\[
+  b_{ir} = v_{ir} \quad \text{for all } i \in \{1,\dots,N\}.
+\]
+\end{prop}
+
+Proposition~\ref{prop:truthful} is the standard truth-telling result for second-price auctions with private values; see, for example, \cite{krishna2009auction}. Combining Proposition~\ref{prop:truthful} with \eqref{eq:valuation}, we obtain the structural relationship
+\begin{equation}\label{eq:structural-bid}
+  b_{ir}
+  = \alpha_{ir}
+    + \beta_{ir} m^{\IV}_{ir} \sqrt{P_{T_r}}
+    - \gamma_{ir} v^{\IV}_{ir} P_{T_r}.
+\end{equation}
+
+Equation~\eqref{eq:structural-bid} shows that, in our model, equilibrium bids are increasing in the bidder's forecast of integrated variance and decreasing in the forecast uncertainty about integrated variance, with both effects scaled by the current asset price. This link motivates our empirical specification.
+
+In the data, we do not observe the latent objects $(\alpha_{ir}, \beta_{ir}, \gamma_{ir}, m^{\IV}_{ir}, v^{\IV}_{ir})$ directly. Instead, we approximate \eqref{eq:structural-bid} by a reduced-form model in which expected integrated variance and its uncertainty are replaced by observable proxies and bidder- or round-specific components are absorbed into fixed effects. Specifically, in the subsequent section we estimate regressions of the form
+\begin{equation}\label{eq:reduced-form}
+  b_{ir}
+  = \theta_{0,i}
+    + \theta_{1,i} \widehat{\E [\IV_r]} \sqrt{P_{T_r}}
+    + \theta_{2,i} \widehat{\Var (\IV_r)} \, P_{T_r}
+    + \varepsilon_{ir},
+\end{equation}
+where:
+\begin{itemize}
+  \item $\widehat{\E [\IV_r]}$ is a proxy of forecast mean $m^{\IV}_{ir}$,
+  \item $\widehat{\Var (\IV_r)}$ is a proxy for the forecast variance
+        $v^{\IV}_{ir}$, and
+  \item $\varepsilon_{ir}$ is an error term.
+\end{itemize}
+Under \eqref{eq:structural-bid}, the theory predicts $\theta_{1,i} > 0$ and $\theta_{2,i} < 0$: bids should increase with expected volatility (more MEV to extract) and decrease with uncertainty about volatility (stronger risk discount). These sign restrictions form our main testable hypotheses.

@@ -1,0 +1,471 @@
+{
+ "title": "\\bfseries Fast simulation of Gaussian random fields with flexible correlation models in Euclidean spaces",
+ "abstract": "The efficient simulation of Gaussian random fields with flexible correlation structures is fundamental in spatial statistics, machine learning, and uncertainty quantification. In this work, we revisit the spectral turning-bands (STB) method as a versatile and scalable framework for simulating isotropic Gaussian random fields with a broad range of covariance models. Beyond the Matérn model, we extend the STB approach to the Kummer--Tricomi model, which exhibits polynomially decaying correlations and long-range dependence, and to the Gauss--Hypergeometric model, which yields compactly supported correlations, including the generalized Wendland class. \nFor both classes, we derive exact sampling schemes for the spectral variables entering the STB construction.\nThe resulting simulator yields the usual finite-$L$ STB approximation to the target Gaussian random field while remaining numerically stable and computationally efficient, with computational complexity linear in the number of locations and spectral components.\nNumerical experiments confirm good accuracy and stable performance across a broad range of parameter settings. Supplementary materials for this article are available online.",
+ "sections": [
+  {
+   "level": "preamble",
+   "title": "",
+   "text": "\\def\\spacingset#1{\\renewcommand{\\baselinestretch}\n{#1}\\small\\normalsize} \\spacingset{1}\n\n\n\n\n\n\\if1\\anon\n{\n  \\title{\\bfseries Fast simulation of Gaussian random fields with flexible correlation models in Euclidean spaces}\n  \\author{\n    Moreno Bevilacqua\\thanks{\n      Facultad de Ingenier\\'ia y Ciencias, Universidad Adolfo Ib\\'a\\~nez, Chile;\n      Dipartimento di Scienze Ambientali, Informatica e Statistica, Universit\\`a Ca' Foscari, Italy.\n    }\n    \\and\n    Xavier Emery\\thanks{\n      Department of Mining Engineering, Universidad de Chile, Santiago, Chile;\n      Advanced Mining Technology Center, Universidad de Chile, Santiago, Chile.\n    }\n    \\and\n    Francisco Cuevas-Pacheco\\thanks{\n      Departamento de Matem\\'atica, Universidad T\\'ecnica Federico Santa Mar\\'ia, Chile.\n    }\n  }\n  \\maketitle\n} \\fi\n\n\\if0\\anon\n{\n  \\bigskip\n  \\bigskip\n  \\bigskip\n  \\begin{center}\n    {\\LARGE\\bf Fast simulation of Gaussian random fields with flexible correlation models in Euclidean spaces}\n\\end{center}\n  \n} \\fi\n\n\\bigskip\n\\begin{abstract}\nThe efficient simulation of Gaussian random fields with flexible correlation structures is fundamental in spatial statistics, machine learning, and uncertainty quantification. In this work, we revisit the spectral turning-bands (STB) method as a versatile and scalable framework for simulating isotropic Gaussian random fields with a broad range of covariance models. Beyond the Matérn model, we extend the STB approach to the Kummer--Tricomi model, which exhibits polynomially decaying correlations and long-range dependence, and to the Gauss--Hypergeometric model, which yields compactly supported correlations, including the generalized Wendland class. \nFor both classes, we derive exact sampling schemes for the spectral variables entering the STB construction.\nThe resulting simulator yields the usual finite-$L$ STB approximation to the target Gaussian random field while remaining numerically stable and computationally efficient, with computational complexity linear in the number of locations and spectral components.\nNumerical experiments confirm good accuracy and stable performance across a broad range of parameter settings. Supplementary materials for this article are available online.\n\\end{abstract}\n\n\\noindent\n\n\n\\noindent{\\it Keywords:} Gaussian random field; spectral turning-bands; Mat\\'ern; compact support; long-range dependence; exact spectral sampling\n\\vfill\n\n\\newpage\n\\spacingset{1.8}"
+  },
+  {
+   "level": "section",
+   "title": "Introduction",
+   "text": ""
+  },
+  {
+   "level": "subsection",
+   "title": "Motivation",
+   "text": "Gaussian random fields (RFs) indexed over Euclidean spaces play a central role in spatial statistics, geostatistics, machine learning, numerical analysis, design of experiments, signal processing, and uncertainty quantification, among many other areas\n\\citep{Cressie:1993,stein-book,Banerjee-Carlin-Gelfand:2004,williams2006gaussian,wendland2004scattered,cp2003}.\nA Gaussian RF is fully characterized by its mean function and covariance structure, the latter governing both smoothness and spatial dependence.\n\nIn many applications, from spatial interpolation to Bayesian inverse problems, fast simulation under a prescribed covariance model is essential for both inference and uncertainty propagation through complex models.\nFast Gaussian RF simulation is also important in likelihood-free inference, including Approximate Bayesian Computation \\citep{sisson2018handbook} and simulation-based amortized methods \\citep{zammit2025neural}, as well as in simulation-based hypothesis testing, for example in the Global Rank Envelope Test \\citep{globale}.\nIt also plays an important role in numerical weather prediction and ensemble forecasting, where spatially coherent error fields are used to generate ensembles of weather fields for postprocessing and uncertainty quantification \\citep{BerrocalRafteryGneiting2007}.\n\nSimulation is equally important for non-Gaussian RFs obtained from latent Gaussian structures.\nRelevant examples include Gaussian copula models \\citep{MasarottoVarin2012}, truncated Gaussian and plurigaussian RFs \\citep{armstrong2011plurigaussian}, substitution RFs \\citep{emery2008substitution}, chi-squared and non-central chi-squared RFs \\citep{Adler:1981,emery2007}, Tukey--$g$--and--$h$ RFs \\citep{XuGenton2017}, Weibull RFs \\citep{Bevilacqua2020}, and Poisson-based RFs \\citep{MoralesNavarrete2024}.\nIn all these settings, efficient simulation of the underlying Gaussian field is a key computational ingredient."
+  },
+  {
+   "level": "subsection",
+   "title": "Review of existing methods",
+   "text": "One of the earliest and most widely used methods for simulating a Gaussian RF with a prescribed covariance function at a finite set of locations is the \\emph{Cholesky method} \\citep{Ripley:1987}.\nIt relies on the Cholesky factorization of the covariance matrix and has computational cost $O(N^3)$, where $N$ denotes the number of locations.\nThis quickly becomes prohibitive for large datasets.\n\nTo reduce this burden, several alternative approaches exploit structure in the covariance or precision matrix.\nFor regular grids, the \\emph{circulant embedding} method \\citep{Dietrich-Newsam:1993,chan1997algorithm} uses the Fast Fourier Transform (FFT) after embedding the grid into a torus, yielding computational cost of order $O(N\\log N)$.\nIts applicability is however limited to regular lattices in Euclidean spaces, and additional corrections may be required when the embedded covariance matrix fails to be nonnegative definite \\citep{Chiles2012}.\n\nFor irregular spatial designs, an important class of methods is based on the \\emph{Vecchia approximation} \\citep{vecchia1988} and its extensions \\citep{datta2016a,katzfuss2017general}.\nThese approaches exploit approximate conditional independence through sparse factorizations of the joint density or precision structure.\nConditioning each location on a small set of neighbors, say $m\\ll N$, yields sequential simulation with cost of order $O(Nm^2)$.\nAccuracy depends strongly on both the ordering of the locations and the choice of neighbors.\nVecchia-type methods are often effective for covariance models with localized dependence in the precision structure, such as Mat\\'ern models, although their behavior can be less favorable for compactly supported covariance models, where the precision matrix need not inherit the sparsity of the covariance matrix \\citep{mateporcu}.\n\nFor the Mat\\'ern class, an alternative route is provided by the \\emph{SPDE--INLA} framework \\citep{Lindgren:Rue:Lindstrom:2011}, in which the continuous field is approximated on a finite-element mesh by a Gaussian Markov RF with sparse precision matrix.\nThis allows simulation through sparse linear algebra rather than dense covariance factorizations, typically with computational complexity around $O(N^{3/2})$ in two dimensions, and sometimes closer to linear complexity depending on the mesh structure and implementation.\n\nGeneral-purpose simulation can also be performed via Markov chain Monte Carlo (MCMC) schemes such as Gibbs sampling \\citep{Geman:Geman:1984} and Metropolis--Hastings \\citep{Hastings:1970}.\nThese methods can accommodate irregular sampling configurations, but they are usually not competitive for large-scale simulation because they require many iterations and repeated sampling from conditional Gaussian distributions.\n\nFor compactly supported covariance functions, sparse Cholesky factorization of the covariance matrix can also be effective \\citep{da2006,da1989}, provided that the covariance matrix is sufficiently sparse.\nIn practice, the resulting gains may be substantial only when the support is small relative to the spatial domain and the sampling design.\n\nA conceptually different strategy for general stationary covariance models is the continuous spectral method of \\citet{Shinozuka1971,Shinozuka1972}, which applies whenever the spectral density is available.\nThis approach can be interpreted as a particular case of the more general \\emph{turning-bands} method introduced by \\citet{Matheron:1973}, where one-dimensional processes are spread over a multidimensional Euclidean space.\nIn the spectral setting, the one-dimensional components reduce to cosine waves, leading to what we call the \\emph{spectral turning--bands} (STB) method, following \\citet{Mantoglou:1987} and \\citet{emery2016}.\n\nThe STB method is attractive because it reduces simulation to the generation of univariate components along randomly oriented lines, while remaining applicable to arbitrary spatial designs.\nFor a finite number of spectral components, say $L$, the resulting field is a finite-$L$ STB approximation to the target Gaussian RF.\nIncreasing $L$ improves the approximation through a central-limit effect, so that $L$ controls the trade-off between computational cost and fidelity to the target field.\nThe overall computational cost scales linearly in both the number of locations and the number of spectral components, namely $O(NL)$."
+  },
+  {
+   "level": "subsection",
+   "title": "A brief computational comparison",
+   "text": "To illustrate the computational performance of the proposed STB approach, we compare its runtime with two widely used methods for large-scale simulation on irregular spatial designs: the SPDE--INLA framework \\citep{Lindgren:Rue:Lindstrom:2011} and the Vecchia approximation \\citep{vecchia1988}, implemented in the \\texttt{INLA} and \\texttt{GpGp} \\texttt{R} packages, respectively.\nRuntime is measured in terms of elapsed  time using the \\texttt{system.time} function in \\texttt{R}. Although the main contribution of this paper is the extension of STB simulation beyond the Mat\\'ern class, we focus this benchmark on the Mat\\'ern model, for which both SPDE--INLA and Vecchia are well-established reference methods. All computations were performed on a 2$\\times$8-core CPU (Intel Xeon E5-2689 @ 1200--3600 MHz) with 128 GB RAM.\n\nIn all experiments, we consider the Mat\\'ern covariance model $\\mathcal{M}_{\\nu,\\alpha}$ with marginal variance $\\sigma^2=2$, scale parameter $\\alpha=0.12$, and two smoothness settings, namely $\\nu=0.5$ and $\\nu=1$.\nSampling locations are generated independently from the uniform distribution on $[0,1]^2$, and the sample size ranges from $n=100$ to $n=100{,}000$.\n\nFor the Vecchia approximation, we consider conditioning set sizes $m\\in\\{5,10,20,30\\}$ and use the function \\texttt{fast\\_Gp\\_sim}.\nFor SPDE--INLA, we construct a constrained Delaunay triangulation over $[0,1]^2$ using \\texttt{fm\\_mesh\\_2d\\_inla} from the \\texttt{fmesher} package, with inner and outer offsets equal to $0.1$ and maximum edge length equal to $0.072$ in both regions.\nThe Mat\\'ern SPDE model is specified through \\texttt{inla.spde2.matern}, with $\\alpha=\\nu+d/2$ \\citep{Lindgren:Rue:Lindstrom:2011}, and with the log-linear parametrization\n\\[\n\\log\\kappa_0 = \\tfrac{1}{2}\\log(8\\nu) - \\log(r_0),\n\\qquad\n\\log\\tau_0 = \\tfrac{1}{2}\n\\bigl[\\log\\Gamma(\\nu)-\\log\\Gamma(\\alpha)-\\log(4\\pi)\n-2\\nu\\log\\kappa_0-\\log\\sigma^2\\bigr],\n\\]\nwhere $r_0=0.12$ and $\\sigma^2=2$, so that the target practical range and marginal variance are aligned with those used by the competing methods.\nWeakly informative Gaussian priors with mean zero and precision $0.1$ are assigned to both $\\log\\tau$ and $\\log\\kappa$.\nThe precision matrix $\\mathbf{Q}$ is computed using \\texttt{inla.spde.precision} at $\\boldsymbol{\\theta}=(0,0)^\\top$.\nFor INLA, we report separately the one-time cost of mesh construction and precision-matrix assembly, and the per-realization simulation time obtained through \\texttt{inla.qsample}; only the latter is included in the replication-wise timing comparison.\nFor each configuration, runtimes are summarized over $n_{\\rm sim}=1{,}000$ independent realizations, computed in parallel using \\texttt{doParallel} on half of the available cores.\n\nThe results are reported in Figure~\\ref{fig:timing}.\nFor small sample sizes ($n\\le 1{,}000$), all methods are computationally inexpensive and runtime differences remain modest.\nAs $n$ increases, the proposed STB simulator exhibits the most favorable scaling behavior under both smoothness settings.\nFor example, when $n=100{,}000$ and $\\nu=0.5$, the median simulation time for STB is \\texttt{3.1650} seconds, compared with \\texttt{25.204}, \\texttt{29.656}, \\texttt{38.164}, and \\texttt{42.385} seconds for the Vecchia approximation with $m=5,10,20,30$, respectively, and \\texttt{10.257} seconds for INLA sampling alone.\nThe latter does not include the additional one-time mesh and precision-matrix construction cost of \\texttt{31.57} seconds.\nA similar pattern is observed for $\\nu=1$, where the corresponding median times at $n=100{,}000$ are \\texttt{3.077} seconds for STB and \\texttt{9.605} seconds for INLA.\nOverall, these results are consistent with the near-linear scaling of STB in the number of locations, as predicted by its $O(NL)$ complexity, and motivate its use for large-scale simulation on irregular designs.\n\n\n\nTable~\\ref{tab:sim-comparison} summarizes the main computational and qualitative features of the simulation methods discussed above.\nFor irregularly distributed locations, STB is particularly attractive among the methods considered here because it combines linear complexity in the number of locations with modest memory requirements, while avoiding both dense matrix factorizations and mesh construction."
+  },
+  {
+   "level": "subsection",
+   "title": "Contribution",
+   "text": "This work develops STB simulation methods for Gaussian RFs in Euclidean spaces under flexible isotropic covariance models.\nHere, flexibility refers to parametric covariance families that provide continuous control over the smoothness of the field, while also allowing either compact support or heavier-than-Mat\\'ern tail behavior.\n\nThe Mat\\'ern ($\\mathcal{M}$) family \\citep{Stein:1999,mateporcu} is the benchmark model in spatial statistics because of its interpretable parameters and explicit control of mean-square differentiability.\nHowever, as discussed in \\citet{mateporcu}, it has two well-known limitations:\nglobal support and exponentially decaying correlations.\n\nTwo recent covariance families overcome these limitations in complementary directions:\n\\begin{enumerate}\n\\item The \\emph{Gauss--Hypergeometric} ($\\mathcal{GH}$) model \\citep{emery2022gauss,hyp2025}, which defines a broad class of compactly supported correlations including, as special cases, the generalized Wendland family \\citep{gnei02,BFFP}.\nIt preserves the smoothness parametrization of the Mat\\'ern model while introducing an additional shape parameter.\n\n\\item The \\emph{Kummer--Tricomi} ($\\mathcal{K}$) model \\citep{ma2022beyond}, which introduces an additional tail parameter allowing polynomial decay while maintaining smoothness flexibility in all spatial dimensions.\n\\end{enumerate}\n\nBoth models can therefore be viewed as extensions of the Mat\\'ern class:\nthe $\\mathcal{GH}$ model toward compactly supported correlations, and the $\\mathcal{K}$ model toward heavy-tailed and long-range dependence.\n\nWhile STB simulation for the Mat\\'ern model is classical and well understood \\citep{EmeryLantu2006}, extending the approach to the $\\mathcal{K}$ and $\\mathcal{GH}$ families requires new stochastic representations for their spectral distributions.\nThe main difficulty is that the corresponding spectral densities involve special hypergeometric functions and do not appear to admit simple direct samplers, except in a few special cases \\citep[e.g.,][]{arroyo2021}.\nTo address this issue, we derive exact sampling representations for the spectral variables entering the STB construction, together with corresponding stochastic samplers that avoid numerical inversion, quadrature, or other approximations at the spectral-sampling stage.\nAccordingly, exactness in this paper refers to exact sampling of the spectral variables entering the STB construction; the resulting RF remains the usual finite-$L$ STB approximation to the target Gaussian field.\n\nMore specifically:\n\\begin{itemize}\n\\item we show that the $\\mathcal{K}$ model admits a tractable spectral representation leading to exact sampling of the STB spectral variable through a Beta--prime Gaussian mixture;\n\\item we show that STB simulation for the $\\mathcal{GH}$ class can be developed through two alternative spectral constructions based on Beta and Gasper mixtures.\n\\end{itemize}\n\nThe resulting algorithms provide a unified stochastic framework for fast simulation of Gaussian RFs with $\\mathcal{M}$, $\\mathcal{K}$, and $\\mathcal{GH}$ covariance functions over very large sets of spatial locations.\nThey are implemented in the function \\texttt{GeoSimapprox} of the \\texttt{R} package \\texttt{GeoModels} \\citep{geomodels}, which supports simulation of Gaussian and a broad class of non-Gaussian spatial fields with $\\mathcal{M}$, $\\mathcal{K}$, and $\\mathcal{GH}$ underlying correlation models.\n\nTwo numerical studies illustrate the proposed methodology.\nFirst, we conduct a simulation study assessing the accuracy of the STB algorithms for the $\\mathcal{GH}$ and $\\mathcal{K}$ models across a broad range of parameter settings by comparing empirical semivariograms with their theoretical counterparts.\nSecond, Section~B of the Supplementary Material analyzes a large climate dataset and shows how the proposed STB simulators can be used for parametric bootstrap in the computation of standard errors and model selection criteria under weighted pairwise composite likelihood \\citep{NNP}, for both Gaussian and transformed Gaussian RFs with $\\mathcal{M}$, $\\mathcal{K}$, and generalized Wendland correlation functions."
+  },
+  {
+   "level": "subsection",
+   "title": "Outline",
+   "text": "The remainder of the paper is organized as follows.\nSection~\\ref{sec2} recalls the spectral representation of stationary Gaussian RFs and the STB framework.\nSection~\\ref{sec3} reviews the $\\mathcal{M}$ correlation model and its STB sampler.\nSection~\\ref{sec4} develops the $\\mathcal{K}$ model, its spectral representation, and the associated STB algorithm.\nSection~\\ref{sec5} introduces the $\\mathcal{GH}$ family, including the Beta- and Gasper-mixture formulations and the corresponding STB algorithms.\nSection~\\ref{sec6} reports numerical experiments assessing the accuracy and numerical stability of the proposed samplers.\nSection~\\ref{sec8} concludes with a discussion and directions for future work."
+  },
+  {
+   "level": "section",
+   "title": "Spectral representation and spectral turning--bands simulation",
+   "text": "\\label{sec2}\n\nLet $\\{Z(\\mathbf{s}) : \\mathbf{s}\\in D\\}$ be a real-valued, zero-mean stationary Gaussian RF defined on a bounded domain\n$D\\subset\\mathbb{R}^d$, with stationary covariance\n\\[\nC(\\mathbf{h})=\\mathrm{Cov}\\!\\bigl(Z(\\mathbf{s}),Z(\\mathbf{s}+\\mathbf{h})\\bigr),\n\\qquad\n\\mathbf{h}\\in\\mathbb{R}^d,\n\\]\nand variance $\\sigma^2:=C(\\mathbf{0})$.\nThe corresponding correlation function is\n\\[\n\\phi(\\mathbf{h})=\\frac{C(\\mathbf{h})}{\\sigma^2},\n\\qquad\n\\phi(\\mathbf{0})=1.\n\\]\n\nBy Bochner's theorem, any continuous positive-semidefinite function $C:\\mathbb{R}^d\\to\\mathbb{C}$ admits the representation \\citep{Yaglom:1987}\n\\begin{equation}\\label{eq:bochner}\nC(\\mathbf{h})=\\int_{\\mathbb{R}^d} e^{\\mathsf{i}\\boldsymbol{\\omega}\\cdot\\mathbf{h}}\\,F({\\rm d}\\boldsymbol{\\omega}),\n\\end{equation}\nwhere $\\mathsf{i}$ is the imaginary unit, $\\cdot$ is the Euclidean scalar product, and $F$ is a finite nonnegative symmetric measure on $\\mathbb{R}^d$.\nIf $F$ admits a density $f_C$, then\n\\[\nC(\\mathbf{h})=\\int_{\\mathbb{R}^d} e^{\\mathsf{i}\\boldsymbol{\\omega}\\cdot\\mathbf{h}} f_C(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega},\n\\qquad\nf_C(\\boldsymbol{\\omega})\\ge 0,\n\\qquad\n\\int_{\\mathbb{R}^d}f_C(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}=\\sigma^2.\n\\]\nSince the field is real-valued, $C(\\mathbf{h})=C(-\\mathbf{h})$, and therefore\n\\[\nC(\\mathbf{h})=\\int_{\\mathbb{R}^d}\\cos(\\boldsymbol{\\omega}\\cdot\\mathbf{h})\\,f_C(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}.\n\\]\n\nWhen the spectral measure is absolutely continuous, we denote by $f$ the normalized spectral density of the correlation function $\\phi$, namely\n\\[\nf(\\boldsymbol{\\omega})=\\frac{1}{\\sigma^2}f_C(\\boldsymbol{\\omega}),\n\\qquad\n\\int_{\\mathbb{R}^d}f(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}=1,\n\\]\nso that\n\\begin{equation}\\label{eq:spectral-corr}\n\\phi(\\mathbf{h})\n=\\int_{\\mathbb{R}^d}\\cos(\\boldsymbol{\\omega}\\cdot\\mathbf{h})\\,f(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}.\n\\end{equation}\n\nFor an isotropic RF, $\\phi(\\mathbf{h})=\\phi(x)$ with $x=\\|\\mathbf{h}\\|$, and, in the absolutely continuous case, the spectral density depends only on $r=\\|\\boldsymbol{\\omega}\\|$, that is,\n$\nf(\\boldsymbol{\\omega})=g_R(r)\n$\nfor some radial function $g_R$.\nIntegrating~\\eqref{eq:spectral-corr} over directions yields the Schoenberg representation \\citep{Schoenberg1938b}\n\\begin{equation}\\label{eq:schoenberg}\n\\phi(x)=\\int_0^\\infty \\Omega_d(xr)\\,|\\mathbb{S}^{d-1}|\\,r^{d-1}\\,g_R(r)\\,{\\rm d}r,\n\\qquad x\\ge 0,\n\\end{equation}\nwhere $|\\mathbb{S}^{d-1}|=\\frac{2\\pi^{d/2}}{\\Gamma(d/2)}$ is the surface area of the unit sphere in $\\mathbb{R}^d$, and\n\\[\n\\Omega_d(x)=\\Gamma\\!\\Bigl(\\tfrac{d}{2}\\Bigr)\\Bigl(\\tfrac{2}{x}\\Bigr)^{d/2-1}J_{d/2-1}(x),\n\\qquad x>0,\n\\]\nwith $J_{\\nu}$ denoting the Bessel function of the first kind of order $\\nu$.\nWe denote by $\\Phi_d$ the class of continuous isotropic positive-definite functions on $\\mathbb{R}^d$ satisfying $\\phi(0)=1$; these classes are nested as\n\\[\n\\Phi_1 \\supset \\Phi_2 \\supset \\cdots \\supset \\Phi_\\infty := \\bigcap_{d\\ge1}\\Phi_d.\n\\]\n\nIn the absolutely continuous isotropic case, let $\\boldsymbol{\\Omega}\\in\\mathbb{R}^d$ be a random frequency vector with density\n$\nf(\\boldsymbol{\\omega})=g_R(\\|\\boldsymbol{\\omega}\\|),\n$\nnormalized so that\n\\[\n\\int_{\\mathbb{R}^d}f(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}\n=\n|\\mathbb{S}^{d-1}|\\int_0^\\infty r^{d-1}g_R(r)\\,{\\rm d}r\n=1.\n\\]\nLet $R=\\|\\boldsymbol{\\Omega}\\|$ denote the associated spectral radius.\nIts density is\n\\begin{equation}\\label{eq:fR}\nf_R(r)=|\\mathbb{S}^{d-1}|\\,r^{d-1}\\,g_R(r),\n\\qquad r\\ge 0.\n\\end{equation}\nWith this normalization,\n\\begin{equation}\\label{eq:spectral-expectation}\n\\phi(\\|\\mathbf{h}\\|)\n=\n\\mathbb{E}\\!\\left[\\cos(\\boldsymbol{\\Omega}\\cdot\\mathbf{h})\\right],\n\\qquad \\mathbf{h}\\in\\mathbb{R}^d.\n\\end{equation}\nMoreover, writing\n\\[\n\\boldsymbol{\\Omega}=R\\boldsymbol{\\Theta},\n\\qquad\n\\boldsymbol{\\Theta}\\sim\\mathrm{Unif}(\\mathbb{S}^{d-1}),\n\\qquad\nR\\perp\\!\\!\\!\\perp\\boldsymbol{\\Theta},\n\\]\nseparates the radial and angular components of the spectral distribution and provides the basis for model-specific samplers.\n\nThe spectral turning--bands (STB) method exploits~\\eqref{eq:spectral-expectation} by replacing the expectation with a Monte Carlo average over independent spectral components.\nFor a target covariance model $\\sigma^2\\phi$, the STB field is defined as \\citep{Lantu2002}\n\\begin{equation}\\label{eq:TB-def-prob}\n\\widetilde Z_L(\\mathbf{s})\n=\n\\sigma \\sum_{\\ell=1}^L\n\\sqrt{\\frac{-2\\ln(\\varepsilon_\\ell)}{L}}\\,\n\\cos\\!\\bigl(\\boldsymbol{\\Omega}_\\ell\\cdot\\mathbf{s}+\\Phi_\\ell\\bigr),\n\\qquad \\mathbf{s}\\in D,\n\\end{equation}\nwhere\n\\[\n\\varepsilon_\\ell \\stackrel{\\text{i.i.d.}}{\\sim}\\mathrm{Unif}(0,1),\n\\qquad\n\\boldsymbol{\\Omega}_\\ell \\stackrel{\\text{i.i.d.}}{\\sim} F,\n\\qquad\n\\Phi_\\ell \\stackrel{\\text{i.i.d.}}{\\sim}\\mathrm{Unif}(0,2\\pi),\n\\qquad\n\\ell=1,\\dots,L,\n\\]\nand $F$ denotes the spectral distribution of the target correlation model (with density $f$ whenever the spectral measure is absolutely continuous).\n\nFollowing \\cite{AELL}, the variable $\\varepsilon_\\ell$ is introduced so that, for each $\\ell$ and each location $\\mathbf{s}$, the random quantity\n\\[\n\\sqrt{-2\\ln(\\varepsilon_\\ell)}\\,\n\\cos\\!\\bigl(\\boldsymbol{\\Omega}_\\ell\\cdot\\mathbf{s}+\\Phi_\\ell\\bigr)\n\\]\nhas a standard Gaussian distribution \\citep{box:1958}.\nConsequently, $\\widetilde Z_L(\\mathbf{s})$ is Gaussian with mean zero and variance $\\sigma^2$ at every fixed location $\\mathbf{s}$.\n\nBy construction,\n$\n\\mathbb{E}\\!\\bigl[\\widetilde Z_L(\\mathbf{s})\\bigr]=0$,\n$\\mathbf{s}\\in D,$\nand, for any $\\mathbf{s},\\mathbf{t}\\in D$,\n$\n\\mathbb{E}\\!\\bigl[\\widetilde Z_L(\\mathbf{s})\\widetilde Z_L(\\mathbf{t})\\bigr]\n=\n\\sigma^2\\,\\phi(\\|\\mathbf{s}-\\mathbf{t}\\|).\n$\nThus, for every finite $L$, the STB construction reproduces the target covariance exactly.\nHowever, the field $\\widetilde Z_L$ is generally not Gaussian as a process for finite $L$; only its one-dimensional marginals are exactly Gaussian.\nThe target Gaussian dependence structure is recovered only asymptotically: as $L\\to\\infty$, $\\widetilde Z_L$ converges in finite-dimensional distributions to the target Gaussian RF by a central-limit effect, and the Monte Carlo error associated with the finite-$L$ approximation decreases at the usual rate $O(L^{-1/2})$.\n\nWhen the spectral measure is absolutely continuous, isotropic spectral sampling reduces to sampling $R$ from~\\eqref{eq:fR}, sampling $\\boldsymbol{\\Theta}\\sim\\mathrm{Unif}(\\mathbb{S}^{d-1})$, and setting $\\boldsymbol{\\Omega}=R\\boldsymbol{\\Theta}$.\nMore generally, the key algorithmic step is to construct the model-specific spectral random element entering the STB representation.\n\nSections~\\ref{sec3}--\\ref{sec5} derive stochastic representations that allow exact sampling of the spectral variables for the Mat\\'ern, Kummer--Tricomi, and Gauss--Hypergeometric models.\nAccordingly, throughout the paper, exactness refers to the spectral-sampling step; the resulting RF remains the usual finite-$L$ STB approximation to the target Gaussian field.\n\nGiven $\\phi\\in\\Phi_d$ with spectral distribution $F$ and sill $\\sigma^2$, the generic STB algorithm is:\n\\begin{enumerate}\n\\item Choose the number of spectral components $L$.\n\\item For each $\\ell=1,\\dots,L$:\n\\begin{enumerate}\n\\item Sample the model-specific spectral variable(s) defining $\\boldsymbol{\\Omega}_\\ell\\sim F$;\n\\item Sample $\\Phi_\\ell\\sim\\mathrm{Unif}(0,2\\pi)$;\n\\item Sample $\\varepsilon_\\ell\\sim\\mathrm{Unif}(0,1)$.\n\\end{enumerate}\n\\item Compute $\\widetilde Z_L(\\mathbf{s})$ via~\\eqref{eq:TB-def-prob} for all $\\mathbf{s}\\in D$.\n\\end{enumerate}\n\nThe computational cost scales linearly in the number of spectral components and in the number of spatial locations at which the field is evaluated.\nThe resulting algorithm is straightforward to parallelize across frequencies and locations.\nIn practice, once sampling from the model-specific spectral representation is available, the additional computational overhead of the STB construction is modest, so that reasonably large values of $L$ can be used in applications."
+  },
+  {
+   "level": "section",
+   "title": "STB simulation for the Mat\\'ern correlation model",
+   "text": "\\label{sec3}\n\nIn this section, we review the Mat\\'ern class $\\mathcal{M}$ \\citep{Stein:1999,mateporcu} and discuss its STB-based simulation.\nThe Mat\\'ern class is one of the most widely used families of isotropic correlation functions, as it provides a simple and interpretable control over both smoothness and spatial range.\nFor parameters $\\nu>0$ (smoothness) and $\\alpha>0$ (scale), we adopt the standard parameterization \\citep{Matern}:\n\\begin{equation}\\label{eq:matern}\n\\mathcal{M}_{\\nu,\\alpha}(x)\n= \\frac{2^{1-\\nu}}{\\Gamma(\\nu)}\n\\left(\\frac{x}{\\alpha}\\right)^{\\nu}\nK_{\\nu}\\!\\left(\\frac{x}{\\alpha}\\right),\n\\qquad x \\ge 0,\n\\end{equation}\nwhere $K_{\\nu}$ denotes the modified Bessel function of the second kind.\n\nThe parameter $\\nu$ controls the mean-square differentiability of the RF: for any integer $k>0$, the field is $k$ times mean-square differentiable if and only if $\\nu>k$.\nThe Mat\\'ern model belongs to $\\Phi_{\\infty}$ and is therefore positive semidefinite in any Euclidean dimension.\n\nThe isotropic radial spectral density associated with~\\eqref{eq:matern} in $\\mathbb{R}^d$, normalized so that it integrates to one on $\\mathbb{R}^d$, is\n\\begin{equation}\\label{eq:matern-spectral}\ng_{R}^{\\mathcal{M}}(r)\n= \\frac{\\Gamma(\\nu+\\tfrac{d}{2})\\,\\alpha^{d}}{\\Gamma(\\nu)\\,\\pi^{d/2}}\\,\n\\bigl(1+\\alpha^{2} r^{2}\\bigr)^{-(\\nu+d/2)},\n\\qquad r \\ge 0,\n\\end{equation}\nso that the full spectral density of the correlation function is\n$\nf(\\boldsymbol{\\omega}) = g_{R}^{\\mathcal{M}}(\\|\\boldsymbol{\\omega}\\|).\n$\n\nA convenient feature of the Mat\\'ern model is that its spectral distribution admits an exact Gaussian scale-mixture representation, which allows direct sampling of the spectral frequencies.\nLet\n\\[\nT \\sim \\mathrm{Gamma}(\\nu,1),\n\\qquad\n\\mathbf{Z} \\sim \\mathcal{N}(\\mathbf{0},I_d),\n\\qquad\nT \\perp\\!\\!\\!\\perp \\mathbf{Z},\n\\]\nand define\n\\begin{equation}\\label{eq:matern-mixture}\n\\boldsymbol{\\Omega} = \\frac{1}{\\alpha\\sqrt{2T}}\\,\\mathbf{Z}\n\\;\\in\\mathbb{R}^d.\n\\end{equation}\nThen $\\boldsymbol{\\Omega}$ follows a multivariate Student--$t$ distribution \\citep{fang1990symmetric} with $2\\nu$ degrees of freedom and scale matrix $(2\\nu\\alpha^{2})^{-1}I_d$, and has isotropic density\n\\[\nf_{\\boldsymbol{\\Omega}}(\\boldsymbol{\\omega})\n=\n\\frac{\\Gamma(\\nu+\\tfrac{d}{2})\\,\\alpha^{d}}{\\Gamma(\\nu)\\,\\pi^{d/2}}\n\\bigl(1+\\alpha^{2}\\|\\boldsymbol{\\omega}\\|^{2}\\bigr)^{-(\\nu+d/2)},\n\\]\nwhich coincides with~\\eqref{eq:matern-spectral}.\nHence, spectral frequencies for the Mat\\'ern model can be sampled exactly by drawing $T$ and $\\mathbf{Z}$ and setting $\\boldsymbol{\\Omega}$ as in~\\eqref{eq:matern-mixture}.\n\nThe Mat\\'ern correlation also admits the integral representation\n\\begin{equation}\\label{eq:matern-integral}\n\\mathcal{M}_{\\nu,\\alpha}(x)\n=\n\\int_{0}^{\\infty}\n\\exp\\!\\Bigl(-\\tfrac{x^{2}}{2\\lambda}\\Bigr)\\,\np_{\\nu,\\alpha}(\\lambda)\\,{\\rm d}\\lambda,\n\\end{equation}\nwhere $\\lambda \\sim \\mathrm{Gamma}\\!\\bigl(\\nu,2\\alpha^{2}\\bigr)$ has density\n\\[\np_{\\nu,\\alpha}(\\lambda)\n= \\frac{1}{\\Gamma(\\nu)\\,(2\\alpha^{2})^{\\nu}}\\,\n\\lambda^{\\nu-1}\\exp\\!\\Bigl(-\\tfrac{\\lambda}{2\\alpha^{2}}\\Bigr),\n\\qquad \\lambda>0.\n\\]\nThe representations~\\eqref{eq:matern-mixture} and~\\eqref{eq:matern-integral} are equivalent through the change of variable $\\lambda=2\\alpha^{2}T$.\n\nThis yields the following STB sampler for the covariance model $\\sigma^2\\mathcal{M}_{\\nu,\\alpha}$ \\citep{EmeryLantu2006}:\n\\begin{enumerate}\n\\item Set the parameters $(\\nu,\\alpha,\\sigma^2)$ and the number of spectral components $L$.\n\\item For $\\ell=1,\\ldots,L$:\n\\begin{enumerate}\n\\item Sample $T_\\ell \\sim \\mathrm{Gamma}(\\nu,1)$;\n\\item Sample $\\mathbf{Z}_\\ell \\sim \\mathcal{N}(\\mathbf{0},I_d)$;\n\\item Set $\\boldsymbol{\\Omega}_\\ell = \\dfrac{1}{\\alpha}\\,\\dfrac{\\mathbf{Z}_\\ell}{\\sqrt{2T_\\ell}}$;\n\\item Sample $\\Phi_\\ell \\sim \\mathrm{Unif}(0,2\\pi)$;\n\\item Sample $\\varepsilon_\\ell\\sim\\mathrm{Unif}(0,1)$;\n\\end{enumerate}\n\\item Evaluate $\\widetilde Z_L(\\mathbf{s})$ at any target location $\\mathbf{s}\\in D$ via~\\eqref{eq:TB-def-prob}.\n\\end{enumerate}\n\n\n\nThis construction provides exact sampling of the spectral variables entering the finite-$L$ STB representation for the covariance model $\\sigma^2\\mathcal{M}_{\\nu,\\alpha}$.\nThe resulting RF is therefore the usual finite-$L$ STB approximation to the target Gaussian field."
+  },
+  {
+   "level": "section",
+   "title": "STB simulation for the Kummer--Tricomi correlation model",
+   "text": "\\label{sec4}\n\n\\cite{ma2022beyond} introduced the $\\mathcal{K}$ family, which generalizes the Mat\\'ern class by adding a parameter that controls the tail decay of spatial correlations.\nThis additional flexibility allows a substantially more independent tuning of smoothness and tail behavior, thereby providing a continuous bridge between the Mat\\'ern model and heavier-tailed alternatives.\n\nFor parameters $\\nu>0$ (smoothness), $\\mu>0$ (tail), and $\\beta>0$ (scale), the $\\mathcal{K}$ correlation function is defined as\n\\begin{equation}\\label{eq:kummer}\n\\mathcal{K}_{\\nu,\\mu,\\beta}(x)\n= \\frac{\\Gamma(\\nu+\\mu)}{\\Gamma(\\nu)}\\,\nU\\!\\left(\\mu,\\ 1-\\nu,\\ \\frac{x^{2}}{2\\beta^{2}}\\right),\n\\qquad x \\ge 0,\n\\end{equation}\nwhere $U(a,b,z)$ denotes Tricomi's confluent hypergeometric function,\n\\[\nU(a,b,z)\n= \\frac{1}{\\Gamma(a)} \\int_{0}^{\\infty}\ne^{-z t}\\,t^{a-1}(1+t)^{b-a-1}\\,{\\rm d}t.\n\\]\n\nFor $\\mu > d/2$, the model has an absolutely continuous isotropic spectral measure in $\\mathbb{R}^d$, with radial spectral density given by \\citep{Bhadra2025}\n\\begin{equation}\\label{eq:kummer-spectral}\ng_{R}^{\\mathcal{K}}(r)\n=\n\\frac{\\Gamma\\!\\bigl(\\nu+\\tfrac d2\\bigr)}{(2\\pi)^{d/2}\\,B(\\mu,\\nu)}\\,\n\\beta^{d}\\,\nU\\!\\left(\\nu+\\tfrac d2,\\ 1-\\mu+\\tfrac d2,\\ \\frac{\\beta^{2}r^{2}}{2}\\right),\n\\qquad r \\ge 0,\n\\end{equation}\nwhere $B(\\mu,\\nu)$ is the Beta function.\nWhen $\\mu \\le d/2$, the correlation exhibits polynomial decay and long-range dependence, so that \\eqref{eq:kummer-spectral} should no longer be interpreted as a Lebesgue density.\nIn that regime, the relevant object is the underlying spectral measure.\n\nThe function $\\mathcal{K}_{\\nu,\\mu,\\beta}$ belongs to $\\Phi_\\infty$ and is therefore positive semidefinite in any Euclidean dimension.\nUnder a suitable scaling, the Mat\\'ern model is recovered as a limiting case when $\\mu \\to \\infty$; specifically,\n\\begin{equation}\\label{kkmm}\n\\mathcal{K}_{\\nu,\\mu,\\beta\\sqrt{2(\\mu+1)}}\\!\\left(x\\right)\n\\;\\xrightarrow[\\mu \\to \\infty]{}\\;\n\\mathcal{M}_{\\nu,\\beta}(x)\n\\end{equation}\nuniformly in $x$.\n\nAs shown by \\cite{ma2022beyond}, $\\mathcal{K}_{\\nu,\\mu,\\beta}$ can be expressed as a continuous mixture of Mat\\'ern kernels with random scale parameter:\n\\begin{equation}\\label{eq:kummer-mixture}\n\\mathcal{K}_{\\nu,\\mu,\\beta}(x)\n= \\mathbb{E}_{\\Phi}\\!\\left[\\mathcal{M}_{\\nu,\\Phi}(x)\\right],\n\\qquad\n\\Phi^{2} \\sim \\mathrm{Inv\\text{-}Gamma}\\!\\left(\\mu,\\ \\tfrac{\\beta^{2}}{2}\\right),\n\\end{equation}\nwhere $\\mathcal{M}_{\\nu,\\Phi}$ denotes the Mat\\'ern correlation~\\eqref{eq:matern} with smoothness $\\nu$ and random scale parameter $\\Phi$.\n\nThe model also admits a convenient Gaussian scale-mixture representation.\nLet\n$\nX \\sim \\Gamma(\\nu,1)\n$\nand\n$\nY \\sim \\Gamma(\\mu,1),\n$\nwith $X$ and $Y$ independent, and define\n\\[\nT := \\frac{X}{Y} \\sim \\mathrm{BetaPrime}(\\nu,\\mu).\n\\]\nFor $\\mathbf{Z}\\sim \\mathcal{N}(\\mathbf{0},I_d)$ independent of $(X,Y)$, set\n\\[\n\\boldsymbol{\\Omega}\n= \\frac{1}{\\beta}\\,\\frac{\\mathbf{Z}}{\\sqrt{T}}.\n\\]\nFor $\\mu>d/2$, the random vector $\\boldsymbol{\\Omega}$ has isotropic density\n\\[\nf_{\\boldsymbol{\\Omega}}(\\boldsymbol{\\omega})\n=\n\\frac{\\Gamma\\!\\bigl(\\nu+\\tfrac{d}{2}\\bigr)}{(2\\pi)^{d/2}B(\\mu,\\nu)}\n\\,\\beta^{d}\\,\nU\\!\\left(\\nu+\\tfrac{d}{2},\\,1-\\mu+\\tfrac{d}{2},\\,\\frac{\\beta^{2}\\|\\boldsymbol{\\omega}\\|^{2}}{2}\\right),\n\\]\nwhich coincides with~\\eqref{eq:kummer-spectral}.\nMore generally, the same Gaussian scale-mixture construction is well defined for all $\\mu>0$: it yields the spectral density when $\\mu>d/2$, and otherwise is understood in terms of the underlying spectral measure through\n\\begin{equation}\\label{eq:kummer-cosine}\n\\mathbb{E}\\!\\left[\\cos(\\boldsymbol{\\Omega}\\cdot\\mathbf{h})\\right]\n=\n\\mathcal{K}_{\\nu,\\mu,\\beta}(\\|\\mathbf{h}\\|),\n\\qquad \\mathbf{h}\\in\\mathbb{R}^d.\n\\end{equation}\nThus, for all $\\mu>0$, this construction provides the spectral random element entering the finite-$L$ STB representation.\n\nThe inverse-Gamma mixture in~\\eqref{eq:kummer-mixture} and the Gaussian scale-mixture representation above are equivalent.\nIndeed,\n\\[\n\\Phi = \\frac{\\beta}{\\sqrt{Y}},\n\\qquad\nT = \\frac{X}{Y},\n\\]\nso that the model can be interpreted either as a scale mixture of Mat\\'ern correlations or as a Beta-prime mixture of Gaussian components.\nThis dual interpretation is useful for simulation, since it leads to a direct STB construction.\n\nThis yields the following STB sampler for the covariance model $\\sigma^2\\mathcal{K}_{\\nu,\\mu,\\beta}$:\n\\begin{enumerate}\n\\item Set the parameters $(\\nu,\\mu,\\beta,\\sigma^2)$ and the number of spectral components $L$.\n\\item For $\\ell=1,\\dots,L$:\n\\begin{enumerate}\n\\item Sample $X_\\ell \\sim \\Gamma(\\nu,1)$ and $Y_\\ell \\sim \\Gamma(\\mu,1)$ independently, and set $T_\\ell = X_\\ell / Y_\\ell$;\n\\item Sample $\\mathbf{Z}_\\ell \\sim \\mathcal{N}(\\mathbf{0},I_d)$;\n\\item Set $\\boldsymbol{\\Omega}_\\ell = \\beta^{-1}\\mathbf{Z}_\\ell / \\sqrt{T_\\ell}$;\n\\item Sample $\\Phi_\\ell \\sim \\mathrm{Unif}(0,2\\pi)$;\n\\item Sample $\\varepsilon_\\ell\\sim\\mathrm{Unif}(0,1)$;\n\\end{enumerate}\n\\item Evaluate $\\widetilde Z_L(\\mathbf{s})$ at any target location $\\mathbf{s}\\in D$ via~\\eqref{eq:TB-def-prob}.\n\\end{enumerate}\n\nThis construction provides exact sampling of the spectral variables entering the finite-$L$ STB representation for the covariance model $\\sigma^2\\mathcal{K}_{\\nu,\\mu,\\beta}$.\nFor $\\mu\\le d/2$, exactness is understood with respect to the underlying spectral measure rather than a Lebesgue spectral density.\nThe resulting RF is therefore the usual finite-$L$ STB approximation to the target Gaussian field."
+  },
+  {
+   "level": "section",
+   "title": "STB simulation for the Gauss--Hypergeometric correlation model",
+   "text": "\\label{sec5}\n\nThe $\\mathcal{GH}$ class \\citep{emery2022gauss,hyp2025} represents one of the most general families of compactly supported correlation models currently available in spatial statistics.\nIt provides a unified analytical framework encompassing, as special cases, the generalized Wendland models \\citep{gnei02,BFFP}. The main appeal of this construction lies in its ability to generate covariance functions that are both \\emph{compactly supported}---leading to sparse covariance matrices---and \\emph{highly flexible} in terms of smoothness and local behavior.\n\nFor parameters $\\delta>\\tfrac{d}{2}$, $\\beta>\\tfrac{d}{2}$, $\\gamma>\\tfrac{d}{2}$, and compact-support radius $a>0$, the $\\mathcal{GH}$ correlation model is defined as \\citep{emery2022gauss}\n\\begin{equation}\\label{eq:GH-def}\n\\scalebox{0.9}{$\n\\mathcal{GH}_{\\delta,\\beta,\\gamma,a}(x)\n=\n\\left\\{\n\\begin{array}{ll}\n\\displaystyle\nK(\\beta,\\gamma,\\delta,d)\\left(1-\\frac{x^2}{a^2}\\right)^{\\beta-\\delta+\\gamma-\\tfrac d2-1}\n{}_{2}F_{1}\\!\\left(\\beta-\\delta,\\,\\gamma-\\delta;\\,\n\\beta-\\delta+\\gamma-\\tfrac d2;\\,\n1-\\frac{x^2}{a^2}\\right),\n&  x \\leq a, \\\\[10pt]\n0, & x>a,\n\\end{array}\n\\right.\n$}\n\\end{equation}\nwith\n\\[\nK(\\beta,\\gamma,\\delta,d)=\n\\frac{\\Gamma(\\beta-\\tfrac d2)\\,\\Gamma(\\gamma-\\tfrac d2)}\n{\\Gamma(\\beta-\\delta+\\gamma-\\tfrac d2)\\,\\Gamma(\\delta-\\tfrac d2)}.\n\\]\nSufficient conditions for the validity of the model are\n\\begin{equation}\\label{eq:GH-cond}\n\\delta > \\frac{d}{2},\n\\qquad\n2(\\beta-\\delta)(\\gamma-\\delta) \\geq \\delta,\n\\qquad\n2(\\beta+\\gamma) \\geq 6\\delta + 1.\n\\end{equation}\n\nHere ${}_{2}F_{1}$ denotes Gauss's hypergeometric function, which governs the polynomial structure of the model.\nThe isotropic \\emph{radial spectral density} associated with~\\eqref{eq:GH-def} is given by\n\\begin{equation}\\label{eq:GH-spectral}\ng_{R}^{\\mathcal{GH}}(r)\n=\nL(\\delta,\\beta,\\gamma)\n\\,a^{d}\\;\n{}_{1}F_{2}\\!\\left(\\delta;\\,\\beta,\\,\\gamma;\\,-\\frac{(ar)^2}{4}\\right),\n\\qquad r\\ge 0,\n\\end{equation}\nwhere ${}_{1}F_{2}$ is a generalized hypergeometric function and the normalizing constant is\n\\[\nL(\\delta,\\beta,\\gamma)=\n\\frac{\n\\Gamma(\\delta)\\,\\Gamma(\\beta-\\tfrac d2)\\,\\Gamma(\\gamma-\\tfrac d2)\n}{\n2^{d}\\pi^{d/2}\\,\n\\Gamma(\\delta-\\tfrac d2)\\,\n\\Gamma(\\beta)\\,\n\\Gamma(\\gamma)\n}.\n\\]\n\nFollowing \\cite{hyp2025}, we adopt the parameterization\n\\begin{equation}\\label{eq:GH-reparam}\n\\delta = \\tfrac{d+1}{2} + \\nu, \\qquad\n\\beta = \\delta + \\tfrac{\\mu}{2}, \\qquad\n\\gamma = \\delta + \\tfrac{\\mu}{2} + l,\n\\end{equation}\nand write\n\\begin{equation}\\label{polo8}\n\\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a}(x) :=\n\\mathcal{GH}_{\\delta,\\;\\delta+\\mu/2,\\;\\delta+\\mu/2+l,\\;a}(x).\n\\end{equation}\nHere $\\nu > -\\tfrac{1}{2}$ controls the differentiability at the origin,\n$\\mu>0$ determines the decay rate within the support,\n$l \\ge 0$ allows additional flexibility in the tail shape,\nand $a>0$ retains its geometric meaning as the compact-support radius.\n\n\\cite{hyp2025} establishes the following sharp validity conditions for the parametrization~\\eqref{polo8}.\nLet $d$ be fixed, $\\nu > -\\frac{1}{2}$, $\\delta = \\frac{d+1}{2}+\\nu$, $a > 0$, and $l \\ge 0$. Then:\n\\begin{enumerate}\n\\item If $0 \\le l \\le \\frac{d}{2}+\\nu$, then\n$\n\\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a} \\in \\Phi_d\n\\quad\\text{if and only if}\\quad\n\\mu \\ge \\delta - l + \\frac{1}{2}.\n$\n\n\\item If $l > \\frac{d}{2}+\\nu$, then\n$\n\\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a} \\in \\Phi_d\n\\quad\\text{if}\\quad\n\\mu \\ge \\sqrt{2\\nu + l^2 + d + 1} - l,\n$\nand only if\n$\n\\mu \\ge \\delta - l + \\frac{1}{2}.\n$\n\\end{enumerate}\n\nTwo particularly relevant subfamilies arise from specific choices of $l$:\n\\begin{itemize}\n\\item \\textbf{Hypergeometric model:}\n$\\mathcal{H}_{\\nu,\\mu,a} \\equiv \\widetilde{\\mathcal{GH}}_{\\nu,\\mu,d/2+\\nu,a}$, obtained for $l=\\tfrac{d}{2}+\\nu$.\nThis family, proposed in \\cite{hyp2025}, has appealing theoretical properties; in particular, it allows one to maximize the \\emph{integral range}, with the maximum attained at $\\mu=1$.\nIt generalizes several well-known compactly supported correlation models, such as Euclid's hat, which in turn encompasses the classical triangular, circular, and spherical models \\citep{Matheron1965, Gneiting1999}.\n\n\\item \\textbf{Generalized Wendland model:}\n$\\mathcal{GW}_{\\nu,\\mu,a} \\equiv \\widetilde{\\mathcal{GH}}_{\\nu,\\mu,1/2,a}$, obtained for $l=\\tfrac{1}{2}$.\nThis celebrated class was first introduced by \\cite{gnei02} and has been extensively studied in the spatial statistics and numerical analysis literature\n\\citep{Wen,Schaback:2011,Hubb14,BFFP,bevele}.\n\\end{itemize}\n\nBoth the $\\mathcal{H}$ and $\\mathcal{GW}$ models, after proper rescaling of the compact support,\nallow one to recover the $\\mathcal{M}$ model as a limiting case. For instance, \\cite{bevilacqua2022unifying} show that\n\\begin{equation}\\label{gwmm}\n\\mathcal{GW}_{\\nu,\\mu,\\,\n\\beta\\!\\left(\\frac{\\Gamma(\\mu+2\\nu+1)}{\\Gamma(\\mu)}\\right)^{\\!\\frac{1}{1+2\\nu}}}(x)\n\\;\\xrightarrow[\\mu \\to \\infty]{}\\;\n\\mathcal{M}_{\\nu+\\frac{1}{2},\\,\\beta}(x),\n\\end{equation}\nuniformly in $x$."
+  },
+  {
+   "level": "subsection",
+   "title": "First scale mixture representation and simulation algorithm",
+   "text": "Under the conditions\n\\begin{equation}\n\\label{authorizedregion}\n\\mu>1, \\qquad \\frac{\\mu}{2}-\\frac{d}{2}-\\frac{1}{2}-\\nu+l>0,\n\\end{equation}\nthe $\\widetilde{\\mathcal{GH}}$ model admits a two-stage Beta mixture representation. By Theorem~6 in \\cite{hyp2025},\n\\begin{equation}\\label{eq:GH-mixture}\n\\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a}(x)\n=\nM(\\nu,\\mu,l,d)\n\\!\\!\\iint_{(0,1)^2}\\!\\!\nu^{\\delta-\\frac{d+1}{2}}(1-u)^{\\frac{\\mu}{2}-\\frac{3}{2}}\nv^{\\delta-\\frac12+\\nu}(1-v)^{\\frac{\\mu}{2}-\\frac{d}{2}-\\frac{3}{2}-\\nu+l}\n\\mathcal{H}_{\\nu,1,a\\sqrt{uv}}(x)\\,{\\rm d}u\\,{\\rm d}v,\n\\end{equation}\nwhere\n\\begin{equation}\\label{eq:GH-constant}\nM(\\nu,\\mu,l,d)\n=\n\\frac{\n\\Gamma\\!\\bigl(\\nu+\\tfrac{\\mu}{2}+\\tfrac12\\bigr)\n\\Gamma\\!\\bigl(\\nu+\\tfrac{\\mu}{2}+\\tfrac12+l\\bigr)\n}{\n\\Gamma(\\nu+1)\n\\Gamma\\!\\bigl(\\tfrac d2+2\\nu+1\\bigr)\n\\Gamma\\!\\bigl(\\tfrac{\\mu}{2}-\\tfrac12\\bigr)\n\\Gamma\\!\\bigl(\\tfrac{\\mu}{2}-\\tfrac d2-\\tfrac12-\\nu+l\\bigr)\n}.\n\\end{equation}\n\nEquivalently, if\n\\[\nU \\sim \\mathrm{Beta}\\!\\left(1+\\nu,\\tfrac{\\mu}{2}-\\tfrac12\\right),\n\\qquad\nV \\sim \\mathrm{Beta}\\!\\left(\\tfrac d2+2\\nu+1,\\tfrac{\\mu}{2}-\\tfrac d2-\\tfrac12-\\nu+l\\right),\n\\]\nindependently, then\n\\[\n\\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a}(x)\n=\n\\mathbb{E}_{U,V}\\!\\left[\\mathcal{H}_{\\nu,1,a\\sqrt{UV}}(x)\\right].\n\\]\nHence, the model is represented as a scale mixture of compactly supported base kernels.\n\nThe corresponding conditional radial spectral density of the base kernel $\\mathcal{H}_{\\nu,1,b}$ is\n\\begin{equation}\\label{eq:base-spectral}\ng^{\\widetilde{\\mathcal{GH}}}_{R}(r\\mid b)\n=\nC_H(\\nu,d)\\,b^d\\,\n{}_1F_2\\!\\left(\\delta;\\delta+\\tfrac12,2\\delta;-\\frac{(br)^2}{4}\\right),\n\\qquad r\\ge 0,\n\\end{equation}\nwhere\n\\begin{equation}\\label{eq:CH-corrected}\nC_H(\\nu,d)=\n\\frac{\n\\Gamma\\!\\bigl(\\tfrac{d+1}{2}+\\nu\\bigr)\n\\Gamma(1+\\nu)\n\\Gamma\\!\\bigl(\\tfrac d2+1+2\\nu\\bigr)\n}{\n2^d\\pi^{d/2}\n\\Gamma\\!\\bigl(\\tfrac12+\\nu\\bigr)\n\\Gamma\\!\\bigl(\\tfrac d2+1+\\nu\\bigr)\n\\Gamma(d+1+2\\nu)\n}.\n\\end{equation}\nUsing Watson’s identity \\citep[p.~147]{Watson}, this can be rewritten as\n\\begin{equation}\\label{eq:base-bessel}\ng^{\\widetilde{\\mathcal{GH}}}_{R}(r\\mid b)\n=\nC_H(\\nu,d)\\,b^d\\,\n\\Gamma^2\\!\\left(\\delta+\\tfrac12\\right)\n\\left(\\frac{br}{4}\\right)^{1-2\\delta}\nJ_{\\delta-\\tfrac12}^2\\!\\left(\\frac{br}{2}\\right).\n\\end{equation}\n\nLet $T=bR$. Then the distribution of $T$ does not depend on $b$, and its density is\n\\begin{equation}\\label{eq:fT-bessel}\n\\begin{aligned}\nf_T(t)\n&=\n|\\mathbb{S}^{d-1}|\\,t^{d-1}\\,C_H(\\nu,d)\\,\n{}_1F_2\\!\\left(\\delta;\\delta+\\tfrac12,2\\delta;-\\tfrac{t^2}{4}\\right)\\\\\n&=\n|\\mathbb{S}^{d-1}|\\,t^{d-1}\\,C_H(\\nu,d)\\,\n\\Gamma^2\\!\\left(\\delta+\\tfrac12\\right)\n\\left(\\tfrac{t}{4}\\right)^{1-2\\delta}\nJ_{\\delta-\\tfrac12}^2\\!\\left(\\tfrac{t}{2}\\right),\n\\qquad t\\ge0.\n\\end{aligned}\n\\end{equation}\nThis yields a convenient factorization of the spectral radius:\nfirst sample $T$ from the universal density~\\eqref{eq:fT-bessel}, then set\n\\[\nR=\\frac{T}{a\\sqrt{UV}}.\n\\]\n\nThis leads to the following STB simulation scheme for the covariance model\n$\\sigma^2\\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a}$.\n\n\\begin{enumerate}\n\\item Fix $(\\nu,\\mu,l,a,\\sigma^2)$ and the number of spectral components $L$.\n\\item For $\\ell=1,\\ldots,L$:\n\\begin{enumerate}\n\\item sample\n\\[\nU_\\ell \\sim \\mathrm{Beta}\\!\\left(1+\\nu,\\tfrac{\\mu}{2}-\\tfrac12\\right),\n\\qquad\nV_\\ell \\sim \\mathrm{Beta}\\!\\left(\\tfrac d2+2\\nu+1,\\tfrac{\\mu}{2}-\\tfrac d2-\\tfrac12-\\nu+l\\right),\n\\]\nindependently;\n\\item set $b_\\ell=a\\sqrt{U_\\ell V_\\ell}$;\n\\item sample $T_\\ell$ from~\\eqref{eq:fT-bessel};\n\\item set $R_\\ell=T_\\ell/b_\\ell$;\n\\item sample $\\boldsymbol{\\Theta}_\\ell\\sim\\mathrm{Unif}(\\mathbb{S}^{d-1})$ and define $\\boldsymbol{\\Omega}_\\ell=R_\\ell\\boldsymbol{\\Theta}_\\ell$;\n\\item sample $\\Phi_\\ell\\sim\\mathrm{Unif}(0,2\\pi)$ and $\\varepsilon_\\ell\\sim\\mathrm{Unif}(0,1)$.\n\\end{enumerate}\n\\item Evaluate $\\widetilde Z_L(\\mathbf{s})$ using~\\eqref{eq:TB-def-prob}.\n\\end{enumerate}\n\nThe main numerical task is the generation of the auxiliary variable $T$.\nSince the density~\\eqref{eq:fT-bessel} is oscillatory and does not admit a closed-form inverse cdf, we use a two-piece acceptance--rejection sampler on $(0,\\infty)$.\nGiven a threshold $t_0>0$, the proposal density is\n\\[\ng(t)=w_1 g_1(t)+w_2 g_2(t),\n\\]\nwhere\n\\begin{align}\ng_1(t) &= \\frac{d\\,t^{d-1}}{t_0^d}, && 0\\le t\\le t_0,\\\\\ng_2(t) &= \\frac{\\kappa\\,t_0^\\kappa}{t^{\\kappa+1}}, && t>t_0,\n\\end{align}\nwith\n$\n\\kappa=2\\nu+1.\n$\nThe first component matches the behavior of $f_T$ near the origin, whereas the second reproduces its polynomial tail decay. Sampling from both proposals is explicit:\n\\[\nT=t_0U^{1/d}\\quad\\text{under }g_1,\n\\qquad\nT=t_0(1-U)^{-1/\\kappa}\\quad\\text{under }g_2,\n\\qquad U\\sim\\mathrm{Unif}(0,1).\n\\]\n\nFor numerical implementation, the threshold $t_0$ is selected by minimizing the sum of the body and tail envelope constants over a bounded interval.\nA small multiplicative safety factor is incorporated into the envelopes to guarantee domination under floating-point arithmetic.\nThis yields a stable rejection sampler that does not require numerical inversion of the target cdf.\n\nThe Bessel term in~\\eqref{eq:fT-bessel} is evaluated using a piecewise strategy:\na series expansion for small arguments, the standard library routine in the intermediate regime, and an asymptotic approximation for large arguments.\nThis avoids loss of accuracy both near the origin and in the tail and improves the robustness of the rejection sampler.\n\nUnder~\\eqref{authorizedregion}, the Beta variables are non-degenerate and the mixture sampler applies directly.\nIn the implementation, the boundary cases are also handled by continuous extension:\nwhen $\\mu$ is numerically close to $1$, $U$ is set to $1$, and when the second shape parameter of $V$ is numerically close to zero, $V$ is set to $1$.\nThus, part of the boundary of the simulatability region can be treated in practice, although the integral representation~\\eqref{eq:GH-mixture} is stated under strict inequalities.\n\nFigure~\\ref{fig:g-simulations} shows three realizations on $1{,}000{,}000$ points uniformly distributed on $[0,1]^2$, obtained with $L=1{,}000$ under the generalized Wendland model\n$\n\\mathcal{GW}_{\\nu,7,0.2}\\equiv \\widetilde{\\mathcal{GH}}_{\\nu,7,1/2,0.2},\n$\nfor $\\nu=0,1,2$.\n\n\n\nThe conditions in~\\eqref{authorizedregion} define the parameter region where the Beta--mixture construction is directly available.\nThey are more restrictive than the validity conditions of the covariance model.\nTherefore, every model covered by the sampler is valid, but not every valid model is covered by this first representation.\n\nThe gap between validity and direct simulatability is illustrated in Figure~\\ref{fig:validity-simulability}, which reports the $(\\mu,\\nu)$ regions for $d=2$.\nThe left panel corresponds to the $\\mathcal{GW}$ model ($l=0.5$), whereas the right panel corresponds to the $\\mathcal{H}$ model ($l=d/2+\\nu$).\nIn both cases, the simulatability region is strictly contained in the validity region.\nThe uncovered region is larger for the $\\mathcal{H}$ model, indicating a narrower parameter range for which the Beta--mixture representation can be used directly.\n\n\n\nAs in the next subsection, exactness refers only to the sampling of the spectral variables entering the finite-$L$ STB representation.\nThe resulting RF is therefore the usual finite-$L$ STB approximation to the target Gaussian field."
+  },
+  {
+   "level": "subsection",
+   "title": "Second scale mixture representation and simulation algorithm",
+   "text": "To cover the parameter region not handled by the Beta--mixture construction, we use an alternative spectral decomposition based on Gasper's expansion of the hypergeometric kernel.\nSpecifically, using the original parameterization $(\\delta,\\beta,\\gamma)$, the radial spectral density~\\eqref{eq:GH-spectral} of the $\\mathcal{GH}$ kernel can be rewritten as \\citep[Eq.~3.1]{Gasper:75}\n\\begin{equation*}\n\\begin{split}\ng_{R}^{\\mathcal{GH}}(r)\n&= L(\\delta,\\beta,\\gamma)\\,a^d\\,\\Gamma^2(\\eta+1)\n\\left(\\frac{ar}{4}\\right)^{-2\\eta}\n\\sum_{n=0}^{\\infty}\nC(n,\\delta,\\beta,\\gamma)\n\\frac{(2n+2\\eta)(2\\eta+1)_n}{(n+2\\eta)n!}\nJ^2_{\\eta+n}\\!\\left(\\frac{ar}{2}\\right),\n\\end{split}\n\\end{equation*}\nwhere $(\\cdot)_n$ denotes the Pochhammer symbol,\n$\n\\eta = \\frac{1}{2}\\left(\\beta+\\gamma-\\delta-\\frac{3}{2}\\right),\n$\nand\n\\begin{equation*}\nC(n,\\delta,\\beta,\\gamma)\n=\n{}_4F_3\\!\\left(-n,n+2\\eta,\\eta+1,\\delta;\\eta+\\tfrac12,\\beta,\\gamma;1\\right).\n\\end{equation*}\nSince the hypergeometric function ${}_4F_3$ is terminating, it can be evaluated recursively as\n\\[\nt_{k+1}\n=\nt_k\\,\n\\frac{(-n+k)(n+2\\eta+k)(\\eta+1+k)(\\delta+k)}\n{(\\eta+\\tfrac12+k)(\\beta+k)(\\gamma+k)(k+1)},\n\\qquad\nt_0=1,\n\\qquad\nC(n,\\delta,\\beta,\\gamma)=\\sum_{k=0}^n t_k.\n\\]\n\nDefine\n\\begin{equation}\n\\label{eq:holeeffectdensity}\n\\begin{split}\ng^{(n)}_R\\!\\left(r \\mid \\eta+n,a\\right)\n&= C_H(\\eta+n-d/2,d,n)\\, a^{d+2n} r^{2n} \\\\\n&\\quad \\times\n{}_1F_2\\!\\left(\n\\tfrac{d+1}{2}+\\eta+n-\\tfrac d2;\\,\n\\tfrac d2+1+\\eta+n-\\tfrac d2,\\,\n1+2\\eta+2n;\\,\n-\\tfrac{(ar)^2}{4}\n\\right).\n\\end{split}\n\\end{equation}\nBy Watson's identity, this can be rewritten as\n\\begin{equation}\n\\label{eq:holeeffectdensity-bessel}\ng^{(n)}_R\\!\\left(r \\mid \\eta+n,a\\right)\n=\nC_H(\\eta+n-d/2,d,n)\\, a^{d+2n} r^{2n}\n\\Gamma^2(1+\\eta+n)\n\\left(\\tfrac{ar}{4}\\right)^{-2\\eta-2n}\nJ^2_{\\eta+n}\\!\\left(\\tfrac{ar}{2}\\right).\n\\end{equation}\nTherefore,\n\\begin{equation}\n\\label{eq:gasper-mixture}\ng_R^{\\mathcal{GH}}(r)\n=\n\\sum_{n=0}^{\\infty}\nw_n(\\delta,\\beta,\\gamma)\\,\ng^{(n)}_R\\!\\left(r \\mid \\eta+n,a\\right),\n\\end{equation}\nwhere\n\\begin{equation}\\label{polo}\nw_n(\\delta,\\beta,\\gamma)\n=\n\\frac{L(\\delta,\\beta,\\gamma)\\Gamma^2(\\eta+1)}{2^{4n}\\Gamma^2(\\eta+n+1)}\n\\frac{C(n,\\delta,\\beta,\\gamma)}{C_H(\\eta+n-\\frac d2,d,n)}\n\\frac{(2n+2\\eta)(2\\eta+1)_n}{(n+2\\eta)n!}.\n\\end{equation}\n\nUnder conditions~\\eqref{eq:GH-cond}, \\citet[Lemma~3.1]{cho2020rational} proved that\n$C(n,\\delta,\\beta,\\gamma)\\ge 0$.\nSince both $g_R^{\\mathcal{GH}}$ and $g_R^{(n)}(\\cdot\\mid\\eta+n,a)$ integrate to one on $\\mathbb{R}^d$,\nit follows that the weights $w_n(\\delta,\\beta,\\gamma)$ are non-negative and sum to one.\nHence, \\eqref{eq:gasper-mixture} is a genuine discrete mixture representation of the spectral density.\nIn particular, the Gasper--mixture formulation applies on the whole validity region of the $\\widetilde{\\mathcal{GH}}$ model and therefore complements the Beta--mixture construction.\n\nFor each fixed $n$, let $\\boldsymbol{\\Omega}\\in\\mathbb{R}^d$ have radial density\n$g_R^{(n)}(\\cdot\\mid\\eta+n,a)$, let $R=\\|\\boldsymbol{\\Omega}\\|$, and define $T:=aR$.\nThen the distribution of $T$ does not depend on $a$, and its density is\n\\begin{equation}\\label{eq:fT-holeeffect}\n\\begin{aligned}\nf_T^{(n)}(t)\n&=\n|\\mathbb{S}^{d-1}|\\,\nC_H(\\eta+n-\\tfrac d2,d,n)\\,\n4^{2\\eta+2n}\\,\n\\Gamma^2(1+\\eta+n)\\,\nt^{d-1-2\\eta}\nJ^2_{\\eta+n}\\!\\left(\\tfrac{t}{2}\\right),\n\\qquad t>0.\n\\end{aligned}\n\\end{equation}\nBecause $J_{\\eta+n}(t)$ behaves like $t^{\\eta+n}$ near zero and like a bounded oscillatory term times $t^{-1/2}$ for large $t$, the density $f_T^{(n)}$ is non-negative and bounded on $(0,\\infty)$.\n\nIn practice, the infinite mixture in~\\eqref{eq:gasper-mixture} is approximated by truncation at a fixed level $n_{\\max}=15$.\nMore precisely, we compute the weights $\\{w_n(\\delta,\\beta,\\gamma)\\}_{n=0}^{n_{\\max}}$, evaluate them in log-scale for numerical stability, and then renormalize them to obtain a discrete distribution on $\\{0,\\dots,n_{\\max}\\}$.\nThis avoids underflow in the computation of the coefficients and proved sufficient in all numerical experiments reported in this paper.\nWith this approximation, the discrete mixture step has negligible computational overhead relative to the generation of the auxiliary variable $T$.\n\nBased on this representation, the following STB simulation scheme can be used for the covariance model $\\sigma^2 \\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a}$ whenever the Beta--mixture sampler is not applicable.\nAs in the previous subsection, exactness here refers to the sampling of the spectral variables entering the STB construction.\n\n\\begin{enumerate}\n\\item Set the parameters $(\\nu,\\mu,l,a,\\sigma^2)$ and the number of spectral components $L$.\n\\item Set $\\delta = \\tfrac{d+1}{2} + \\nu$, $\\beta = \\delta + \\tfrac{\\mu}{2}$, and $\\gamma = \\delta + \\tfrac{\\mu}{2} + l$.\n\\item Compute the truncated weights $\\{w_n(\\delta,\\beta,\\gamma)\\}_{n=0}^{n_{\\max}}$ using~\\eqref{polo}, and renormalize them.\n\\item For $\\ell=1,\\ldots,L$:\n\\begin{enumerate}\n\\item Sample $N_\\ell$ from the discrete distribution on $\\{0,\\dots,n_{\\max}\\}$ with probabilities proportional to $w_n(\\delta,\\beta,\\gamma)$;\n\\item Sample $T_\\ell$ from the density $f_T^{(N_\\ell)}$ defined in~\\eqref{eq:fT-holeeffect};\n\\item Set the spectral radius as $R_\\ell=T_\\ell/a$;\n\\item Sample $\\boldsymbol{\\Theta}_\\ell\\sim\\mathrm{Unif}(\\mathbb{S}^{d-1})$ and define $\\boldsymbol{\\Omega}_\\ell = R_\\ell\\,\\boldsymbol{\\Theta}_\\ell$;\n\\item Sample $\\Phi_\\ell\\sim\\mathrm{Unif}(0,2\\pi)$;\n\\item Sample $\\varepsilon_\\ell\\sim\\mathrm{Unif}(0,1)$.\n\\end{enumerate}\n\\item Evaluate $\\widetilde Z_L(\\mathbf{s})$ at any target location $\\mathbf{s}$ using~\\eqref{eq:TB-def-prob}.\n\\end{enumerate}\n\nAs in the Beta--mixture case, the main numerical ingredient is the sampling of the auxiliary variable $T$.\nThe density $f_T^{(n)}$ is oscillatory and does not admit a closed-form inverse cdf, so we use a two-piece acceptance--rejection scheme on $(0,\\infty)$.\nThe support is partitioned at a threshold $t_0$ into a body and a tail region, with proposal densities\n\\[\ng_1(t)=\\frac{d\\,t^{d-1}}{t_0^d},\n\\qquad 0\\le t\\le t_0,\n\\]\nand\n\\[\ng_2(t)=\\frac{\\alpha\\,t_0^\\alpha}{t^{\\alpha+1}},\n\\qquad t>t_0,\n\\]\nwhere\n$\n\\alpha = 2\\eta+1-d.\n$\nHence, the tail proposal reproduces the polynomial decay of $f_T^{(n)}$.\nSampling from these proposals is explicit:\n\\[\nT=t_0U^{1/d}\\quad\\text{under }g_1,\n\\qquad\nT=t_0(1-U)^{-1/\\alpha}\\quad\\text{under }g_2,\n\\qquad U\\sim\\mathrm{Unif}(0,1).\n\\]\n\nThe threshold $t_0$ is selected numerically by minimizing the sum of the corresponding envelope constants over a bounded interval.\nTo ensure domination in finite precision arithmetic, a small safety factor is incorporated into the envelope construction.\nThe resulting proposal yields stable acceptance rates across the parameter settings considered in our experiments.\n\nThe recursive evaluation of the terminating ${}_4F_3$ series and the log-scale computation of the weights are important implementation details.\nThey make the discrete mixture step numerically stable even for moderately large values of $n$.\nLikewise, the Bessel evaluations entering~\\eqref{eq:fT-holeeffect} are stabilized by combining a small-argument expansion, the standard library routine for intermediate values, and a large-argument asymptotic approximation.\n\nIn our implementation, the overall workflow is automatic:\nwhenever the Beta--mixture conditions are satisfied numerically, the Beta--mixture sampler is used; otherwise, the algorithm switches to the Gasper--mixture sampler.\nThe Gasper construction therefore complements the Beta one and extends the simulation procedure to the part of the admissible parameter region that is not practically covered by the Beta--mixture representation."
+  },
+  {
+   "level": "section",
+   "title": "Numerical experiments",
+   "text": "\\label{sec6}\n\nThroughout this section, we consider a zero-mean Gaussian random field\n$\\{Z(\\mathbf{s}) : \\mathbf{s}\\in D\\subset\\mathbb{R}^2\\}$ with unit variance, that is,\n$\\mathbb{E}[Z(\\mathbf{s})]=0$ and $\\mathbb{V}[Z(\\mathbf{s})]=\\sigma^2=1$.\nThe aim is to assess the empirical performance of the proposed STB algorithms in terms of second-order accuracy across a range of covariance models and parameter settings.\n\nUnless otherwise stated, each experiment is based on $1{,}000$ independent realizations generated at $5{,}000$ spatial locations drawn independently from the uniform distribution on $[0,1]^2$.\nAll STB simulations are carried out with $L=1{,}000$ spectral components.\n\nWe first consider the generalized Wendland model\n$\n\\mathcal{GW}_{\\nu,\\mu,a}\\equiv \\widetilde{\\mathcal{GH}}_{\\nu,\\mu,1/2,a}.\n$\nThe parameter settings are chosen to represent a range of smoothness and support configurations.\nSince $\\nu$ controls the mean-square differentiability of the field, we consider $\\nu=0$ for non-differentiable realizations and $\\nu=1$ for smoother realizations.\nWe also consider two compact-support parameters, $a=0.1$ and $a=0.5$, which determine the correlation range.\n\nThe shape parameter $\\mu$ determines which of the two simulation algorithms applies.\nWe take $\\mu=6,7$ for the Beta--mixture algorithm (Section~5.1), and $\\mu=2,3$ for the Gasper--mixture algorithm (Section~5.2).\nThis yields eight scenarios, summarized in Tables~\\ref{tab:tabla1} and~\\ref{tab:tabla2}.\n\nAs a diagnostic of simulation quality, we follow \\citet{emery2016,cuevas2019fast,arroyo2021} and compute the omnidirectional empirical semivariogram for each realization.\nFor each parameter configuration, the empirical semivariograms are compared with their theoretical counterparts.\nAcross the scenarios considered, the average empirical semivariograms track the theoretical ones closely, indicating that the proposed finite-$L$ STB schemes reproduce the target second-order structure well.\nThe results are shown in Figures~\\ref{fig:simu1} and~\\ref{fig:simu2}, where, for reference, we also report empirical semivariograms obtained from realizations generated by the Cholesky method.\n\nThe same experimental design is used for the Kummer--Tricomi model $\\mathcal{K}_{\\nu,\\mu,\\beta}$.\nSince $\\nu$ controls mean-square differentiability, we consider $\\nu=0.5$ for non-differentiable realizations and $\\nu=1.5$ for smoother realizations.\nWe also consider two scale parameters, $\\beta=0.1$ and $\\beta=0.5$, which are related to the correlation range.\nThe tail parameter $\\mu$ governs the large-distance behavior of the correlation function and determines whether the model exhibits short-range or long-range dependence.\nHere we consider $\\mu=0.25$ (long-range dependence) and $\\mu=3.5$ (short-range dependence), yielding the six scenarios summarized in Table~\\ref{tab:tabla3}.\n\nAs in the generalized Wendland case, the empirical semivariograms agree closely with their theoretical counterparts across the parameter settings considered.\nThe results, reported in Figure~\\ref{fig:simu3}, indicate that the proposed STB scheme reproduces the target semivariogram accurately for both short-range and long-range dependence."
+  },
+  {
+   "level": "subsection",
+   "title": "Global Rank Envelope Test for additional distributional assessment",
+   "text": "To complement the semivariogram-based comparisons, we perform an additional diagnostic based on the \\emph{Global Rank Envelope Test} (GET) of \\citet{globale}, implemented in the \\texttt{GET} \\texttt{R} package.\nThe goal is not to establish full distributional equivalence of the simulated fields, but rather to assess whether the proposed STB algorithms reproduce the distribution of empirical semivariograms generated under the target model.\n\nThe experimental setup is as follows.\nWe consider three correlation models: the generalized Wendland model $\\mathcal{GW}_{0,2,0.1}$, the Kummer--Tricomi model $\\mathcal{K}_{0.5,3.5,0.076}$, and the Mat\\'ern model $\\mathcal{M}_{0.5,0.15}$, over $n=1{,}000$ spatial locations drawn uniformly on $[0,1]^2$.\nFor each model and for each of $1{,}000$ independent replications, we proceed as follows.\nFirst, one realization is generated, separately by the Cholesky method and by the proposed STB algorithm, and its omnidirectional empirical semivariogram is computed using $25$ bins up to maximum distance $0.6$.\nSecond, an additional ensemble of $2{,}499$ independent STB realizations is generated, and the corresponding empirical semivariograms are used as the simulated reference set.\nThe GET is then applied by treating the semivariogram of the template realization as the observed functional statistic and the ensemble of $2{,}499$ semivariograms as the reference sample.\nUnder the null hypothesis that the template semivariogram is drawn from the same distribution as the reference ensemble, the resulting $p$-values should follow a $\\mathrm{Unif}(0,1)$ distribution.\n\nThe test is therefore applied twice per replication: once with a Cholesky-generated template and once with an STB-generated template.\nOver the $1{,}000$ replications, this yields two empirical distributions of $p$-values for each model.\nFigure~\\ref{fig:GET} reports quantile--quantile plots of these empirical $p$-value distributions against the $\\mathrm{Unif}(0,1)$ law.\n\nFor all three covariance models, the $p$-value distributions obtained from STB-generated templates are close to those obtained from Cholesky-generated templates and remain near the $45^\\circ$ reference line.\nThis provides additional evidence that the proposed STB algorithms reproduce well the distribution of empirical semivariograms under the target model.\nIn particular, the diagnostic supports the conclusions drawn from the semivariogram comparisons for models with compact support ($\\mathcal{GW}$), polynomially decaying tails ($\\mathcal{K}$), and classical Mat\\'ern dependence."
+  },
+  {
+   "level": "subsection",
+   "title": "Computational performance",
+   "text": "As a final numerical experiment, we assess how the proposed STB algorithms scale with the number of spatial locations in very large simulation settings. Table~\\ref{tab:large-scale-times} reports the median elapsed time, computed over $n_{\\rm sim}=10$ independent realizations, for $n=500{,}000$, $1{,}000{,}000$, $5{,}000{,}000$, $10{,}000{,}000$, and $50{,}000{,}000$ locations.\n\nWe consider three representative scenarios: Scenario~1 of the $\\mathcal{GW}_{0,6,0.1}$ model, corresponding to the Beta--mixture algorithm; Scenario~6 of the $\\mathcal{GW}_{1,3,0.1}$ model, corresponding to the Gasper--mixture algorithm; and Scenario~9 of the $\\mathcal{K}_{0.5,3.5,0.101}$ model. The results show a nearly linear increase of computational time with the number of locations for all three cases, in agreement with the $O(NL)$ complexity of the STB construction when the number of spectral components is fixed. Moreover, the computational costs of the Beta--mixture and Gasper--mixture implementations are very similar in practice, indicating that the additional discrete mixture step in the Gasper case has only a limited impact on overall runtime. The $\\mathcal{K}_{0.5,3.5,0.101}$ model exhibits essentially the same scaling behavior. Overall, these results confirm that the proposed methods remain computationally feasible even for simulations involving tens of millions of locations."
+  },
+  {
+   "level": "section",
+   "title": "Conclusions",
+   "text": "\\label{sec8}\n\nWe have revisited the spectral turning--bands (STB) method as a general and scalable framework for simulating isotropic Gaussian random fields with flexible correlation structures. By exploiting probabilistic representations of the spectral measure, we derived exact sampling schemes for the spectral variables entering the STB construction not only for the Mat\\'ern ${\\cal M}$ model, but also for its Kummer--Tricomi ${\\cal K}$ and Gauss--Hypergeometric ${\\cal GH}$ extensions, which allow for heavy tails, long-range dependence, and compactly supported correlations, including Generalized Wendland models as special cases. The resulting procedures retain the usual finite-$L$ STB approximation to the target Gaussian random field, while leading to simple algorithms with linear computational cost in the number of locations and spectral components. These methods are implemented in the \\texttt{GeoModels} \\texttt{R} package, making them readily applicable to large-scale simulation studies and to the generation of non-Gaussian fields through transformations of latent Gaussian processes.\n\nA natural direction for future work is the development of fast STB simulation methods for multivariate random fields with ${\\cal GH}$ and ${\\cal K}$ matrix-valued covariance models, where diagonal entries describe the spatial dependence within each component and off-diagonal entries characterize cross-dependence between components. A few multivariate constructions for the ${\\cal GH}$ class have been proposed by \\cite{daley2015} and \\cite{emery2022gauss}, in which both direct and cross-covariances belong to the ${\\cal GH}$ family under suitable parametric constraints. By contrast, to the best of our knowledge, no corresponding study is currently available for multivariate ${\\cal K}$ models. Extending the univariate STB construction to the multivariate setting is nontrivial, since matrix-valued covariance functions are associated with matrix-valued spectral densities that cannot be sampled in the same way as in the univariate case; consequently, importance-sampling strategies or related techniques are often required \\citep{emery2016}."
+  },
+  {
+   "level": "section",
+   "title": "Acknowledgments",
+   "text": "This work was partially funded and supported by the National Agency for Research and Development of Chile, through grants ANID FONDECYT REGULAR 1240308 (M. Bevilacqua), ANID FONDECYT INICIACION 11240330 (F. Cuevas-Pacheco) and ANID PIA CIA250010 (X. Emery).\nThe authors confirm that the data and code  supporting the findings of this study are available in the supplementary materials.\n\n\\newpage\n\n\n\\bibliography{sample}"
+  }
+ ],
+ "figures": [
+  {
+   "caption": "Median simulation time (in seconds) versus the number of spatial locations $n$, shown on a log--log scale, for SPDE--INLA sampling, Vecchia approximations with $m=5,10,20,30$, and the proposed STB algorithm. The left panel corresponds to $\\nu=0.5$, and the right panel to $\\nu=1$ . Black crosses connected by a dashed line indicate the one-time cost of mesh construction and precision-matrix assembly for INLA; this cost is not included in the per-realization simulation times.",
+   "label": "fig:timing",
+   "images": [
+    "Images/timing_comparison.pdf"
+   ]
+  },
+  {
+   "caption": "Simulated Gaussian RFs on $1{,}000{,}000$ points uniformly distributed on $[0,1]^2$ using the generalized Wendland model $\\mathcal{GW}_{\\nu,7,0.2}\\equiv\\widetilde{\\mathcal{GH}}_{\\nu,7,1/2,0.2}$, for $\\nu=0,1,2$ from left to right.",
+   "label": "fig:g-simulations",
+   "images": [
+    "Images/gw00.pdf",
+    "Images/gw11.pdf",
+    "Images/gw22.pdf"
+   ]
+  },
+  {
+   "caption": "Validity (yellow and green) and simulatability (green) regions in the $(\\nu,\\mu)$ plane for $d=2$. The left panel corresponds to the $\\mathcal{GW}$ model ($l=0.5$), while the right panel refers to the $\\mathcal{H}$ model ($l=d/2+\\nu$). The solid black line denotes the validity boundary, whereas the dashed black line marks the simulatability limit of the Beta--mixture construction.",
+   "label": "fig:validity-simulability",
+   "images": [
+    "Images/gw.pdf",
+    "Images/h.pdf"
+   ]
+  },
+  {
+   "caption": "Scenario 1",
+   "label": "fig:1",
+   "images": [
+    "Images/Variogram_case1.pdf",
+    "Images/Variogram_case3.pdf",
+    "Images/Variogram_case5.pdf",
+    "Images/Variogram_case7.pdf"
+   ]
+  },
+  {
+   "caption": "Scenario 5",
+   "label": "fig:5",
+   "images": [
+    "Images/Variogram_case2.pdf",
+    "Images/Variogram_case4.pdf",
+    "Images/Variogram_case6.pdf",
+    "Images/Variogram_case8.pdf"
+   ]
+  },
+  {
+   "caption": "Scenario 9",
+   "label": "fig:simu3",
+   "images": [
+    "Images/Variogram_case9.pdf",
+    "Images/Variogram_case10.pdf",
+    "Images/Variogram_case11.pdf",
+    "Images/Variogram_case12.pdf",
+    "Images/Variogram_case13.pdf",
+    "Images/Variogram_case14.pdf"
+   ]
+  },
+  {
+   "caption": "$\\mathcal{GW}_{0,2,0.1}$",
+   "label": "fig:GET_GW",
+   "images": [
+    "Images/GET_qqplot_GW.pdf",
+    "Images/GET_qqplot_Kummer.pdf",
+    "Images/GET_qqplot_Matern.pdf"
+   ]
+  }
+ ],
+ "tables": [
+  {
+   "caption": "Computational and qualitative comparison of simulation methods for Gaussian RFs. Here $N$ denotes the number of locations, $m$ the Vecchia conditioning size, and $L$ the number of spectral components in STB.",
+   "label": "tab:sim-comparison",
+   "latex": "\\begin{tabular}{lcccc}\n\\hline\nMethod & Time & Memory & Design & Exactness \\\\\n\\hline\nCholesky & $O(N^{3})$ & $O(N^{2})$ & arbitrary & exact \\\\\nCirculant embedding & $O(N\\log N)$ & $O(N)$ & regular grid & exact$^{\\dagger}$ \\\\\nVecchia & $O(Nm^{2})$ & $O(Nm)$ & arbitrary & approx.$^{\\ddagger}$ \\\\\nSPDE--INLA & $\\approx O(N^{3/2})$ (2D) & $O(N)$ (sparse) & mesh & approx.$^{\\S}$ \\\\\nSTB & $O(NL)$ & $O(N{+}L)$ & arbitrary & finite-$L$ approx.$^{\\P}$ \\\\\n\\hline\n\\end{tabular}"
+  },
+  {
+   "caption": "Parameters of the $\\mathcal{GW}_{\\nu,\\mu,a}$ correlation model used in the simulation study. The parameters are chosen such that $\\mu/2 - 1 - \\nu > 0$, corresponding to the Beta--mixture algorithm (Section~5.1).",
+   "label": "tab:tabla1",
+   "latex": "\\begin{tabular}{|c|c|c|c|}\n\\hline\n\\textbf{Scenario} & \\textbf{Smoothness ($\\nu$)} & \\textbf{Compact support ($a$)} & \\textbf{Shape ($\\mu$)} \\\\\n\\hline\n1 & 0 & 0.1 & 6 \\\\\n\\hline\n2 & 1 & 0.1 & 7 \\\\\n\\hline\n3 & 0 & 0.5 & 6 \\\\\n\\hline\n4 & 1 & 0.5 & 7 \\\\\n\\hline\n\\end{tabular}"
+  },
+  {
+   "caption": "Parameters of the $\\mathcal{GW}_{\\nu,\\mu,a}$ correlation model used in the simulation study. The parameters are chosen such that $\\mu/2 - 1 - \\nu < 0$, corresponding to the Gasper--mixture algorithm (Section~5.2).",
+   "label": "tab:tabla2",
+   "latex": "\\begin{tabular}{|c|c|c|c|}\n\\hline\n\\textbf{Scenario} & \\textbf{Smoothness ($\\nu$)} & \\textbf{Compact support ($a$)} & \\textbf{Shape ($\\mu$)} \\\\\n\\hline\n5 & 0 & 0.1 & 2 \\\\\n\\hline\n6 & 1 & 0.1 & 3 \\\\\n\\hline\n7 & 0 & 0.5 & 2 \\\\\n\\hline\n8 & 1 & 0.5 & 3 \\\\\n\\hline\n\\end{tabular}"
+  },
+  {
+   "caption": "Parameters of the $\\mathcal{K}_{\\nu,\\mu,\\beta}$ correlation model used in the simulation study. The tail parameter $\\mu$ is chosen to explore short-range dependence (Scenarios~9, 11, 13) and long-range dependence (Scenarios~10, 12, 14), while the scale parameter $\\beta$ is chosen such that $\\mathcal{K}_{\\nu,\\mu,\\beta}(0.1)=0.90$ (Scenarios~9--11) or $\\mathcal{K}_{\\nu,\\mu,\\beta}(0.5)=0.90$ (Scenarios~12--14).",
+   "label": "tab:tabla3",
+   "latex": "\\begin{tabular}{|c|c|c|c|}\n\\hline\n\\textbf{Scenario} & \\textbf{Smoothness ($\\nu$)} & \\textbf{Scale ($\\beta$)} & \\textbf{Tail ($\\mu$)} \\\\\n\\hline\n9  & 0.5 & 0.101 & 3.5 \\\\\n\\hline\n10 & 0.5 & 0.013 & 0.25 \\\\\n\\hline\n11 & 1.5 & 0.059 & 3.5 \\\\\n\\hline\n12 & 1.5 & 0.032 & 0.25 \\\\\n\\hline\n13 & 1.5 & 0.293 & 3.5 \\\\\n\\hline\n14 & 0.5 & 0.064 & 0.25 \\\\\n\\hline\n\\end{tabular}"
+  },
+  {
+   "caption": "Median elapsed time (in seconds), computed over $n_{\\rm sim}=10$ independent realizations, for large-scale STB simulations at increasing numbers of spatial locations. Scenario~1 corresponds to the $\\mathcal{GW}_{0,6,0.1}$ model with the Beta--mixture algorithm, Scenario~6 to the $\\mathcal{GW}_{1,3,0.1}$ model with the Gasper--mixture algorithm, and Scenario~9 to the $\\mathcal{K}_{0.5,3.5,0.101}$.",
+   "label": "tab:large-scale-times",
+   "latex": "\\begin{tabular}{lccccc}\n\\hline\nModel / Scenario & $500{,}000$ & $1{,}000{,}000$ & $5{,}000{,}000$ & $10{,}000{,}000$ & $50{,}000{,}000$ \\\\\n\\hline\n$\\mathcal{GW}_{0,6,0.1}$, Scenario~1 (Beta--mixture) & 3.90 & 7.87 & 39.50 & 78.54 & 395.40 \\\\\n$\\mathcal{GW}_{1,3,0.1}$, Scenario~6 (Gasper--mixture) & 3.90 & 7.87 & 40.07 & 80.33 & 399.50 \\\\\n$\\mathcal{K}_{0.5,3.5,0.101}$, Scenario~9 & 3.85 & 7.85 & 39.27 & 78.43 &  394.51 \\\\\n\\hline\n\\end{tabular}"
+  }
+ ],
+ "equations": [
+  {
+   "env": "equation",
+   "latex": "\\label{eq:bochner}\nC(\\mathbf{h})=\\int_{\\mathbb{R}^d} e^{\\mathsf{i}\\boldsymbol{\\omega}\\cdot\\mathbf{h}}\\,F({\\rm d}\\boldsymbol{\\omega}),"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:spectral-corr}\n\\phi(\\mathbf{h})\n=\\int_{\\mathbb{R}^d}\\cos(\\boldsymbol{\\omega}\\cdot\\mathbf{h})\\,f(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:schoenberg}\n\\phi(x)=\\int_0^\\infty \\Omega_d(xr)\\,|\\mathbb{S}^{d-1}|\\,r^{d-1}\\,g_R(r)\\,{\\rm d}r,\n\\qquad x\\ge 0,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:fR}\nf_R(r)=|\\mathbb{S}^{d-1}|\\,r^{d-1}\\,g_R(r),\n\\qquad r\\ge 0."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:spectral-expectation}\n\\phi(\\|\\mathbf{h}\\|)\n=\n\\mathbb{E}\\!\\left[\\cos(\\boldsymbol{\\Omega}\\cdot\\mathbf{h})\\right],\n\\qquad \\mathbf{h}\\in\\mathbb{R}^d."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:TB-def-prob}\n\\widetilde Z_L(\\mathbf{s})\n=\n\\sigma \\sum_{\\ell=1}^L\n\\sqrt{\\frac{-2\\ln(\\varepsilon_\\ell)}{L}}\\,\n\\cos\\!\\bigl(\\boldsymbol{\\Omega}_\\ell\\cdot\\mathbf{s}+\\Phi_\\ell\\bigr),\n\\qquad \\mathbf{s}\\in D,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:matern}\n\\mathcal{M}_{\\nu,\\alpha}(x)\n= \\frac{2^{1-\\nu}}{\\Gamma(\\nu)}\n\\left(\\frac{x}{\\alpha}\\right)^{\\nu}\nK_{\\nu}\\!\\left(\\frac{x}{\\alpha}\\right),\n\\qquad x \\ge 0,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:matern-spectral}\ng_{R}^{\\mathcal{M}}(r)\n= \\frac{\\Gamma(\\nu+\\tfrac{d}{2})\\,\\alpha^{d}}{\\Gamma(\\nu)\\,\\pi^{d/2}}\\,\n\\bigl(1+\\alpha^{2} r^{2}\\bigr)^{-(\\nu+d/2)},\n\\qquad r \\ge 0,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:matern-mixture}\n\\boldsymbol{\\Omega} = \\frac{1}{\\alpha\\sqrt{2T}}\\,\\mathbf{Z}\n\\;\\in\\mathbb{R}^d."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:matern-integral}\n\\mathcal{M}_{\\nu,\\alpha}(x)\n=\n\\int_{0}^{\\infty}\n\\exp\\!\\Bigl(-\\tfrac{x^{2}}{2\\lambda}\\Bigr)\\,\np_{\\nu,\\alpha}(\\lambda)\\,{\\rm d}\\lambda,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:kummer}\n\\mathcal{K}_{\\nu,\\mu,\\beta}(x)\n= \\frac{\\Gamma(\\nu+\\mu)}{\\Gamma(\\nu)}\\,\nU\\!\\left(\\mu,\\ 1-\\nu,\\ \\frac{x^{2}}{2\\beta^{2}}\\right),\n\\qquad x \\ge 0,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:kummer-spectral}\ng_{R}^{\\mathcal{K}}(r)\n=\n\\frac{\\Gamma\\!\\bigl(\\nu+\\tfrac d2\\bigr)}{(2\\pi)^{d/2}\\,B(\\mu,\\nu)}\\,\n\\beta^{d}\\,\nU\\!\\left(\\nu+\\tfrac d2,\\ 1-\\mu+\\tfrac d2,\\ \\frac{\\beta^{2}r^{2}}{2}\\right),\n\\qquad r \\ge 0,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{kkmm}\n\\mathcal{K}_{\\nu,\\mu,\\beta\\sqrt{2(\\mu+1)}}\\!\\left(x\\right)\n\\;\\xrightarrow[\\mu \\to \\infty]{}\\;\n\\mathcal{M}_{\\nu,\\beta}(x)"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:kummer-mixture}\n\\mathcal{K}_{\\nu,\\mu,\\beta}(x)\n= \\mathbb{E}_{\\Phi}\\!\\left[\\mathcal{M}_{\\nu,\\Phi}(x)\\right],\n\\qquad\n\\Phi^{2} \\sim \\mathrm{Inv\\text{-}Gamma}\\!\\left(\\mu,\\ \\tfrac{\\beta^{2}}{2}\\right),"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:kummer-cosine}\n\\mathbb{E}\\!\\left[\\cos(\\boldsymbol{\\Omega}\\cdot\\mathbf{h})\\right]\n=\n\\mathcal{K}_{\\nu,\\mu,\\beta}(\\|\\mathbf{h}\\|),\n\\qquad \\mathbf{h}\\in\\mathbb{R}^d."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:GH-def}\n\\scalebox{0.9}{$\n\\mathcal{GH}_{\\delta,\\beta,\\gamma,a}(x)\n=\n\\left\\{\n\\begin{array}{ll}\n\\displaystyle\nK(\\beta,\\gamma,\\delta,d)\\left(1-\\frac{x^2}{a^2}\\right)^{\\beta-\\delta+\\gamma-\\tfrac d2-1}\n{}_{2}F_{1}\\!\\left(\\beta-\\delta,\\,\\gamma-\\delta;\\,\n\\beta-\\delta+\\gamma-\\tfrac d2;\\,\n1-\\frac{x^2}{a^2}\\right),\n&  x \\leq a, \\\\[10pt]\n0, & x>a,\n\\end{array}\n\\right.\n$}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:GH-cond}\n\\delta > \\frac{d}{2},\n\\qquad\n2(\\beta-\\delta)(\\gamma-\\delta) \\geq \\delta,\n\\qquad\n2(\\beta+\\gamma) \\geq 6\\delta + 1."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:GH-spectral}\ng_{R}^{\\mathcal{GH}}(r)\n=\nL(\\delta,\\beta,\\gamma)\n\\,a^{d}\\;\n{}_{1}F_{2}\\!\\left(\\delta;\\,\\beta,\\,\\gamma;\\,-\\frac{(ar)^2}{4}\\right),\n\\qquad r\\ge 0,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:GH-reparam}\n\\delta = \\tfrac{d+1}{2} + \\nu, \\qquad\n\\beta = \\delta + \\tfrac{\\mu}{2}, \\qquad\n\\gamma = \\delta + \\tfrac{\\mu}{2} + l,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{polo8}\n\\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a}(x) :=\n\\mathcal{GH}_{\\delta,\\;\\delta+\\mu/2,\\;\\delta+\\mu/2+l,\\;a}(x)."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{gwmm}\n\\mathcal{GW}_{\\nu,\\mu,\\,\n\\beta\\!\\left(\\frac{\\Gamma(\\mu+2\\nu+1)}{\\Gamma(\\mu)}\\right)^{\\!\\frac{1}{1+2\\nu}}}(x)\n\\;\\xrightarrow[\\mu \\to \\infty]{}\\;\n\\mathcal{M}_{\\nu+\\frac{1}{2},\\,\\beta}(x),"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{authorizedregion}\n\\mu>1, \\qquad \\frac{\\mu}{2}-\\frac{d}{2}-\\frac{1}{2}-\\nu+l>0,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:GH-mixture}\n\\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a}(x)\n=\nM(\\nu,\\mu,l,d)\n\\!\\!\\iint_{(0,1)^2}\\!\\!\nu^{\\delta-\\frac{d+1}{2}}(1-u)^{\\frac{\\mu}{2}-\\frac{3}{2}}\nv^{\\delta-\\frac12+\\nu}(1-v)^{\\frac{\\mu}{2}-\\frac{d}{2}-\\frac{3}{2}-\\nu+l}\n\\mathcal{H}_{\\nu,1,a\\sqrt{uv}}(x)\\,{\\rm d}u\\,{\\rm d}v,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:GH-constant}\nM(\\nu,\\mu,l,d)\n=\n\\frac{\n\\Gamma\\!\\bigl(\\nu+\\tfrac{\\mu}{2}+\\tfrac12\\bigr)\n\\Gamma\\!\\bigl(\\nu+\\tfrac{\\mu}{2}+\\tfrac12+l\\bigr)\n}{\n\\Gamma(\\nu+1)\n\\Gamma\\!\\bigl(\\tfrac d2+2\\nu+1\\bigr)\n\\Gamma\\!\\bigl(\\tfrac{\\mu}{2}-\\tfrac12\\bigr)\n\\Gamma\\!\\bigl(\\tfrac{\\mu}{2}-\\tfrac d2-\\tfrac12-\\nu+l\\bigr)\n}."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:base-spectral}\ng^{\\widetilde{\\mathcal{GH}}}_{R}(r\\mid b)\n=\nC_H(\\nu,d)\\,b^d\\,\n{}_1F_2\\!\\left(\\delta;\\delta+\\tfrac12,2\\delta;-\\frac{(br)^2}{4}\\right),\n\\qquad r\\ge 0,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:CH-corrected}\nC_H(\\nu,d)=\n\\frac{\n\\Gamma\\!\\bigl(\\tfrac{d+1}{2}+\\nu\\bigr)\n\\Gamma(1+\\nu)\n\\Gamma\\!\\bigl(\\tfrac d2+1+2\\nu\\bigr)\n}{\n2^d\\pi^{d/2}\n\\Gamma\\!\\bigl(\\tfrac12+\\nu\\bigr)\n\\Gamma\\!\\bigl(\\tfrac d2+1+\\nu\\bigr)\n\\Gamma(d+1+2\\nu)\n}."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:base-bessel}\ng^{\\widetilde{\\mathcal{GH}}}_{R}(r\\mid b)\n=\nC_H(\\nu,d)\\,b^d\\,\n\\Gamma^2\\!\\left(\\delta+\\tfrac12\\right)\n\\left(\\frac{br}{4}\\right)^{1-2\\delta}\nJ_{\\delta-\\tfrac12}^2\\!\\left(\\frac{br}{2}\\right)."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:fT-bessel}\n\\begin{aligned}\nf_T(t)\n&=\n|\\mathbb{S}^{d-1}|\\,t^{d-1}\\,C_H(\\nu,d)\\,\n{}_1F_2\\!\\left(\\delta;\\delta+\\tfrac12,2\\delta;-\\tfrac{t^2}{4}\\right)\\\\\n&=\n|\\mathbb{S}^{d-1}|\\,t^{d-1}\\,C_H(\\nu,d)\\,\n\\Gamma^2\\!\\left(\\delta+\\tfrac12\\right)\n\\left(\\tfrac{t}{4}\\right)^{1-2\\delta}\nJ_{\\delta-\\tfrac12}^2\\!\\left(\\tfrac{t}{2}\\right),\n\\qquad t\\ge0.\n\\end{aligned}"
+  },
+  {
+   "env": "align",
+   "latex": "g_1(t) &= \\frac{d\\,t^{d-1}}{t_0^d}, && 0\\le t\\le t_0,\\\\\ng_2(t) &= \\frac{\\kappa\\,t_0^\\kappa}{t^{\\kappa+1}}, && t>t_0,"
+  },
+  {
+   "env": "equation*",
+   "latex": "\\begin{split}\ng_{R}^{\\mathcal{GH}}(r)\n&= L(\\delta,\\beta,\\gamma)\\,a^d\\,\\Gamma^2(\\eta+1)\n\\left(\\frac{ar}{4}\\right)^{-2\\eta}\n\\sum_{n=0}^{\\infty}\nC(n,\\delta,\\beta,\\gamma)\n\\frac{(2n+2\\eta)(2\\eta+1)_n}{(n+2\\eta)n!}\nJ^2_{\\eta+n}\\!\\left(\\frac{ar}{2}\\right),\n\\end{split}"
+  },
+  {
+   "env": "equation*",
+   "latex": "C(n,\\delta,\\beta,\\gamma)\n=\n{}_4F_3\\!\\left(-n,n+2\\eta,\\eta+1,\\delta;\\eta+\\tfrac12,\\beta,\\gamma;1\\right)."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:holeeffectdensity}\n\\begin{split}\ng^{(n)}_R\\!\\left(r \\mid \\eta+n,a\\right)\n&= C_H(\\eta+n-d/2,d,n)\\, a^{d+2n} r^{2n} \\\\\n&\\quad \\times\n{}_1F_2\\!\\left(\n\\tfrac{d+1}{2}+\\eta+n-\\tfrac d2;\\,\n\\tfrac d2+1+\\eta+n-\\tfrac d2,\\,\n1+2\\eta+2n;\\,\n-\\tfrac{(ar)^2}{4}\n\\right).\n\\end{split}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:holeeffectdensity-bessel}\ng^{(n)}_R\\!\\left(r \\mid \\eta+n,a\\right)\n=\nC_H(\\eta+n-d/2,d,n)\\, a^{d+2n} r^{2n}\n\\Gamma^2(1+\\eta+n)\n\\left(\\tfrac{ar}{4}\\right)^{-2\\eta-2n}\nJ^2_{\\eta+n}\\!\\left(\\tfrac{ar}{2}\\right)."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:gasper-mixture}\ng_R^{\\mathcal{GH}}(r)\n=\n\\sum_{n=0}^{\\infty}\nw_n(\\delta,\\beta,\\gamma)\\,\ng^{(n)}_R\\!\\left(r \\mid \\eta+n,a\\right),"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{polo}\nw_n(\\delta,\\beta,\\gamma)\n=\n\\frac{L(\\delta,\\beta,\\gamma)\\Gamma^2(\\eta+1)}{2^{4n}\\Gamma^2(\\eta+n+1)}\n\\frac{C(n,\\delta,\\beta,\\gamma)}{C_H(\\eta+n-\\frac d2,d,n)}\n\\frac{(2n+2\\eta)(2\\eta+1)_n}{(n+2\\eta)n!}."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:fT-holeeffect}\n\\begin{aligned}\nf_T^{(n)}(t)\n&=\n|\\mathbb{S}^{d-1}|\\,\nC_H(\\eta+n-\\tfrac d2,d,n)\\,\n4^{2\\eta+2n}\\,\n\\Gamma^2(1+\\eta+n)\\,\nt^{d-1-2\\eta}\nJ^2_{\\eta+n}\\!\\left(\\tfrac{t}{2}\\right),\n\\qquad t>0.\n\\end{aligned}"
+  },
+  {
+   "env": "display",
+   "latex": "\\log\\kappa_0 = \\tfrac{1}{2}\\log(8\\nu) - \\log(r_0),\n\\qquad\n\\log\\tau_0 = \\tfrac{1}{2}\n\\bigl[\\log\\Gamma(\\nu)-\\log\\Gamma(\\alpha)-\\log(4\\pi)\n-2\\nu\\log\\kappa_0-\\log\\sigma^2\\bigr],"
+  },
+  {
+   "env": "display",
+   "latex": "C(\\mathbf{h})=\\mathrm{Cov}\\!\\bigl(Z(\\mathbf{s}),Z(\\mathbf{s}+\\mathbf{h})\\bigr),\n\\qquad\n\\mathbf{h}\\in\\mathbb{R}^d,"
+  },
+  {
+   "env": "display",
+   "latex": "\\phi(\\mathbf{h})=\\frac{C(\\mathbf{h})}{\\sigma^2},\n\\qquad\n\\phi(\\mathbf{0})=1."
+  },
+  {
+   "env": "display",
+   "latex": "C(\\mathbf{h})=\\int_{\\mathbb{R}^d} e^{\\mathsf{i}\\boldsymbol{\\omega}\\cdot\\mathbf{h}} f_C(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega},\n\\qquad\nf_C(\\boldsymbol{\\omega})\\ge 0,\n\\qquad\n\\int_{\\mathbb{R}^d}f_C(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}=\\sigma^2."
+  },
+  {
+   "env": "display",
+   "latex": "C(\\mathbf{h})=\\int_{\\mathbb{R}^d}\\cos(\\boldsymbol{\\omega}\\cdot\\mathbf{h})\\,f_C(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}."
+  },
+  {
+   "env": "display",
+   "latex": "f(\\boldsymbol{\\omega})=\\frac{1}{\\sigma^2}f_C(\\boldsymbol{\\omega}),\n\\qquad\n\\int_{\\mathbb{R}^d}f(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}=1,"
+  },
+  {
+   "env": "display",
+   "latex": "\\Omega_d(x)=\\Gamma\\!\\Bigl(\\tfrac{d}{2}\\Bigr)\\Bigl(\\tfrac{2}{x}\\Bigr)^{d/2-1}J_{d/2-1}(x),\n\\qquad x>0,"
+  },
+  {
+   "env": "display",
+   "latex": "\\Phi_1 \\supset \\Phi_2 \\supset \\cdots \\supset \\Phi_\\infty := \\bigcap_{d\\ge1}\\Phi_d."
+  },
+  {
+   "env": "display",
+   "latex": "\\int_{\\mathbb{R}^d}f(\\boldsymbol{\\omega})\\,{\\rm d}\\boldsymbol{\\omega}\n=\n|\\mathbb{S}^{d-1}|\\int_0^\\infty r^{d-1}g_R(r)\\,{\\rm d}r\n=1."
+  },
+  {
+   "env": "display",
+   "latex": "\\boldsymbol{\\Omega}=R\\boldsymbol{\\Theta},\n\\qquad\n\\boldsymbol{\\Theta}\\sim\\mathrm{Unif}(\\mathbb{S}^{d-1}),\n\\qquad\nR\\perp\\!\\!\\!\\perp\\boldsymbol{\\Theta},"
+  },
+  {
+   "env": "display",
+   "latex": "\\varepsilon_\\ell \\stackrel{\\text{i.i.d.}}{\\sim}\\mathrm{Unif}(0,1),\n\\qquad\n\\boldsymbol{\\Omega}_\\ell \\stackrel{\\text{i.i.d.}}{\\sim} F,\n\\qquad\n\\Phi_\\ell \\stackrel{\\text{i.i.d.}}{\\sim}\\mathrm{Unif}(0,2\\pi),\n\\qquad\n\\ell=1,\\dots,L,"
+  },
+  {
+   "env": "display",
+   "latex": "\\sqrt{-2\\ln(\\varepsilon_\\ell)}\\,\n\\cos\\!\\bigl(\\boldsymbol{\\Omega}_\\ell\\cdot\\mathbf{s}+\\Phi_\\ell\\bigr)"
+  },
+  {
+   "env": "display",
+   "latex": "T \\sim \\mathrm{Gamma}(\\nu,1),\n\\qquad\n\\mathbf{Z} \\sim \\mathcal{N}(\\mathbf{0},I_d),\n\\qquad\nT \\perp\\!\\!\\!\\perp \\mathbf{Z},"
+  },
+  {
+   "env": "display",
+   "latex": "f_{\\boldsymbol{\\Omega}}(\\boldsymbol{\\omega})\n=\n\\frac{\\Gamma(\\nu+\\tfrac{d}{2})\\,\\alpha^{d}}{\\Gamma(\\nu)\\,\\pi^{d/2}}\n\\bigl(1+\\alpha^{2}\\|\\boldsymbol{\\omega}\\|^{2}\\bigr)^{-(\\nu+d/2)},"
+  },
+  {
+   "env": "display",
+   "latex": "p_{\\nu,\\alpha}(\\lambda)\n= \\frac{1}{\\Gamma(\\nu)\\,(2\\alpha^{2})^{\\nu}}\\,\n\\lambda^{\\nu-1}\\exp\\!\\Bigl(-\\tfrac{\\lambda}{2\\alpha^{2}}\\Bigr),\n\\qquad \\lambda>0."
+  },
+  {
+   "env": "display",
+   "latex": "U(a,b,z)\n= \\frac{1}{\\Gamma(a)} \\int_{0}^{\\infty}\ne^{-z t}\\,t^{a-1}(1+t)^{b-a-1}\\,{\\rm d}t."
+  },
+  {
+   "env": "display",
+   "latex": "T := \\frac{X}{Y} \\sim \\mathrm{BetaPrime}(\\nu,\\mu)."
+  },
+  {
+   "env": "display",
+   "latex": "\\boldsymbol{\\Omega}\n= \\frac{1}{\\beta}\\,\\frac{\\mathbf{Z}}{\\sqrt{T}}."
+  },
+  {
+   "env": "display",
+   "latex": "f_{\\boldsymbol{\\Omega}}(\\boldsymbol{\\omega})\n=\n\\frac{\\Gamma\\!\\bigl(\\nu+\\tfrac{d}{2}\\bigr)}{(2\\pi)^{d/2}B(\\mu,\\nu)}\n\\,\\beta^{d}\\,\nU\\!\\left(\\nu+\\tfrac{d}{2},\\,1-\\mu+\\tfrac{d}{2},\\,\\frac{\\beta^{2}\\|\\boldsymbol{\\omega}\\|^{2}}{2}\\right),"
+  },
+  {
+   "env": "display",
+   "latex": "\\Phi = \\frac{\\beta}{\\sqrt{Y}},\n\\qquad\nT = \\frac{X}{Y},"
+  },
+  {
+   "env": "display",
+   "latex": "10pt]\n0, & x>a,\n\\end{array}\n\\right.\n$}\n\\end{equation}\nwith\n\\[\nK(\\beta,\\gamma,\\delta,d)=\n\\frac{\\Gamma(\\beta-\\tfrac d2)\\,\\Gamma(\\gamma-\\tfrac d2)}\n{\\Gamma(\\beta-\\delta+\\gamma-\\tfrac d2)\\,\\Gamma(\\delta-\\tfrac d2)}."
+  },
+  {
+   "env": "display",
+   "latex": "L(\\delta,\\beta,\\gamma)=\n\\frac{\n\\Gamma(\\delta)\\,\\Gamma(\\beta-\\tfrac d2)\\,\\Gamma(\\gamma-\\tfrac d2)\n}{\n2^{d}\\pi^{d/2}\\,\n\\Gamma(\\delta-\\tfrac d2)\\,\n\\Gamma(\\beta)\\,\n\\Gamma(\\gamma)\n}."
+  },
+  {
+   "env": "display",
+   "latex": "U \\sim \\mathrm{Beta}\\!\\left(1+\\nu,\\tfrac{\\mu}{2}-\\tfrac12\\right),\n\\qquad\nV \\sim \\mathrm{Beta}\\!\\left(\\tfrac d2+2\\nu+1,\\tfrac{\\mu}{2}-\\tfrac d2-\\tfrac12-\\nu+l\\right),"
+  },
+  {
+   "env": "display",
+   "latex": "\\widetilde{\\mathcal{GH}}_{\\nu,\\mu,l,a}(x)\n=\n\\mathbb{E}_{U,V}\\!\\left[\\mathcal{H}_{\\nu,1,a\\sqrt{UV}}(x)\\right]."
+  },
+  {
+   "env": "display",
+   "latex": "R=\\frac{T}{a\\sqrt{UV}}."
+  },
+  {
+   "env": "display",
+   "latex": "U_\\ell \\sim \\mathrm{Beta}\\!\\left(1+\\nu,\\tfrac{\\mu}{2}-\\tfrac12\\right),\n\\qquad\nV_\\ell \\sim \\mathrm{Beta}\\!\\left(\\tfrac d2+2\\nu+1,\\tfrac{\\mu}{2}-\\tfrac d2-\\tfrac12-\\nu+l\\right),"
+  },
+  {
+   "env": "display",
+   "latex": "g(t)=w_1 g_1(t)+w_2 g_2(t),"
+  },
+  {
+   "env": "display",
+   "latex": "T=t_0U^{1/d}\\quad\\text{under }g_1,\n\\qquad\nT=t_0(1-U)^{-1/\\kappa}\\quad\\text{under }g_2,\n\\qquad U\\sim\\mathrm{Unif}(0,1)."
+  },
+  {
+   "env": "display",
+   "latex": "t_{k+1}\n=\nt_k\\,\n\\frac{(-n+k)(n+2\\eta+k)(\\eta+1+k)(\\delta+k)}\n{(\\eta+\\tfrac12+k)(\\beta+k)(\\gamma+k)(k+1)},\n\\qquad\nt_0=1,\n\\qquad\nC(n,\\delta,\\beta,\\gamma)=\\sum_{k=0}^n t_k."
+  },
+  {
+   "env": "display",
+   "latex": "g_1(t)=\\frac{d\\,t^{d-1}}{t_0^d},\n\\qquad 0\\le t\\le t_0,"
+  },
+  {
+   "env": "display",
+   "latex": "g_2(t)=\\frac{\\alpha\\,t_0^\\alpha}{t^{\\alpha+1}},\n\\qquad t>t_0,"
+  },
+  {
+   "env": "display",
+   "latex": "T=t_0U^{1/d}\\quad\\text{under }g_1,\n\\qquad\nT=t_0(1-U)^{-1/\\alpha}\\quad\\text{under }g_2,\n\\qquad U\\sim\\mathrm{Unif}(0,1)."
+  }
+ ],
+ "stats": {
+  "n_sections": 17,
+  "n_figures": 7,
+  "n_tables": 5,
+  "n_equations": 68,
+  "n_chars": 77677
+ }
+}

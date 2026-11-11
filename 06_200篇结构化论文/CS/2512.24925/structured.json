@@ -1,0 +1,290 @@
+{
+ "title": "Towards Provably Secure Generative AI: Reliable Consensus Sampling",
+ "abstract": "Existing research on generative AI security is primarily driven by mutually reinforcing attack and defense methodologies grounded in empirical experience. This dynamic frequently gives rise to previously unknown attacks that can circumvent current detection and prevention. This necessitates the continual updating of security mechanisms. Constructing generative AI with provable security and theoretically controllable risk is therefore necessary. Consensus Sampling (CS) is a promising algorithm toward provably secure AI. It controls risk by leveraging overlap in model output probabilities. However, we find that CS relies on frequent abstention to avoid unsafe outputs, which reduces utility. Moreover, CS becomes highly vulnerable when unsafe models are maliciously manipulated. To address these issues, we propose a new primitive called Reliable Consensus Sampling (RCS), that traces acceptance probability to tolerate extreme adversarial behaviors, improving robustness. RCS also eliminates the need for abstention entirely. We further develop a feedback algorithm to continuously and dynamically enhance the safety of RCS. We provide theoretical guarantees that RCS maintains a controllable risk threshold. Extensive experiments show that RCS significantly improves robustness and utility while maintaining latency comparable to CS. We hope this work contributes to the development of provably secure generative AI.",
+ "sections": [
+  {
+   "level": "preamble",
+   "title": "",
+   "text": "\\maketitle\n\\begin{abstract}\nExisting research on generative AI security is primarily driven by mutually reinforcing attack and defense methodologies grounded in empirical experience. This dynamic frequently gives rise to previously unknown attacks that can circumvent current detection and prevention. This necessitates the continual updating of security mechanisms. Constructing generative AI with provable security and theoretically controllable risk is therefore necessary. Consensus Sampling (CS) is a promising algorithm toward provably secure AI. It controls risk by leveraging overlap in model output probabilities. However, we find that CS relies on frequent abstention to avoid unsafe outputs, which reduces utility. Moreover, CS becomes highly vulnerable when unsafe models are maliciously manipulated. To address these issues, we propose a new primitive called Reliable Consensus Sampling (RCS), that traces acceptance probability to tolerate extreme adversarial behaviors, improving robustness. RCS also eliminates the need for abstention entirely. We further develop a feedback algorithm to continuously and dynamically enhance the safety of RCS. We provide theoretical guarantees that RCS maintains a controllable risk threshold. Extensive experiments show that RCS significantly improves robustness and utility while maintaining latency comparable to CS. We hope this work contributes to the development of provably secure generative AI.\n\\end{abstract}"
+  },
+  {
+   "level": "section",
+   "title": "Introduction",
+   "text": "With the widespread deployment of generative AI, especially large language models (LLMs), security issues continue to emerge \\citep{ji2023beaver, Liu2024injection, Zhan2025CAIS, wang2025uniquesec}. Current AI safety research largely follows a coevolutionary trajectory between attacks and defenses \\citep{zhang2025jbshield}. New attack methods and defenses appear continuously. This dynamic leaves existing defenses unprepared for future and unpredictable threats. As a result, the definition of AI safety requires constant revision and expansion. The root cause is inherent risk in model reasoning. This risk is unavoidable and difficult to control, as shown in \\autoref{fig:example}. Across the full reasoning pipeline, three stages permit risk intervention. At the model level, emerging threats demand repeated alignment. However, safety fine-tuning \\citep{jain2024makes} introduces additional risks, such as backdoor attacks \\citep{xu-etal-2024-instructions, wen2024privacy} and data poisoning \\citep{chen2024agentpoison}. For external filtering mechanisms, prior work \\citep{ball2025impossibility} based on cryptographic hardness shows that efficient prompt filters do not exist for certain large models. Output filtering is computationally intractable. Moreover, some risks remain undetectable \\citep{kalai2025consensus}. Therefore, security risk in model reasoning cannot be eliminated. Empirical defenses offer only temporary protection. A generative AI paradigm with provable and controllable risk is therefore necessary. Current research on provably safe AI remains position oriented \\citep{dalrymple2024towards}.\n\n\nRecent work on consensus sampling (CS) \\citep{kalai2025consensus} offers partial theoretical control over output risk. CS considers a model group with $s$ safe models and $f$ unsafe models ($s > f$). It exploits overlap among output distributions across models to set the acceptance probability for a response of unknown safety. The goal is to make the delivered response more likely to originate from safe models. The aggregated risk of the group admits a provable upper bound. Unlike prior approaches, CS does not define a safe response. It follows the principle that responses supported by more models carry lower risk. This line of work is orthogonal to empirical safety optimization.\n\nHowever, CS relies on frequent abstention to avoid unsafe outputs, reducing utility \\citep{paulus2025safety}. We further show that adversarial control over unsafe models sharply weakens CS security. Despite a cryptographic upper bound on risk, CS lacks robustness and practicality for deployment.\n\nTo address these issues, we propose a new primitive named Reliable Consensus Sampling (RCS). We present a provable safety framework for model groups that includes safety and liveness properties. The definitions draw on classical reliable distributed consensus theory. They enable formal security analysis for model groups. RCS records acceptance probability in real time after sampling failures. After a bounded number of rejections, it enters a trace phase that guarantees eventual delivery of a response. RCS fully avoids abstention. During the trace phase, it reweights model probability distributions to control their influence on the final decision. This design tolerates more extreme adversarial behavior and improves robustness. In addition, inspired by quantum entanglement \\citep{nielsen2010quantum}, we introduce a feedback algorithm that captures correlations among model distributions. The algorithm identifies models that are unsafe for sampling on specific tasks. It improves RCS safety by excluding those models from the group decision.\n\nWe prove that RCS achieves a controllable risk threshold. Extensive experiments show that RCS significantly improves security and utility compared with CS. Latency remains comparable to CS. We summarize our contributions as follows:  \n\n\n\\begin{itemize}[left=0pt, itemsep=0pt]\n\n\\item We define a security property theory for model groups under a Byzantine threat model. The theoretical framework supports provable security analysis.\n\n\\item We propose RCS, a trace-based method that eliminates abstention and guarantees eventual delivery. It tracks acceptance probabilities in real time, reweights models to mitigate adversarial influence, and uses a feedback module that exploits cross-model correlations to improve safety.\n\n\\item We theoretically prove that RCS admits a tight upper bound on risk. Experiments demonstrate that RCS outperforms CS in robustness and utility while maintaining comparable latency.\n\n\n\\end{itemize}"
+  },
+  {
+   "level": "section",
+   "title": "Preliminary Analysis",
+   "text": "\\noindent\n\\textbf{Notation}.\nWe follow the notation established in~\\citep{kalai2025consensus}. For a prompt $x$, each model $i \\in \\{1, \\dots, n\\}$ induces a probability distribution $p_i(y)$ over a output space $\\mathcal{Y}$. Let $\\mathrm{Distr}(\\mathcal{Y})$ denote the set of probability distributions on $\\mathcal{Y}$. $\\mathcal{Y}$ is the union of the safe space $S$ and the unsafe space $U$. For any $p \\in \\mathrm{Distr}(\\mathcal{Y})$ and any subset $H \\subseteq \\mathcal{Y}$, we define the cumulative probability $p(H) = \\sum_{y \\in H} p(y)$. Given a collection of distributions $(p_1, \\ldots, p_n) \\in \\mathrm{Distr}(\\mathcal{Y})^n$, let $p_{(i)}(y)$ represent the $i$-th smallest of the probabilities $\\{ p_t(y) \\}_{t=1}^n$. We use the symbol $\\bot \\notin \\mathcal{Y}$ to denote an abstention. \n\n\\noindent\n\\textbf{Output Distribution}. Because the model's output is terminated either by special tokens or by a maximum token limit, for a finite tokenizer, We follow existing work \\citep{chijiwa2025lossless} to treat the ostensibly unbounded output distribution as a finite set to facilitate analysis. Formally, for model $i$ with maximum token length $L$ and tokenizer $T_i$, the output space is $\\mathcal{Y}_i = \\bigcup_{j=1}^{L} T_i^j$.\n\n\n\\noindent\n\\textbf{Model Group}.\nThe model group ($\\mathcal{MG}$) consists of $n$ generative models, including $s$ safe models and \n$f=n-s$ unsafe models. Each safe model should maintain a reasonable probability distribution for any input prompt $x$. The probability that the safety model outputs a safe response is $\\Psi > 0$. Unsafe models are assumed to be fully controllable by an adversary and may exhibit arbitrary unsafe behaviors or follow any probability distribution, and we refer to this as the Byzantine model based on the definition of Byzantine replicas in classical BFT consensus research \\citep{zhang2023waterbear, dashing2024duan, Das2024AC}."
+  },
+  {
+   "level": "section",
+   "title": "Reliable Consensus Sampling",
+   "text": "\\label{sec:Methodology}"
+  },
+  {
+   "level": "subsection",
+   "title": "Safety Properties",
+   "text": "We define the safety properties in $\\mathcal{MG}$ based on the definitions from reliable distributed systems \\citep{cachin2011introduction}.\n\n\\noindent\n\\textbf{Safety}. Let $f < \\lceil \\frac{n}{2} \\rceil$, at all times, the risk of the model group $q(U) \\leq n \\cdot \\mu(U) + \\mathrm{negl}(\\lambda)$. $\\mu(U)$ is the average risk of generating unsafe response $y \\in U$ by $s$ safe models. Safety requires that the risk of unsafe models is reduced to the risk of safe models plus $\\mathrm{negl}(\\lambda)$. $\\lambda$ is a security parameter.\n\n\\noindent\n\\textbf{Liveness}. The liveness property requires that, for any time $t$, there remains the hope that the property will be satisfied at some later time $t' \\ge t$. The mechanism must still retain the possibility of eventually delivering a usable response $y \\in \\mathcal{Y}$, although it may be risky. Liveness reflects the utility of $\\mathcal{MG}$.\n\n\n\n\\noindent\n\\textbf{Anti-Collusion}.\n$\\mathcal{MG}$ must tolerate arbitrary behavior from up to $f$ Byzantine models. Such behavior includes full control over the probability distribution of $y \\in \\mathcal{Y}$. This control may assign low probability to safe responses. It may also assign high probability to unsafe responses. These behaviors should not significantly affect the safety of the response delivered by $\\mathcal{MG}$.\n\n\n\\noindent\n\\textbf{Half-Resilience}. In real-world deployments, the values of $s$ and $f$ may change over time. We consider a time $t$ at which $m$ out of the $s$ safe models become unsafe. The $\\mathcal{MG}$ system then transitions to a new state with $s' = s - m$ and $f' = f + m$. In this state, the condition $f < \\lceil \\frac{n}{2} \\rceil$ no longer holds. We do not require $\\mathcal{MG}$ to preserve theoretical safety or liveness. Instead, we require the system to remain practically robust and avoid catastrophic failure. In this paper, we focus on the case of $f=s$.\n\n\n\\noindent\n\\textbf{Termination}. \nThe algorithm is guaranteed to complete within a finite time $T$."
+  },
+  {
+   "level": "subsection",
+   "title": "Methodology",
+   "text": "Our proposed RCS scheme is shown in Algorithm \\ref{alg:consensus}. During the $R$ rounds of sampling, in each round, if the candidate response $y$ is not accepted, we record $y$ and its acceptance probability $\\sigma(y)$ in real time. When all $R$ sampling rounds fail, the protocol enters the trace phase. In this phase, we select the top $\\min(s, R)$ values of $\\sigma(y)$ and collect the corresponding $y$ into the set $\\mathcal{F}$. For each $y \\in \\mathcal{F}$, we compute $\\alpha(y)$ as the sum of the largest $n - s$ values in $\\{p_j(y)\\}_{j=1}^{n}$, which have already been obtained during the computation of $\\sigma(y)$. We then select the $y$ with the largest $\\alpha(y)$ in order to mitigate the impact of Byzantine models, while maintaining the liveness guarantee.\n\n\n\\begin{algorithm}[t]\n\\SetAlgoLined\n\\KwIn{\nNumber of models $|\\mathcal{MG}|=n$; number of safe models $s$; \nround $R$; distributions $p_1, \\ldots, p_n \\in \\mathrm{Distr}(\\mathcal{Y})^{n}$\n}\n\\KwOut{Response $y \\in \\mathcal{Y}$}\n\n$Buffer \\gets \\varnothing$\\\\\n\\For{$r \\leftarrow 1$ \\KwTo $R$}{\n    Sample $y \\sim \\frac{1}{n}\\sum_{i=1}^{n} p_i$ \\\\\n    $\\sigma(y) =\\frac{\\frac{1}{s}\\sum_{i=1}^{s} p_{(i)}(y)}\n             {\\frac{1}{n}\\sum_{i=1}^{n} p_i(y)}$\n        \n    \\If{accept $y$ with $\\sigma(y)$}{\n        \\Return $y$\n    }\n    $Buffer \\gets Buffer \\cup \\{\\langle y, \\sigma(y) \\rangle \\}$\\\\\n}\n\nSort $Buffer=\\{\\langle y_i, \\sigma(y_i) \\rangle \\}_{i=1}^{R}$ \n such that $\\sigma(y_{(1)}) \\ge \\dots \\ge \\sigma(y_{(R)})$\\\\\nLet $\\mathcal{F} = \\{y_{(1)}, \\dots, y_{u}\\}, \\; u= min(s,R)$ \\\\\n\\For{$i \\leftarrow 1$ \\KwTo $u$}{\n    $\\alpha(y_{(i)}) = \\sum_{j=s+1}^{n} p_{(j)}(y_{(i)})$\n}\n\\Return $y \\gets \\arg\\max_{y \\in \\mathcal{F}} \\alpha(y)$\n\n\\caption{Reliable Consensus Sampling Algorithm}\n\\label{alg:consensus}\n\\end{algorithm}\n\n\n\nWe present a rigorous theoretical proof of the safety property of RCS. The overlap of the output probability distributions of the $s$ safest models, that is, their degree of consensus, is computed by using $Z = \\sum_{y}\\frac{1}{s}\\sum_{i=1}^{s}p_{(i)}(y)$ \\citep{kalai2025consensus}. We denote $\\Pr[T]=(1-Z)^R$ as the probability of entering the trace phase, and $\\rho(U)$ as the probability that the trace phase eventually outputs an unsafe response. Let $R = \\mathrm{poly}(\\lambda)$. Then the risk of RCS satisfies:\n\n\\begin{align*}\nq(U) &= (1-\\Pr[\\text{T}]) \\cdot \\frac{1}{Z} \\sum_{y \\in U}\\frac{1}{s}\\sum_{i=1}^{s}p_{(i)}(y) \\\\ &+ \\Pr[\\text{T}] \\cdot \\rho(U)\\\\\n&\\leq  ZR \\cdot \\frac{1}{Z} \\sum_{y \\in U}\\frac{1}{s}\\sum_{i=1}^{s}p_{(i)}(y) + \\Pr[\\text{T}] \\cdot \\rho(U)\\\\\n&=  R \\cdot \\sum_{y \\in U}\\frac{1}{s}\\sum_{i=1}^{s}p_{(i)}(y) + \\Pr[\\text{T}] \\cdot \\rho(U)\\\\\n&\\leq R \\cdot \\frac{1}{s}\\sum_{i=1}^{s}p_{(i)}(U) + \\Pr[\\text{T}] \\cdot \\rho(U) \\\\\n&= R \\cdot\\mu(U) + (1-Z)^R \\cdot \\rho(U)\n\\end{align*}\n\nIn $\\mathcal{MG}$, at least $s - f$ values of $p_i(y)$ satisfy $p_i(y) > 0$. Therefore, $Z > 0$. It follows that\n$(1-Z)^R = e^{R \\ln(1-Z)}$. Since $\\ln(1-Z) < 0$, $\\rho(U) \\in (0,1)$ and $R = \\mathrm{poly}(\\lambda)$, we have $(1-Z)^R \\cdot \\rho(U) = \\mathrm{negl}(\\lambda)$. Therefore, $q(U) \\leq R \\cdot \\mu(U) + \\text{negl}(\\lambda)$. We set the upper bound as $n = k R + b$, where $k,b > 0$ are constants. Under this choice, for any $R \\le n$, $q(U) \\le n \\cdot \\mu(U) + \\mathrm{negl}(\\lambda)$ holds. In fact, the above proof involves two equality conditions. These conditions are difficult to satisfy simultaneously. The first condition is $R = 1$. This condition can be enforced by design. The second condition requires that for all $y \\in U$,\n$p_i(y) \\le p_j(y), \\; \\forall i \\in S,\\; j \\notin S .$\nThis condition is extremely difficult to satisfy in practice. Therefore, in general, we have $q(U) < n \\cdot \\mu(U) + \\mathrm{negl}(\\lambda)$. As $R \\to +\\infty$ (without considering termination), we have $\\Pr[T] \\to 0$, indicating that $\\mathcal{MG}$ delivers a response with probability approaching unity. In this asymptotic regime, the condition $q(U) \\le n \\cdot \\mu(U)$ remains valid, thereby ensuring the safety property."
+  },
+  {
+   "level": "subsection",
+   "title": "Analysis",
+   "text": "We provide a comprehensive comparison between RCS and existing CS method in \\autoref{tab:compare}. Below, we analyze each property in detail.\n\n\n\n\n\\noindent\n\\textbf{Latency}. Let $I$ denote the time required to sample $y$ from a distribution $p_i$.\nIn RCS, if no sample is accepted after $R$ rounds, the algorithm incurs an additional cost of $n^2 \\log n$ for trace computation. This cost is negligible compared with $I$, especially for reasoning LLMs \\citep{chen2025towards}. Therefore, RCS and CS have comparable time complexity.\n\n\n\n\\noindent\n\\textbf{Anti-Collusion}. The goal of collusion is to make $\\mathcal{MG}$ more likely to deliver unsafe responses by manipulating one or more Byzantine models. We study the relation between acceptance probabilities of an unsafe response $y_t$ and a safe response $y_v$ within the $R$ round loop of Algorithm \\ref{alg:consensus}. We focus on the quantity $\\Delta(\\sigma) = \\sigma(y_t) - \\sigma(y_v)$. The detailed derivation appears in \\autoref{app:ac}. The sign of $\\Delta(\\sigma)$ depends on:\n\\[\n\\mathcal{D}_{t,v} =\n\\frac{\n\\sum_{i = 1}^{s} p_{(i)}(y_t) \\sum_{i = s+1}^{n} p_{(i)}(y_v)\n}{\n\\sum_{i = 1}^{s} p_{(i)}(y_v) \\sum_{i = s+1}^{n} p_{(i)}(y_t)\n}.\n\\]\n\nWhen the Byzantine model assigns a very low probability to $y_v$, the value of\n$\\sum_{i=1}^{s} p_{(i)}(y_v)$ decreases, leading to $\\mathcal{D}_{t,v} > 1$. As a result, $\\Delta(\\sigma) > 0$, which significantly increases the acceptance probability of the unsafe response $y_t$ relative to $y_v$. This effect weakens the security of $\\mathcal{MG}$. When unsafe models collude, we present the resulting model probability distributions in \\autoref{fig:distribution}. The adversarial behavior of unsafe models clearly has a significant impact on the probability overlap among models in CS. In contrast, the design in lines 9-12 of Algorithm \\ref{alg:consensus} effectively mitigates this issue. When the values of $p_{\\text{unsafe}}(y_v)_j$ are very low, RCS can significantly downweight their influence on the final output response.\n\n\n\n\n\n\n\n\n\\noindent\n\\textbf{Half-Resilience}. The CS algorithm has an abstention bound, meaning $\\Pr[y=\\bot]$ does not exceed a threshold when $f < \\lceil \\frac{n}{2} \\rceil$. However, if this condition is violated, the CS abstention bound is affected, leading to an increased probability of abstention and a significant impact on liveness. RCS can avoid this issue. We further validate the half-resilience of RCS in the experiments in Section \\ref{sec:experiment}.\n\n\\noindent\n\\textbf{Termination}. \nAccording to Algorithm \\ref{alg:consensus}, for a finite $R$, RCS always terminates within $R$ rounds."
+  },
+  {
+   "level": "section",
+   "title": "Feedback-Optimized Reliable Consensus Sampling",
+   "text": "For CS and RCS, the framework does not require an explicit definition of security properties. This design allows algorithms to remain applicable over time. From this perspective, for each concrete task, one cannot determine the probability that the final delivered result is safe. This holds even though the algorithmic risk admits an upper bound. External control over the sampling process is limited. This implies that, from both an algorithmic and long-term operational perspective, if the $\\mathcal{MG}$ remains unchanged and the input task types are essentially fixed, the risk in RCS remains stationary over time, thereby limiting the potential for dynamic optimization. In this section, we analyze the nature of response safety in RCS. Inspired by quantum computing \\citep{nielsen2010quantum}, we propose a research methodology for RCS based on quantum states. We further introduce a mechanism that intervenes in model distributions and dynamically improves safety."
+  },
+  {
+   "level": "subsection",
+   "title": "Foundational Theory",
+   "text": "\\label{sec:Theory}\n\\noindent\nMotivated by quantum computation theory, we propose a framework for studying the security of RCS by analogy with quantum theory.\n\n\\noindent\n\\textbf{Understanding RCS Safety from a Quantum State Perspective}. \nWe model a system with unknown safety as a quantum state $|\\phi\\rangle$, defined as\n$|\\phi\\rangle = \\alpha |0\\rangle + \\beta |1\\rangle$,\nwhere $|0\\rangle$ denotes a safe state and $|1\\rangle$ denotes an unsafe state. The constraint $\\alpha^2 + \\beta^2 = 1$ holds. Before evaluation, $|\\phi\\rangle$ does not reside in a definite safe or unsafe state. It remains in a superposition, analogous to Schr\\\"odinger's cat. The value $|\\alpha|^2$ denotes the probability of safety, while $|\\beta|^2$ denotes the probability of unsafety.\n\nGiven a fixed prompt $q$ and an evaluation method $e$, we apply $\\mathrm{Eval}(q, |\\phi\\rangle, e)$. The state $|\\phi\\rangle$ then collapses to $|0\\rangle$ or $|1\\rangle$. Only at this stage can one determine safety under $q$ and $e$. Therefore, $|\\phi\\rangle$ alone cannot be labeled as safe or unsafe. The state becomes concrete only under the joint action of $q$ and $e$. The desired condition is $|\\alpha| > |\\beta|$, meaning a stronger bias toward the safe state.\n\n\\noindent\n\\textbf{Entanglement Theory for RCS}. Consider an $\\mathcal{MG}$ with $n$ models $\\{|\\phi_1\\rangle, |\\phi_2\\rangle, \\dots, |\\phi_n\\rangle\\}$. In each sampling round, the randomly selected model $|\\phi_r\\rangle$ remains in a superposition of safety and unsafety. However, the response $y$ produced by $|\\phi_r\\rangle$ implicitly links $|\\phi_r\\rangle$ with other models. In $\\mathcal{MG}$, there exists a subset\n$W = \\{|\\phi_1\\rangle, |\\phi_2\\rangle, \\dots, |\\phi_\\ell\\rangle\\}$\nthat assigns a high probability to $y$. There also exists a subset\n$X = \\{|\\phi_{\\ell+1}\\rangle, |\\phi_{\\ell+2}\\rangle, \\dots, |\\phi_n\\rangle\\}$\nthat assigns a low probability to $y$. The model $|\\phi_r\\rangle$ belongs to neither $W$ nor $X$. We say that $W$ and $X$ are entangled. After a time interval $\\Delta(t)$, suppose evaluation under $q$ and $e$ verifies that $|\\phi_r\\rangle$ is unsafe. Then models in $W$ are likely unsafe, while models in $X$ are likely safe. In subsequent sampling, when a prompt $x$ and an evaluation $a$ resemble $q$ and $e$, the algorithm should increase weights for models in $X$ and decrease weights for models in $W$."
+  },
+  {
+   "level": "subsection",
+   "title": "F-RCS Algorithm",
+   "text": "Based on the foundational theory in Section \\ref{sec:Theory}, we construct an optimization algorithm for RCS, named Feedback-Optimized Reliable Consensus Sampling (F-RCS). In each sampling round, given the delivered response $y$ and the generating model $|\\phi_r\\rangle$, the algorithm identifies two additional models by a function $F(\\cdot)$ (see Algorithm \\ref{alg:F-RCS}). One model $|\\phi_{\\max}\\rangle$ attains the maximum $p(y)$. Another model $|\\phi_{\\min}\\rangle$ attains the minimum $p(y)$. If $y$ is judged unsafe at time $t$, then for subsequent similar tasks, $|\\phi_{\\max}\\rangle$ is removed during random sampling. Formally, $\\mathcal{MG} = \\mathcal{MG} \\setminus \\{|\\phi_{\\max}\\rangle\\}.$ This allows, at the beginning of each algorithm execution, the system makes an automated decision. It selects safer models used in sampling for $x$. This process increases the safety margin $s - f$ and reduces risk. Here, $|\\phi_{\\max}\\rangle$ can equal $|\\phi_{r}\\rangle$. Initially, $|\\phi_{r}\\rangle$ assigns the highest probability to $y$, which aligns with the algorithm objective. We call this behavior of model $|\\phi_{r}\\rangle$ self-entanglement. In addition, during sampling, the execution of the feedback algorithm is independent of RCS itself, and therefore does not affect the safety of RCS. For time overhead, the additional cost introduced by the feedback algorithm is negligible.\n\n\n\n\\begin{algorithm}[h]\n\\SetAlgoLined\n\\KwIn{\nParameters $(n, s, R)$;\nevaluation method $a$\n}\n\\KwOut{Response $y$}\n\n\\For{each prompt $x$}{\n    $|\\phi_{r}\\rangle \\gets F(x, \\mathcal{MG})$ \\\\\n    $\\mathcal{MG}^{'} \\gets \\mathcal{MG} \\setminus \\{|\\phi_{r}\\rangle\\}$ \\\\\n    $\\{y,\\mathcal{P}\\} \\gets \\text{RCS}(\\mathcal{MG}^{'}, x, s, R)$ \\\\\n    \\textcolor{mGreen}{\\#$\\mathcal{P}=\\{p_{|\\phi_1\\rangle}(y), \\cdots, p_{|\\phi_n\\rangle}(y) \\}$} \\\\\n    \\textcolor{mGreen}{\\#Identify entangled models.} \\\\\n    $|\\phi_{\\max}\\rangle \\gets \\arg\\max_{|\\phi_i\\rangle} p_{|\\phi_i\\rangle}(y)$ \\\\\n    \\textcolor{mGreen}{\\#Record $<|\\phi_{\\max}\\rangle\\ ,x, y, |\\phi_{r}\\rangle>$.} \\\\\n    \\Return $y$ \\\\\n    }\n    \n\\While{time $t \\in \\mathbb{R}^{+}$}{\n    \\If{$|1\\rangle \\gets \\mathrm{Eval}(x, |\\phi_{r}\\rangle, a)$}{\n        New $F \\gets \\mathrm{Update}(F,|\\phi_{\\max}\\rangle\\ ,x)$ \\\\\n    }\n    $t \\gets t + \\Delta(t)$\\\\\n}\n\n\\caption{F-RCS Algorithm}\n\\label{alg:F-RCS}\n\\end{algorithm}"
+  },
+  {
+   "level": "section",
+   "title": "Experiments",
+   "text": "\\label{sec:experiment}\nAlthough Section \\ref{sec:Methodology} presents a theoretical analysis that validates the advantages and effectiveness of our method, we still conduct extensive experiments to demonstrate its practical performance."
+  },
+  {
+   "level": "subsection",
+   "title": "Experimental Setup",
+   "text": "\\noindent\n\\textbf{Parameter Settings}.\nWe follow the cryptography \\citep{Ruan2025haw, Couteau2022sharp} for selecting the security parameter $\\lambda$ and set\n$\\lambda = 2^d, d \\in \\mathbb{Z}.$ We choose $R = \\lambda + 1$. The values of $s$ and $f$ are determined according to specific types of experiments, and we set $n = kR + b$. From a practical perspective, the relationship between $s$ and $n$ is unknown. The value of $s$ needs to be specified when deploying the algorithm. $s$ does not reflect the actual number of safe models in the $\\mathcal{MG}$. To cover general practical scenarios, we adopt the weakest security assumption and set $s = \\lceil \\frac{n+1}{2} \\rceil$. This setting is similar to the widely used $3f+1=n$ in distributed systems research \\citep{zhang2023waterbear, Zhang2022pace}.\n\n\n\n\\noindent\n\\textbf{Datasets and Models}. \nTo reflect adversarial conditions in real-world scenarios, we construct the probability distribution of the safe model using the output distributions of Qwen2.5-7b-instruct, Qwen2.5-0.5b-instruct \\citep{qwen2025qwen25technicalreport}, and Qwen3Guard-Gen-8B \\citep{zhao2025qwen3guard} on safety evaluation datasets. The datasets include HarmBench \\citep{mazeika2024harmbench} and AdvBench \\citep{zou2023universal}. We generate the perturbed probability distributions of the unsafe models by referring to the probability distribution of the safe model. This process simulates $f$ Byzantine models that an adversary can fully control. \n\n\\noindent\n\\textbf{Evaluation Protocol}. To reduce randomness, we report experimental results obtained from 8,000 repeated experiments."
+  },
+  {
+   "level": "subsection",
+   "title": "Evaluation Metrics",
+   "text": "In this work, we do not define specific criteria that label a response as safe or unsafe. For example, under jailbreak attacks, LLMs may output tokens such as \"Sorry\" or \"Sure\" \\citep{wang-etal-2025-vulnerability}. These outputs reflect temporary experimental observations. They do not imply provable security in a theoretical sense. Therefore, our evaluation does not rely on the LLM-as-a-judge \\citep{wei2025emoji} commonly used in prior jailbreak studies. We define the evaluation metrics as follows. Safe rate (SR) denotes the proportion of final responses produced by the safe models. Abstention rate (AR) denotes the proportion of cases where the $\\mathcal{MG}$ returns $\\perp$ instead of a usable response. Latency denotes the time interval from the start of the sampling to the delivery of the final response. Accuracy measures the precision of the feedback algorithm in F-RCS when identifying unsafe models, that is, the proportion of models detected by the feedback algorithm that are indeed unsafe."
+  },
+  {
+   "level": "subsection",
+   "title": "Experimental Results",
+   "text": "We evaluate settings where $f < \\lceil \\frac{n}{2} \\rceil$. The results for large values of $n$ are shown in \\autoref{fig:SR_g} and \\autoref{fig:TC_g}. Results for smaller values of $n$ are reported in \\autoref{app:results}. For different values of the security parameter $\\lambda$, RCS achieves significantly higher safety than CS. RCS maintains comparable overall latency to CS. These results are consistent with the theoretical analysis and proofs in Section \\ref{sec:Methodology}. CS often leads to abstention, which reduces SR. We further evaluate the algorithms under Byzantine model collusion. Results for large values of $n$ are shown in \\autoref{fig:SR_m} and \\autoref{fig:TC_m}. Under collusion, the safety of CS degrades catastrophically compared to the $f < \\lceil \\frac{n}{2} \\rceil$ setting. In contrast, the safety of RCS is only slightly affected. RCS maintains more than $67\\%$ safety. This result demonstrates strong resistance to collusion. To assess half-resilience, we also evaluate the case where $f = \\lceil \\frac{n}{2} \\rceil$. The results are reported in \\autoref{app:results}. In this case, CS again exhibits clear safety weaknesses and performs significantly worse than RCS. \\autoref{tab:comparison} reports aggregated results across all values of $\\lambda$ and $n$. RCS outperforms CS in both SR and AR. RCS also achieves comparable latency to CS. These results further validate the theoretical analysis and proofs.\n\nFor F-RCS, we evaluate the accuracy of the feedback algorithm in identifying unsafe models. The results are shown in \\autoref{fig:dr} and \\autoref{app:results}. We show that for different values of $\\lambda$ and $n$, the average accuracy remains around 90\\%. This result demonstrates the effectiveness of the feedback algorithm."
+  },
+  {
+   "level": "section",
+   "title": "Analysis and Discussion",
+   "text": ""
+  },
+  {
+   "level": "subsection",
+   "title": "Enhancements",
+   "text": "Within the F-RCS framework, a general assumption is required. Consider the probability distributions produced by $n$ models over an output $y_h$ with unknown safety. After an arbitrary time interval $\\Delta(t)$, if $y_h$ is determined to be unsafe, this means that the model state $\\lvert \\phi_h \\rangle$ is unsafe. We require that the set of models $W$ that assign high probability to $y_h$ be trustworthy. Specifically, models in $W$ cannot deny the probability distributions reported before $\\Delta(t)$. They also cannot modify the reported distributions. Models in $X$ cannot forge identities to impersonate models in $W$. These conditions can be enforced through cryptographic techniques such as blockchain \\citep{Li2023FISCOBCOS, authors2018Fabric}. Such solutions are isomorphic to existing security supervision mechanisms for voting \\citep{yang2021priscore}. Concrete designs tailored to F-RCS remain an open direction for future work.\n\nFor time cost optimization, we can construct an intermediate algorithm by trading off CS and RCS. One such example is RCS from local coins \\citep{zhang2023waterbear}. After $R$ unsuccessful sampling rounds, the algorithm flips a coin to decide whether to return $\\bot$ or to enter the trace phase. This design improves efficiency by sacrificing part of the safety. The detailed algorithm is provided in \\autoref{app:Local Coin}."
+  },
+  {
+   "level": "subsection",
+   "title": "Additional Insights on Optimal Safety",
+   "text": "Based on experimental results, we observe a clear pattern. When $n$ is fixed, the SR of RCS often exhibits a maximum for different $\\lambda$. For example, \\autoref{fig:SR_m} shows a maximum at $\\lambda = 8$. Very small values of $\\lambda$ and very large values of $\\lambda$ both fail to achieve optimal safety. For a fixed $n$, it is unclear both how to determine whether such a maximum exists and how to theoretically identify the value $\\lambda_h$ corresponding to it."
+  },
+  {
+   "level": "section",
+   "title": "Related Work",
+   "text": "Existing research on generative AI security mainly focuses on the safety of model outputs. This line of work studies various attack methods \\citep{li2024badedit, li2025one} and corresponding defenses \\citep{zhang2025exploiting}. However, these attacks lack a unified definition of security. A representative example is the jailbreak attack \\citep{mehrotra2024tree, zhang2025jbshield, yu2024don, wang-etal-2025-diffusionattacker}. This attack aims to induce models to generate unsafe content. Such content covers multiple categories \\citep{guo2025deepseeknature}, including discrimination, illegal behavior, harmful behavior, and ethical issues. Output level unsafety is inherently subjective. This subjectivity prevents a deterministic definition under cryptographic theory. Current evaluation of output safety largely relies on LLM-as-a-judge \\citep{li-etal-2025-generation}. This approach depends on specialized evaluator models trained for safety analysis, such as Qwen3Guard \\citep{zhao2025qwen3guard}. These models perform semantic analysis on generated content. However, evaluator models are not interpretable. Their correctness in safety assessment cannot be formally proven. Defenses against these attacks also lack formal guarantees. As a result, research on generative model security lacks a mature theoretical foundation. This absence of theory leads to inconsistent standards across existing attack and defense studies."
+  },
+  {
+   "level": "section",
+   "title": "Conclusion",
+   "text": "In this paper, we formalize a provable security theory for model groups. We introduce RCS, a trace-based method that eliminates abstention and guarantees effective delivery. RCS can tolerate extreme adversarial behavior. We also design a feedback algorithm to improve RCS safety. We prove that RCS has tight upper bounds on response risk. Experiments show that RCS outperforms CS in robustness and utility, achieving a $5\\times$ increase in safety rate, while maintaining comparable latency."
+  },
+  {
+   "level": "section",
+   "title": "Limitations and Ethical Considerations",
+   "text": "In this paper, we employ a safety threshold $f < \\lceil \\frac{n}{2} \\rceil$ in traditional consensus sampling. Although this condition is feasible and justified in real-world deployments, exploring looser thresholds, such as $f < \\lceil \\frac{2n}{3} \\rceil$, remains to be explored in future work. In addition, our discussion on unsafe models covers various adversarial behaviors of Byzantine models. However, more extreme threats warrant further study in future work. The Byzantine behavior discussed in this paper may be harmful. The methods described in this paper may be used for research purposes only.\n\n\n\n\n\\bibliography{acl_latex}\n\\onecolumn\n\\newpage\n\n\\appendix"
+  },
+  {
+   "level": "section",
+   "title": "RCS from Local Coins",
+   "text": "\\label{app:Local Coin}\n\n\\begin{algorithm}[h]\n\\SetAlgoLined\n\\KwIn{\nNumber of models $|\\mathcal{MG}|=n$; number of safe models $s$; \nround $R$; distributions $p_1, \\ldots, p_n \\in \\mathrm{Distr}(\\mathcal{Y})^{n}$\n}\n\\KwOut{Response $y \\in \\mathcal{Y}$}\n\n$Buffer \\gets \\varnothing$\\\\\n\\For{$r \\leftarrow 1$ \\KwTo $R$}{\n    Sample $y \\sim \\frac{1}{n}\\sum_{i=1}^{n} p_i$ \\\\\n    $\\sigma(y) =\\frac{\\frac{1}{s}\\sum_{i=1}^{s} p_{(i)}(y)}\n             {\\frac{1}{n}\\sum_{i=1}^{n} p_i(y)}$\n        \n    \\If{accept $y$ with $\\sigma(y)$}{\n        \\Return $y$\n    }\n    $Buffer \\gets Buffer \\cup \\{\\langle y, \\sigma(y) \\rangle \\}$\\\\\n}\n$c \\gets Random()$ \\textcolor{mGreen}{\\#Obtain local coin 0 or 1.} \\\\\n\\If{$c==0$}{\n\\Return $\\bot$\n}\\Else{\n\nSort $Buffer=\\{\\langle y_i, \\sigma(y_i) \\rangle \\}_{i=1}^{R}$ \n such that $\\sigma(y_{(1)}) \\ge \\dots \\ge \\sigma(y_{(R)})$\\\\\nLet $\\mathcal{F} = \\{y_{(1)}, \\dots, y_{u}\\}, \\; u= min(s,R)$ \\\\\n\\For{$i \\leftarrow 1$ \\KwTo $u$}{\n    $\\alpha(y_{(i)}) = \\sum_{j=s+1}^{n} p_{(j)}(y_{(i)})$\n}\n\\Return $y \\gets \\arg\\max_{y \\in \\mathcal{F}} \\alpha(y)$\n\n}\n\n\n\\caption{Reliable Consensus Sampling from Local Coins}\n\\label{alg:coin}\n\\end{algorithm}"
+  },
+  {
+   "level": "section",
+   "title": "Proof",
+   "text": "\\label{app:ac}\n\n\\begin{align*}\n&\\sigma(y_t) - \\sigma(y_v) \\\\\n&=\n\\frac{\\frac{1}{s} \\sum_{i \\le s} p_{(i)}(y_t)}\n     {\\frac{1}{n} \\sum_{i=1}^{n} p_i(y_t)}\n-\n\\frac{\\frac{1}{s} \\sum_{i \\le s} p_{(i)}(y_v)}\n     {\\frac{1}{n} \\sum_{i=1}^{n} p_i(y_v)}\n\\\\[2mm]\n&=\n\\frac{\n\\left( \\frac{1}{s} \\sum_{i \\le s} p_{(i)}(y_t) \\right)\n\\left( \\frac{1}{n} \\sum_{i=1}^{n} p_i(y_v) \\right)\n-\n\\left( \\frac{1}{s} \\sum_{i \\le s} p_{(i)}(y_v) \\right)\n\\left( \\frac{1}{n} \\sum_{i=1}^{n} p_i(y_t) \\right)\n}{\n\\left( \\frac{1}{n} \\sum_{i=1}^{n} p_i(y_t) \\right)\n\\left( \\frac{1}{n} \\sum_{i=1}^{n} p_i(y_v) \\right)\n}\n\\\\[2mm]\n&=\n\\frac{n}{s} \\cdot\n\\frac{\n\\left( \\sum_{i \\le s} p_{(i)}(y_t) \\right)\n\\left( \\sum_{i=1}^{n} p_i(y_v) \\right)\n-\n\\left( \\sum_{i \\le s} p_{(i)}(y_v) \\right)\n\\left( \\sum_{i=1}^{n} p_i(y_t) \\right)\n}{\n\\left( \\sum_{i=1}^{n} p_i(y_t) \\right)\n\\left( \\sum_{i=1}^{n} p_i(y_v) \\right)\n}\n\\\\[2mm]\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n&=\n\\frac{n}{s} \\cdot\n\\frac{\n\\left( \\sum_{i \\le s} p_{(i)}(y_t) \\right)\n\\left( \\sum_{i > s} p_{(i)}(y_v) \\right)\n-\n\\left( \\sum_{i \\le s} p_{(i)}(y_v) \\right)\n\\left( \\sum_{i > s} p_{(i)}(y_t) \\right)\n}{\n\\left( \\sum_{i=1}^{n} p_i(y_t) \\right)\n\\left( \\sum_{i=1}^{n} p_i(y_v) \\right)\n}\n\\end{align*}"
+  },
+  {
+   "level": "section",
+   "title": "Additional Discussion",
+   "text": ""
+  },
+  {
+   "level": "subsection",
+   "title": "RCS and Multi-Agent Debate",
+   "text": "Multi-agent debate (MAD) \\citep{du2024improving, chan2024chateval, liu2025breaking} is a reasoning enhancement technique built on LLM inference. MAD enables multiple agents to interact over several rounds. The goal is to encourage consensus on the same answer to a given query. A final decision is then produced through answer aggregation methods such as majority voting \\citep{du2024improving}. In terms of output safety, MAD and RCS share a similar motivation. Both approaches introduce multiple models to improve the safety of the final output. Some MAD methods also adopt confidence scores to evaluate candidate answers proposed by other models \\citep{chen-etal-2024-reconcile}. This mechanism is conceptually related to RCS. Compared to MAD, RCS follows a more fundamental strategy. RCS directly operates on underlying probability distributions. In contrast, MAD requires models to possess an explicit understanding of safety. This requirement limits robustness against unforeseen attacks. Moreover, RCS does not require interaction among models. This design avoids the conformity \\citep{weng2025do} inherent in LLMs. Operating on underlying probability distributions also mitigates the impact of hallucination \\citep{ji-etal-2023-towards} during reasoning. However, this design limits practical applicability. In many scenarios, models are accessed as black-box services, and probability distributions are not available. We argue that an intersection between MAD and RCS can improve the practical applicability of RCS. We continue to avoid direct interaction among models. Instead, each model outputs a score for each candidate output $y$ at every round. This score represents the level of support for $y$. All other components remain consistent with RCS. We refer to this variant as Practical Reliable Consensus Sampling (PRCS). More broadly, PRCS can be applied beyond safety. It can also enhance model reasoning performance in domains such as mathematics, medicine, and programming \\citep{luo2025large}."
+  },
+  {
+   "level": "section",
+   "title": "Additional Experimental Results",
+   "text": "\\label{app:results}\n\n\n\n\n\n\n\n\n\n\\newpage"
+  },
+  {
+   "level": "section",
+   "title": "Necessity Analysis of Liveness",
+   "text": "We further analyze the necessity of the liveness property. In real-world deployments, the goal of $\\mathcal{MG}$ is not only to guarantee safety, but also to accomplish normal inference tasks such as mathematics, medical diagnosis, and programming. The objective is to maintain both functionality and safety, rather than prioritize safety as the sole consideration. As a result, in practical applications, $\\mathcal{MG}$ must be able to perform valid reasoning on a wide variety of prompts. From the perspective of safety, abstention can be used to avoid unsafe responses. However, for regular inference tasks, abstention is not acceptable, as the response $\\bot$ cannot adaptively provide reasonable outputs for unknown prompts. Therefore, liveness is necessary for $\\mathcal{MG}$ from a practical application perspective."
+  }
+ ],
+ "figures": [
+  {
+   "caption": "Overview of security risks in generative model reasoning. These risks arise from the aggregation of risks across three core stages. From a theoretical perspective, such risks are unavoidable.",
+   "label": "fig:example",
+   "images": [
+    "latex/eval/example.pdf"
+   ]
+  },
+  {
+   "caption": "Distribution under general adversarial conditions.",
+   "label": "fig:distribution",
+   "images": [
+    "latex/eval/distribution.pdf",
+    "latex/eval/distribution2.pdf"
+   ]
+  },
+  {
+   "caption": "$n=33$.",
+   "label": "fig:SR_g",
+   "images": [
+    "latex/eval_res/SR-33.pdf",
+    "latex/eval_res/SR-65.pdf",
+    "latex/eval_res/SR-129.pdf"
+   ]
+  },
+  {
+   "caption": "$n=33$.",
+   "label": "fig:TC_g",
+   "images": [
+    "latex/eval_res/TC-33.pdf",
+    "latex/eval_res/TC-65.pdf",
+    "latex/eval_res/TC-129.pdf"
+   ]
+  },
+  {
+   "caption": "$n=33$.",
+   "label": "fig:SR_m",
+   "images": [
+    "latex/eval_res_m/SR-33-m.pdf",
+    "latex/eval_res_m/SR-65-m.pdf",
+    "latex/eval_res_m/SR-129-m.pdf"
+   ]
+  },
+  {
+   "caption": "$n=33$.",
+   "label": "fig:TC_m",
+   "images": [
+    "latex/eval_res_m/TC-33-m.pdf",
+    "latex/eval_res_m/TC-65-m.pdf",
+    "latex/eval_res_m/TC-129-m.pdf"
+   ]
+  },
+  {
+   "caption": "Accuracy of the feedback algorithm for different $\\lambda$ and $n$ values under $f < \\lceil \\frac{n}{2} \\rceil$.",
+   "label": "fig:dr",
+   "images": [
+    "latex/eval/DR.pdf"
+   ]
+  },
+  {
+   "caption": "$n=5$.",
+   "label": "fig:sr_app",
+   "images": [
+    "latex/eval_res/SR-5.pdf",
+    "latex/eval_res/SR-9.pdf",
+    "latex/eval_res/SR-17.pdf"
+   ]
+  },
+  {
+   "caption": "$n=5$.",
+   "label": "fig:TC_g_app",
+   "images": [
+    "latex/eval_res/TC-5.pdf",
+    "latex/eval_res/TC-9.pdf",
+    "latex/eval_res/TC-17.pdf"
+   ]
+  },
+  {
+   "caption": "$n=5$.",
+   "label": "fig:sr_m_app",
+   "images": [
+    "latex/eval_res_m/SR-5-m.pdf",
+    "latex/eval_res_m/SR-9-m.pdf",
+    "latex/eval_res_m/SR-17-m.pdf"
+   ]
+  },
+  {
+   "caption": "$n=5$.",
+   "label": "fig:TC_m_app",
+   "images": [
+    "latex/eval_res_m/TC-5-m.pdf",
+    "latex/eval_res_m/TC-9-m.pdf",
+    "latex/eval_res_m/TC-17-m.pdf"
+   ]
+  },
+  {
+   "caption": "$n=34$.",
+   "label": "fig:SR_d_app",
+   "images": [
+    "latex/eval_res_d/SR-34.pdf",
+    "latex/eval_res_d/SR-66.pdf",
+    "latex/eval_res_d/SR-130.pdf"
+   ]
+  },
+  {
+   "caption": "$n=34$.",
+   "label": "fig:TC_d_app",
+   "images": [
+    "latex/eval_res_d/TC-34.pdf",
+    "latex/eval_res_d/TC-66.pdf",
+    "latex/eval_res_d/TC-130.pdf"
+   ]
+  },
+  {
+   "caption": "Accuracy of the feedback algorithm for different $\\lambda$ and $n$ values when Byzantine models collude.",
+   "label": "fig:dr_m",
+   "images": [
+    "latex/eval/DR_m.pdf"
+   ]
+  }
+ ],
+ "tables": [
+  {
+   "caption": "A comprehensive comparison between our proposed RCS and existing method.",
+   "label": "tab:compare",
+   "latex": "\\begin{tabular}{@{}l|cccccc@{}}\n    \\toprule\n\\textbf{Algorithm}  & \\textbf{Safety} & \\textbf{Liveness} & \\textbf{Anti-Collusion} & \\textbf{Half-Resilience} & \\textbf{Termination} &\\textbf{Time Complexity}\\\\\n    \\midrule\nConsensus Sampling & \\textcolor{nGreen}{\\ding{51}} & \\textcolor{nRed}{\\ding{55}} & \\textcolor{nRed}{\\ding{55}} & \\textcolor{nRed}{\\ding{55}} & \\textcolor{nGreen}{\\ding{51}} & $\\mathcal{O}(RI)$\\\\\nReliable Consensus Sampling & \\textcolor{nGreen}{\\ding{51}} & \\textcolor{nGreen}{\\ding{51}} & \\textcolor{nGreen}{\\ding{51}} & \\textcolor{nGreen}{\\ding{51}} & \\textcolor{nGreen}{\\ding{51}} & $[\\mathcal{O}(RI), \\ \\mathcal{O}(RI + n^2 \\log n)]$\\\\\n    \\bottomrule\n    \\end{tabular}"
+  },
+  {
+   "caption": "Comprehensive comparison between our RCS and the baseline across different dimensions. Boldface indicates the best value in each dimension.",
+   "label": "tab:comparison",
+   "latex": "\\begin{tabular}{l|llll|llll}\n    \\toprule\n    \\multirow{2}{*}{\\textbf{Method}} \n    & \\multicolumn{4}{c|}{\\textbf{Consensus Sampling (Baseline)}} \n    & \\multicolumn{4}{c}{\\textbf{Reliable Consensus Sampling (Ours)}} \\\\\n    \\cmidrule(lr){2-5} \\cmidrule(lr){6-9}\n    & $f < \\lceil \\frac{n}{2} \\rceil$ & $f = \\lceil \\frac{n}{2} \\rceil$ & Collusion & AVG & $f < \\lceil \\frac{n}{2} \\rceil$ & $f = \\lceil \\frac{n}{2} \\rceil$ & Collusion & AVG \\\\\n    \\midrule\n    Safe Rate       & 20.39 & 15.83 & 1.45  & 12.56 & 82.88 & 81.49 & 67.90 & \\textbf{77.42} ($\\uparrow\\times 5.16$) \\\\\n    Abstention Rate & 71.79 & 72.52 & 82.95 & 75.75 & 0.00  & 0.00 & 0.00 & \\textbf{0.00} ($\\downarrow 100\\%$) \\\\\n    Latency         & 22.60 & 26.73 & 21.43 & 23.59 & 24.26 & 22.21 & 18.42 & \\textbf{21.63} ($\\downarrow 8.31\\%$) \\\\\n    \\bottomrule\n    \\end{tabular}"
+  }
+ ],
+ "equations": [
+  {
+   "env": "align*",
+   "latex": "q(U) &= (1-\\Pr[\\text{T}]) \\cdot \\frac{1}{Z} \\sum_{y \\in U}\\frac{1}{s}\\sum_{i=1}^{s}p_{(i)}(y) \\\\ &+ \\Pr[\\text{T}] \\cdot \\rho(U)\\\\\n&\\leq  ZR \\cdot \\frac{1}{Z} \\sum_{y \\in U}\\frac{1}{s}\\sum_{i=1}^{s}p_{(i)}(y) + \\Pr[\\text{T}] \\cdot \\rho(U)\\\\\n&=  R \\cdot \\sum_{y \\in U}\\frac{1}{s}\\sum_{i=1}^{s}p_{(i)}(y) + \\Pr[\\text{T}] \\cdot \\rho(U)\\\\\n&\\leq R \\cdot \\frac{1}{s}\\sum_{i=1}^{s}p_{(i)}(U) + \\Pr[\\text{T}] \\cdot \\rho(U) \\\\\n&= R \\cdot\\mu(U) + (1-Z)^R \\cdot \\rho(U)"
+  },
+  {
+   "env": "align*",
+   "latex": "&\\sigma(y_t) - \\sigma(y_v) \\\\\n&=\n\\frac{\\frac{1}{s} \\sum_{i \\le s} p_{(i)}(y_t)}\n     {\\frac{1}{n} \\sum_{i=1}^{n} p_i(y_t)}\n-\n\\frac{\\frac{1}{s} \\sum_{i \\le s} p_{(i)}(y_v)}\n     {\\frac{1}{n} \\sum_{i=1}^{n} p_i(y_v)}\n\\\\[2mm]\n&=\n\\frac{\n\\left( \\frac{1}{s} \\sum_{i \\le s} p_{(i)}(y_t) \\right)\n\\left( \\frac{1}{n} \\sum_{i=1}^{n} p_i(y_v) \\right)\n-\n\\left( \\frac{1}{s} \\sum_{i \\le s} p_{(i)}(y_v) \\right)\n\\left( \\frac{1}{n} \\sum_{i=1}^{n} p_i(y_t) \\right)\n}{\n\\left( \\frac{1}{n} \\sum_{i=1}^{n} p_i(y_t) \\right)\n\\left( \\frac{1}{n} \\sum_{i=1}^{n} p_i(y_v) \\right)\n}\n\\\\[2mm]\n&=\n\\frac{n}{s} \\cdot\n\\frac{\n\\left( \\sum_{i \\le s} p_{(i)}(y_t) \\right)\n\\left( \\sum_{i=1}^{n} p_i(y_v) \\right)\n-\n\\left( \\sum_{i \\le s} p_{(i)}(y_v) \\right)\n\\left( \\sum_{i=1}^{n} p_i(y_t) \\right)\n}{\n\\left( \\sum_{i=1}^{n} p_i(y_t) \\right)\n\\left( \\sum_{i=1}^{n} p_i(y_v) \\right)\n}\n\\\\[2mm]\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n&=\n\\frac{n}{s} \\cdot\n\\frac{\n\\left( \\sum_{i \\le s} p_{(i)}(y_t) \\right)\n\\left( \\sum_{i > s} p_{(i)}(y_v) \\right)\n-\n\\left( \\sum_{i \\le s} p_{(i)}(y_v) \\right)\n\\left( \\sum_{i > s} p_{(i)}(y_t) \\right)\n}{\n\\left( \\sum_{i=1}^{n} p_i(y_t) \\right)\n\\left( \\sum_{i=1}^{n} p_i(y_v) \\right)\n}"
+  },
+  {
+   "env": "display",
+   "latex": "\\mathcal{D}_{t,v} =\n\\frac{\n\\sum_{i = 1}^{s} p_{(i)}(y_t) \\sum_{i = s+1}^{n} p_{(i)}(y_v)\n}{\n\\sum_{i = 1}^{s} p_{(i)}(y_v) \\sum_{i = s+1}^{n} p_{(i)}(y_t)\n}."
+  }
+ ],
+ "stats": {
+  "n_sections": 25,
+  "n_figures": 14,
+  "n_tables": 2,
+  "n_equations": 3,
+  "n_chars": 48067
+ }
+}

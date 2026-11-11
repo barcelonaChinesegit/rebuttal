@@ -1,0 +1,154 @@
+%!TEX root=./main.tex
+
+\section{Introduction}
+
+Given a concurrent program, the \emph{estimation problem} asks: how many different behaviors (up to a certain size) does it have?
+It is a natural, counting analogue of decision questions such as reachability.
+%
+In this work, we develop systematic solutions for the estimation problem.
+As a first step, we must answer what we mean by a behavior, since 
+different model checkers induce different notions of behaviors.
+A naive interleaving-based model checker treats every thread schedule as a distinct execution.
+In contrast, a checker based on partial-order reduction \cite{GodefroidThesis, spin, dpor, verisoft,pop-dpor,optimal-dpor,nidhugg,trust} 
+collapses all schedules within the same equivalence class into a single behavior, 
+thereby exploring a significantly smaller space.
+Additional heuristics may reduce the space further, e.g., by defining coarser equivalences based on symmetry.
+
+We focus on behaviors induced by Mazurkiewicz's trace equivalence, where two executions are considered equivalent
+if one can be obtained from the other by repeated swapping of adjacent commutative operations.
+Our choice is guided, on the one hand, by the success of this notion in model checking
+\cite{spin, verisoft, dpor,optimal-dpor, trust}
+and, on the other, by the recent emergence of many \emph{optimal} exploration algorithms that guarantee that each equivalence class is visited exactly 
+once \cite{optimal-dpor, trust, must}.
+In this setting, the estimation problem asks:
+\begin{quote}
+{\bf Exact Estimation problem:} Given a bounded program \(P\), how many Mazurkiewicz equivalence classes do its interleavings induce?
+\end{quote}
+
+For an optimal model checking algorithm, the estimation problem is directly related (but not identical) to the cost of model checking with partial order reduction.
+Thus, solving the estimation problem can help answer two
+high-level quantitative questions that arise when using a model checker:
+\emph{``How long should we expect the model checker to run?''} and
+\emph{``What fraction of the state space has the model checker covered so far?''}
+Reliable answers to these questions allow users of model checking tools to predict verification effort (see, e.g., discussions in \cite{WangCGMK18,gator}).
+%
+% Reliable answers to these questions have the potential to significantly enhance
+% the usability and adoption of model checkers \cite{gator,jpf}, by enabling software teams
+% to allocate computational budgets more effectively, predict the remaining
+% verification effort, and meaningfully compare competing verification tools.
+% As model checkers become an integral part of the modern software development toolkit
+% \cite{spin, cbmc,jbmc, p-lang, trust,optimal-dpor,nidhugg,condpor,kani,must,jpf,cpachecker,cdschecker,concuerror,rInspect},
+% these resourcing questions become increasingly important.
+
+We first ask whether the above estimation problem can be solved
+tractably (i.e., in polynomial time in the size of the program).
+The situation is bleak:
+we show that the problem is \#P-hard even for highly restricted concurrent programs.
+Informally, the \#P-hardness result implies that the task is at least as hard as
+counting the satisfying assignments of a Boolean formula (\#SAT), a canonical
+counting problem for which no efficient algorithm is believed to exist.
+In fact, we show that unless \textsf{P} = \textsf{NP}, we cannot even \emph{approximate} the number of equivalence classes
+up to a subexponential factor!
+Thus, neither exact nor even moderately precise approximate
+counting is feasible in general.
+
+Although these hardness results rule out efficient exact or approximate
+counting, they do not prevent us from obtaining statistical or \emph{Monte Carlo}
+estimates of the size of the behavioral-space.
+The statistical formulation of our problem asks for an \emph{unbiased estimator}:
+\begin{quote}
+{\bf Unbiased statistical estimation problem:} Given a bounded program \(P\), give a polynomial-time randomized procedure whose expected value is the number of Mazurkiewicz-equivalence classes.
+\end{quote}
+%
+
+A natural starting point for deriving such an estimator is Knuth's classical
+estimator \cite{knuth75}, which approximates the number of leaves in a
+combinatorial search tree by performing a randomized exploratory
+walk, recording the branching factors encountered along each walk, and
+computing a weighted product; this yields an unbiased estimator of the total
+number of leaves.
+
+
+However, the space of Mazurkiewicz traces is a directed acyclic graph (DAG) but not a tree:
+different schedules of events can merge into the same equivalence class.
+On a DAG, Knuth's procedure is no longer an unbiased estimator.
+Leonard Pitt generalized Knuth's procedure so it works for DAGs\cite{pitt}.
+While Pitt's estimator is unbiased, its variance is too high to be of practical use: 
+even when a program has exactly one maximal trace, the variance can be exponential.
+
+The main main insight we employ in this work that the \trust stateless optimal \dpor algorithm \cite{trust}
+can be converted into an unbiased estimator!
+This follows because the \trust algorithm enjoys several crucial properties.
+First, its optimality guarantee implies that the underlying state space explored by the algorithm defines a tree structure.
+Second, since it is stateless, the next decisions depend solely on the current state and not on the history of the search.
+Third, each exploration of the algorithm is bounded polynomially in the size of the program.
+
+These observations together imply that the underlying state space traversed by \trust is a tree, whose depth and width are bounded by a quadratic function of the program size,
+and whose leaves are exactly the maximal Mazurkiewicz traces.
+Thus, estimating the leaves of this tree solves the estimation problem,
+and we can apply the Knuth estimator to this (implicitly constructed) tree to obtain an unbiased estimator.
+The algorithm is surprisingly simple: we run \trust, but instead of systematically exploring all successors, we randomly pick one successor at each stage.
+At the end, we output the product of the number of choices we had along the path.
+Note that we do not exhaustively explore all traces; this number can grow exponentially with program size.
+
+While the estimator is unbiased, its variance can still be exponentially large,
+reflecting the inherent hardness of approximation.
+However, in many practical situations, a large variance often occurs not because of inherent computational complexity but because the underlying tree is ``skewed''.
+In the \trust algorithm, some explored paths are linear in the size of the program while others can
+be quadratic---a random walk procedure is much more likely to visit the ``shallow'' leaves than the ``deep'' ones.
+
+In order to reduce variance, we use a technique from Monte Carlo estimation called \emph{stochastic enumeration} \cite{rubinstein, vaisman2017} or weighted ensemble \cite{huberkim}.
+Instead of one random walk, as in Knuth's estimator, we maintain a small population of partial paths at each depth of the tree.
+Whenever a path ends, the population is redistributed to reflect the structure.
+The overall stochastic procedure ensures that no single highly unbalanced subtree dominates the
+estimate.
+This preserves the unbiasedness of estimation while substantially smoothing out the contribution
+of deep but large subtrees.
+As our evaluation shows, on a diverse set of bounded concurrent programs, the
+resulting estimator attains stable estimates with a modest number of samples,
+suggesting that this variance-reduction strategy is well suited to realistic
+model-checking workloads.
+
+We have implemented our estimator in the \dpor-based stateless Java model checker JMC and evaluated it on a suite of bounded concurrent programs, including concurrent data structures 
+and synthetic benchmarks designed to exercise different concurrency patterns.
+
+We show that the estimator based on \trust, combined with stochastic enumeration, consistently achieves stable estimates within a small number of trials---typically a few hundred---even 
+for behavior spaces ranging from about \(10^{5}\) to \(10^{6}\)
+executions, with relative error usually within a 20\% band.
+On the other hand, each aspect of our estimation algorithm remains 
+crucial: on these benchmarks, a DAG-based estimator or an estimator that does not perform stochastic enumeration fails to converge.
+
+We note that the combination of \trust, tree-estimation, and stochastic enumeration exploits a number of subtle but important properties of the \trust algorithm.
+First, we crucially leverage the fact that the underlying optimal \dpor algorithm is history independent.
+In an optimal model checker like Nidhugg~\cite{nidhugg}, every execution graph is visited through a unique path, implicitly inducing a tree.
+However, the task of sampling paths in such a tree (in the style of Knuth's estimator) can be non-trivial.
+This is because, to decide whether a given execution graph is an extension of another, the model checker may have to consult the history of the exploration, 
+ paying exponential cost in the worst case, undermining the poly-time sampling property.
+Second, one could try to reduce variance using a number of heuristics that perform importance sampling in various ways.
+However, in practice, the performance of importance sampling is very sensitive to good estimates of the relative sizes of different options.
+These estimates are difficult to come by for practical benchmarks.
+%% other than by computationally expensive nested Monte Carlo searches.
+
+We also explore the theoretical question of whether there is a good approximate counter that uses \emph{subexponential} time.
+We find that, surprisingly, there is an unbiased estimator with low variance that runs in time \(\tilde{O}(\sqrt{N})\), where \(N\) is the number of possible maximal traces (here $\tilde{O}$ hides polynomial factors)!
+While theoretically optimal (there is an \(\Omega(\sqrt{N})\) lower bound \cite{Stockmeyer85}), the polynomial factors appearing in the algorithm are too large for empirical evaluation.
+
+\myparagraph{Contributions}{
+In summary, this paper makes the following contributions: 
+\begin{itemize}[topsep=0pt, partopsep=0pt, itemsep=0.25em, parsep=0pt]
+  \item  
+  We formulate the estimation problem for Mazurkiewicz traces and show that it is \#P-hard 
+  and
+  inapproximable within any subexponential factor unless \textsf{P} = \textsf{NP}.
+
+  \item 
+  We show how the stateless optimal \dpor algorithm \trust can be modified to produce a poly-time unbiased estimation, and show how a population-based
+  estimation strategy reduces the variance of the estimation (\cref{trust_sec}, \cref{sec:se}).
+  
+  \item We evaluate our estimation procedure on a wide variety of shared-memory concurrency benchmarks in the context of the \jmc model checker (\cref{sec:experiment}).
+  The summary of our experiments is that our estimator provides accurate and robust estimates of the number of equivalence classes, as well as the cost of model checking,
+  while using a small population budget and a modest number of samples.
+\end{itemize}
+}
+
+%For space reasons, the detailed proofs be found in the full version of the paper~\cite{balasubramanian2026statespaceestimationdporbased}.

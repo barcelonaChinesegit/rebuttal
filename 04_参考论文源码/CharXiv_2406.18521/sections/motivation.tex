@@ -1,0 +1,93 @@
+\section{Existing Benchmarks Overestimate Chart Understanding Capabilities}
+\label{sec:motivation}
+
+\subsection{Related Works}
+\label{subsec:design_flaw}
+
+Existing benchmarks such as FigureQA \cite{kahou2017figureqa}, DVQA \cite{kafle2018dvqa}, PlotQA \cite{methani2020plotqa} do not fully capture the complexity and diversity of real-world charts due to their synthetic nature, while charts in ChartQA \cite{masry2022chartqa} lack visual diversity.
+More recent benchmarks such as MMC \cite{liu2024mmc}, ChartBench \cite{xu2024chartbench} and ChartX\footnote{Due to limited public availability of the MMC and ChartBench data, our assessment is based on the papers.} \cite{xia2024chartx} also contain issues with the source or diversity of the charts (\textit{e.g.,} ChartX, MMC) and the types of questions (\textit{e.g.,} MMC, ChartBench).
+We provide a summary of existing benchmarks' design choices in \cref{tab:design_choice} and a detailed review below. We provide a more detailed related works on Multimodal Large Language Models and More MLLM benchmarks in \cref{sec:more_related_works}.
+
+\begin{wraptable}[20]{r}{8cm}
+\centering
+\setlength{\tabcolsep}{2pt}
+\vspace{-2.8ex}
+\caption{Design choice of chart understanding benchmarks. We use the following shorthand:  Vis. Div.$=$visual diversity, Temp.$=$template, Knwl.$=$knowledge, and Vocab.$=$vocabulary. Cells marked with ``\notcheckmark'' indicate \textit{mixed attributes} (e.g., real and synthetic data; real and synthetic chart).}
+  \resizebox{8cm}{!}{
+\begin{tabular}{lccccccccc}
+\hline
+\toprule
+\small \textbf{} & \small \textbf{} & \small \textbf{} & &\multicolumn{3}{c}{\small {\textsc{Question Type}}} & \small \textbf{} & \multicolumn{1}{c}{\small {\textsc{Answer}}} \\
+\cmidrule{5-7} \cmidrule{9-9}
+\small \textbf{Name} & \small \textbf{Real} & \small \textbf{Real} & \textbf{Vis.} & \small \textbf{Temp.} & \small \textbf{Free} & \small \textbf{Knwl.} & \small \textbf{} & \small \textbf{Open} \\
+\small \textbf{} & \small \textbf{Data} & \footnotesize \textbf{Chart} & \textbf{Div.} & \small \textbf{Based} & \small \textbf{Form} & \small \textbf{Free} & \small \textbf{} & \small \textbf{Vocab.} \\
+\midrule
+\textit{QA-Based} \\
+\quad FigureQA \cite{kahou2017figureqa} & \xmark & \xmark & \xmark & \cmark & \xmark & \cmark  & \small \textbf{} & \xmark \\
+\quad DVQA \cite{kafle2018dvqa} & \xmark & \xmark & \xmark & \cmark & \xmark & \cmark & \small \textbf{} & \cmark \\
+\quad PlotQA \cite{methani2020plotqa} & \cmark & \xmark & \xmark & \cmark & \xmark & \cmark & \small \textbf{} & \cmark \\
+\quad ChartQA \cite{masry2022chartqa} & \cmark & \cmark & \xmark & \xmark & \cmark & \cmark & \small \textbf{} & \cmark \\
+\quad ChartBench \cite{xu2024chartbench} & \notcheckmark & \notcheckmark & \cmark & \cmark & \xmark & \cmark & \small \textbf{} & \xmark \\
+\arrayrulecolor{black!30}\midrule
+\textit{Multi-Task} \\
+\quad MMC \cite{liu2024mmc} & \cmark & \cmark & \xmark & \xmark & \cmark & \xmark & \small \textbf{} & \cmark \\
+\quad ChartX \cite{xia2024chartx} & \xmark & \xmark & \cmark & \xmark & \cmark & \cmark & \small \textbf{} & \cmark \\
+\arrayrulecolor{black!30}\midrule
+\textbf{\ours{}} & \cmark & \cmark & \cmark & \cmark & \cmark & \cmark & \small \textbf{} & \cmark \\
+\arrayrulecolor{black}\bottomrule
+\hline
+\end{tabular} }
+\label{tab:design_choice}
+%\vspace{-2ex}
+\end{wraptable}
+
+\textbf{Chart source.   }
+FigureQA, DVQA and PlotQA use plotting software to synthesize charts restricted to very few predefined chart types with stylistically similar elements (see \cref{fig:figureqa,,fig:dvqa,,fig:plotqa}).
+ChartQA sources charts from only 4 websites, each of which lacks visual diversity (see~\cref{fig:chartqa}).
+One such website also served as the primary source of charts for reasoning questions in MMC.
+On the other hand, ChartX provides fixed instructions to GPT-4 to write code to procedurally generate predefined types of charts and settings in bulk.
+All of these approaches yield artificial charts belonging to a narrow distribution.
+
+\textbf{Question types.}
+Existing benchmarks lack variation in their questions: FigureQA, DVQA and PlotQA use a fixed template to generate QA pairs, while ChartBench adopts an automatic QA generation pipeline according to 4 predefined tasks.
+However, similar to MMMU \cite{yue2023mmmu}, more complex reasoning questions from MMC cannot be solved from the charts alone and require external domain-specific knowledge (e.g., mapping acronyms in the legend to particular algorithms).
+
+\textbf{Answer \& validation.  }FigureQA and ChartBench both evaluate model performance only based on \emph{yes/no} questions.
+Evaluating models on binary answers does not faithfully reflect their performance in the natural use case of general free-form question answering \cite{li2024multiplechoice}. 
+
+\subsection{Open-Source MLLMs Are Sensitive to Perturbations}
+\label{subsec:control}
+
+
+Many open-source models have been adapting training sets of existing benchmarks \cite{kahou2017figureqa, kafle2018dvqa, masry2022chartqa} for visual instruction tuning \cite{liu2023llava} and show promising performance in their respective evaluation sets. However, due to the aforementioned issues with the diversity of these benchmarks, the evaluation data is too similar to the training data. As a result, evaluation scores often do not accurately reflect the general chart understanding capabilities of MLLMs. In particular, we demonstrate below that \textit{simple} modifications in the evaluation components lead to \textit{drastic} changes in model performance.
+
+
+\textbf{Models.  }We selected open-source models that are known to be trained on the training set of DVQA and ChartQA: Mini-Gemini (MGM) \cite{li2024minigemini}, InternVL-XComposer2 (IXC2) \cite{chen2023internvl}, InternVL-XComposer2 4KHD (IXC2 4KHD) \cite{dong2024internlmxcomposer24khd}, InternVL-Chat V1.5 \cite{chen2024far}, SPHINX V2 \cite{gao2024sphinxx}, LLaVA 1.6 \cite{liu2024llavanext}, and IDEFICS 2 \cite{laurenccon2024matters}.
+We compare their performance with proprietary models \cite{openai2024gpt4, claude3, rekateam2024reka}.
+
+
+\begin{figure*}[th!]
+  \centering
+    \includegraphics[width=1\linewidth]{figures/ablation_results.pdf}
+    \vspace{-4ex}
+    \caption{Open-source models generalize poorly to modified examples (measured by accuracy). Left: original set against modified-\textit{question} set. Right: original set against modified-\textit{chart} set.}
+    \label{fig:motivation}
+    \vspace{-1ex}
+\end{figure*}
+
+\textbf{Evaluation set.  }We extract subsets of DVQA, FigureQA, and ChartQA from MathVista. This yields 174 samples and we refer to it as the \textit{original set}.
+To test the robustness of the models mentioned above, we create two modified versions of the original set: the modified-question set (see \cref{sec:examples_mq}) and the modified-chart set (see \cref{sec:examples_mc}).
+In the modified-question set, we retain the original chart, but write novel questions that deviate from the predefined templates \cite{kahou2017figureqa, kafle2018dvqa}. 
+In the modified-chart set, we alter the charts to ones from arXiv with similar visual complexity that can be asked with the same types of questions. 
+We manually annotate all questions and answers in both modified-question and modified-chart set.
+As in the original set, we maintain an equal number of yes and no answers in the original set to prevent models from achieving artificially high scores by simply outputting one response more often than the other and adopt the same evaluation protocol as in MathVista.
+
+\textbf{Results.} As plotted in \cref{fig:motivation}, all proprietary models remain close to the diagonal line, indicating good generalization in both modified-question and modified-chart scenarios. 
+In contrast, most open-source models exhibit significant performance degradation in both settings, indicating poor generalization.
+We observe the most pronounced performance drop in SPHINX V2 in the modified-question set, where performance dropped by 34.5\%, from 63.2\% in the original set to 28.7\% in the modified-question set.
+Our findings demonstrate that design strategies in existing benchmarks lead to an \textit{overestimation} of chart understanding capabilities for open-source models.
+We hypothesize that the training and evaluation datasets are too similar, so models appear to generalize well despite not being robust to simple modifications.
+In the next section, we introduce \ours{}, which features a more natural, challenging, and diverse evaluation of real-world charts.
+
+
+

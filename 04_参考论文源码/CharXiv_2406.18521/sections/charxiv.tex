@@ -1,0 +1,121 @@
+\section{\texorpdfstring{\gradientRGB{CharXiv}{31,119,180}{179,26,26}}{CharXiv}: A Real-World and Challenging Chart Understanding Benchmark}
+\label{sec:charxiv_overview}
+\ours{} is a comprehensive and challenging chart understanding benchmark sourced solely from real-world charts. 
+We select diverse, naturally occurring, and complex figures from arXiv preprints, and manually construct descriptive and reasoning questions that require intensive visual and numerical analysis. 
+\ours{} consists of 2,323 charts paired with more than 10K questions---we randomly sample 1,000 charts as the validation set and use the rest as the test set.\footnote{Similar to MathVista \cite{lu2024mathvista} and MMMU \cite{yue2023mmmu}, we release all QA pairs for the validation set and keep the answers to the test set private to prevent data leakage.} In the following sections, we describe how we select charts (\S\ref{subsec:charxiv_chart}), construct questions (\S\ref{subsec:charxiv_questions}), and validate model responses (\S\ref{subsec:eval_protocol}).
+
+\subsection{Chart Curation}
+\label{subsec:charxiv_chart}
+\textbf{Figure source. }We downloaded all arXiv preprints on eight academic subjects from January 2020 to September 2023 (\cref{fig:overview}) and extracted figures from the source files. 
+All figures were re-rendered into high-resolution JPEG format, with the longer side of each figure resized to $1024$px.
+
+\textbf{Chart selection. }
+We define a chart as \emph{any figure that visually illustrates data}. 
+Most figures in arXiv source files are diagrams, illustrations, and natural images, \emph{not} charts. 
+To identify charts and promote visual diversity, we apply a four-step selection pipeline. 
+First, we utilize a pretrained SigLIP visual encoder \cite{zhai2023sigmoid} to identify candidate figures that exhibit a cosine similarity of at least $0.65$ with the average image embedding of existing charts from MathVista \cite{kafle2018dvqa, kahou2017figureqa, masry2022chartqa, lu2024mathvista}. 
+We choose this target similarity to balance identifying charts and ensuring good coverage of the visually diverse distribution. 
+Second, we recruit experienced graduate students to manually select charts from the candidate set.
+Concretely, we randomly sample 750 candidate figures from the pre-filtered set for each subject and year, and present 10 figures at a time to the annotators, asking them to select a single figure that is a chart and looks different from previously selected datapoints (see \cref{subsec:chart_selection_annotation} for details). 
+In the third step, we remove the charts that exhibit large ($\geq 0.95$) pairwise cosine similarities with the other candidates. 
+Finally, we remove the charts that are not clearly labeled or appear blurry. 
+At the end of this four-step pipeline, we have 2,323 charts in total. 
+
+We provide details of the chart categories, years, and number of subplots in \cref{fig:overview}, size information in \cref{tab:overall_statistics}, and a collage of sampled charts in \cref{fig:chartxiv}.
+Notably, the charts in \ours{} are much more compositional and complex in style compared to existing datasets. A single chart often combines elements or subplots featuring multiple chart types (e.g., lines and bars in one plot).
+
+\begin{figure*}[!t]
+  \centering
+    \includegraphics[width=1\linewidth]{figures/charxiv_overview_new.pdf}
+    \vspace{-3ex}
+    \captionsetup{justification=centering}
+    \caption{Metadata breakdown of charts, descriptive questions, and reasoning questions in \ours{}. 
+    %on charts, descriptive and reasoning questions.
+    }
+    \vspace{-2ex}
+    \label{fig:overview}
+\end{figure*}
+
+\subsection{Question Construction}
+\label{subsec:charxiv_questions}
+We construct two types of questions: \textit{descriptive} and \textit{reasoning}. 
+Descriptive questions assess models' capability in extracting and aggregating basic information from charts, and reasoning questions evaluate a model's ability to perform complex visual reasoning.
+
+\textbf{Descriptive questions.  }
+We designed a total of 19 templates for descriptive questions that require (1) identifying basic information, such as the title, axis labels, legend labels, labeled ticks, or (2) aggregating chart information to count ticks, recognize data patterns, and enumerate labels.
+These questions are broadly categorized into five groups: information extraction, enumeration, pattern recognition, counting, and compositionality (see \cref{subsec:resp_generation_desc} for details). 
+Although descriptive questions are intended to be easier than reasoning questions, they can still pose challenges due to the complexity of the charts. 
+For example, answering descriptive questions about charts with multiple subplots requires the model to first identify the relevant subplot\footnote{We use the prefix ``\textit{for the subplot at row N and column M}'' when subplots form a grid or a description \textit{e.g.,} ``\textit{for the bottom left subplot}'' otherwise. Both \textit{N} and \textit{M} start from 1.} (see \cref{subsec:desc_example1,,subsec:desc_example7,,subsec:desc_example10}).
+If basic elements such as the legend, axis, and title are shared across multiple subplots, the model must then also grasp the relationships among the subplots to extract the correct information (see \cref{subsec:desc_example3,,subsec:desc_example23}). %, adding another layer of difficulty. 
+We pair each chart with four descriptive questions and one of them is intentionally designed to be \emph{unanswerable}\footnote{This is inspired by similar designs in SQuAD 2.0~\cite{rajpurkar2018know} and WebArena~\cite{zhou2023webarena}.}, where the requested information does not exist or is not applicable to the subplot in the chart.
+We provide the distribution of specific questions in \cref{fig:overview}, aggregated statistics of questions and answers in \cref{tab:overall_statistics}, and a screenshot of the labeling process in \cref{subsec:descriptive_q_annotation}.
+
+\begin{wraptable}[26]{r}{4.8cm}
+\vspace{-2.8ex}
+\caption{\ours{} dataset statistics. Unique tokens and question \& answer lengths are calculated based on the GPT-4o tokenizer.}
+\scalebox{0.77}{
+\begin{tabular}{lr}
+\hline
+\toprule
+\textbf{Statistics}            & \textbf{Value}   \\
+\midrule
+\textbf{Charts}                &                  \\
+Total Charts                   & $2,323$          \\
+Total Subjects/Years           & $8 / 4$          \\
+Val:Test                       & $1,000 / 1,323$  \\
+Average size (px)              & $996\times702$   \\
+Maximum size (px)              & $1024\times1024$ \\
+\midrule
+\textbf{Descriptive Questions} &                  \\
+\# questions                   & $9,292$          \\
+\# unique questions            & $19$             \\
+\textit{Answer}                &                  \\
+- \# unique. tokens            & $3,723$          \\
+- maximum length               & $138$            \\
+- average length               & $2.93$           \\
+\midrule
+\textbf{Reasoning Questions}   &                  \\
+\# questions                   & $2,323$          \\
+\# unique questions            & $2,323$          \\
+\textit{Question}              &                  \\
+- \# unique tokens             & $5,114$          \\
+- maximum length               & $144$            \\
+- average length               & $22.56$          \\
+\textit{Answer}                &                  \\
+- \# unique tokens             & $2,177$          \\
+- maximum length               & $38$             \\
+- average length               & $2.8$            \\
+\bottomrule
+\hline
+\end{tabular}}
+\label{tab:overall_statistics}
+\end{wraptable}
+
+\textbf{Reasoning questions.  }
+We \textit{manually} craft one reasoning question for each chart to evaluate the models' ability to perform visual and numerical reasoning. 
+To ensure data quality, we recruit graduate students as annotators. 
+Annotators are presented with a chart and 10 sample reasoning QA pairs generated by GPT-4V. 
+Based on the diversity and practicality of the sample questions, annotators choose or modify one of the samples, or they create their own question for each chart.
+The resulting question must have a definite and unambiguous answer and must strictly adhere to one of the following four types:
+\vspace{-2ex}
+\begin{itemize}[leftmargin=*]
+  \setlength\itemsep{-0.2em}
+  \item \textit{text-in-chart}: The answer is a piece of text found in the chart (see \cref{subsec:reas_example1,,subsec:reas_example2,,subsec:reas_example6}).
+  \item \textit{text-in-general}: The answer is an easily verifiable phrase that is not necessarily in the chart (see \cref{subsec:reas_example3,,subsec:reas_example4,,subsec:reas_example30}).
+  \item \textit{number-in-chart}: The answer is a numerical value written on the chart (see \cref{subsec:reas_example7,,subsec:reas_example9,,subsec:reas_example12}).
+  \item \textit{number-in-general}: The answer requires an exact numerical value, not necessarily found in the chart, to a specified precision (see \cref{subsec:reas_example5,,subsec:reas_example14,,subsec:reas_example15}). 
+\end{itemize}
+\vspace{-2ex}
+
+One notable feature of our reasoning questions is that they are designed to require \textit{only} visual and numerical reasoning, without the need for advanced domain-specific knowledge or access to captions and referencing paragraphs. 
+This sets {\ours{}} apart from MathVista~\cite{lu2024mathvista}, MMMU~\cite{yue2023mmmu}, and arXiv-based QA datasets \cite{liu2024mmc, li2023scigraphqa, li2024multimodal}, which often require additional expert knowledge.
+Although our curation process requires significant human effort to craft question-answer pairs, we believe that it promotes originality, diversity, accuracy, and answerability. 
+The distribution for both QA sources and answer types is shown in \cref{fig:overview} and the aggregated statistics of the questions and answers are shown in \cref{tab:overall_statistics}. 
+We provide a screenshot of the annotation interface in \cref{subsec:reasoning_q_annotation}, and the response generation instructions for each type of answer in \cref{subsec:resp_generation_reas}. 
+
+\subsection{Evaluation Metrics}
+\label{subsec:eval_protocol}
+\ours{} is amenable to automatic grading due to the unambiguous nature of the answers. 
+Considering the fact that many charts contain Greek symbols and math notation that can be typed in different ways (\textit{e.g.,} \texttt{$\alpha$} and \texttt{\$$\backslash$alpha\$}; \texttt{T\^{}a\_b} and \texttt{T\_b\^{}a}), we opt out of exact match and instead use GPT-4o \cite{openai2024gpt4} to extract the answer and assign \textit{binary} scores based on the correctness.
+Similar GPT-assisted evaluations have become commonplace in many established benchmarks \cite{lu2024mathvista, yu2023mm, dubois2024alpacafarm}.
+Grading instructions for descriptive and reasoning questions are provided in \cref{subset:grading_desc} and \cref{subsec:grading_reas} respectively.

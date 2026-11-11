@@ -1,0 +1,105 @@
+\section{Inventory Model Overview}\label{sec:InventoryModel}
+
+We focus on the fundamental single-product inventory control problem to illustrate our general framework. However, our approach can be directly extended to the multi-problem or multi-echelon cases. To be specific, we 
+consider a periodic-review inventory system for a single product over a finite horizon of $T$ periods with stochastic demand. In each period $t$, demand $D_t$ lies in $[0, \bar{D}]$ and is drawn independently from an unknown distribution $F(\cdot)$. The firm places an order $q_t$ at the beginning of period $t$, which arrives after a deterministic lead time $L \in \mathds{N}$. Let $h \ge 0$ denote the per-unit holding cost, $b \ge 0$ the per-unit lost-sales penalty, and $H$ the setup cost.
+The sequence of events within each period $t$ is as follows:
+\begin{enumerate}
+    \item \textbf{State observation:} The firm observes on-hand inventory $I_t$ and the pipeline vector $(x_{1,t}, \ldots, x_{L,t})$, where $x_{i,t}$ is the order placed at $t-L+i-1$ for $i = 1, \ldots, L$. The system state is $(I_t, x_{1,t}, \ldots, x_{L,t})$.
+    \item \textbf{On-hand inventory update:} The order due to arrive is received, and on-hand inventory updates to $I_t + x_{1,t}$.
+    \item \textbf{Ordering decision:} The firm places $q_t$, which will arrive at the beginning of period $t+L$ (i.e., \mbox{$x_{L,t+1} = q_t$}).
+    \item \textbf{Demand realization and fulfillment:} Demand $D_t$ realizes and is satisfied up to available inventory; unmet demand is lost and unobserved.
+\end{enumerate}
+If the system is a lost-sale system and the product is non-perishable, then
+the state evolves according to
+\[
+I_{t+1} = \big(I_t + x_{1,t} - D_t\big)^+, 
+\quad x_{i,t+1} = x_{i+1,t} \ \text{ for } 1 \le i \le L-1, 
+\quad x_{L,t+1} = q_t.
+\]
+In contrast, if the system is a back-order system and the product is non-perishable, then the state evolves according to 
+\[
+I_{t+1} = I_t + x_{1,t} - D_t, 
+\quad x_{i,t+1} = x_{i+1,t} \ \text{ for } 1 \le i \le L-1, 
+\quad x_{L,t+1} = q_t,
+\]
+where we allow the on-hand inventory level to be negative which will be replenished by future orders. Finally, if the product is perishable and the system is lost-sale, then the state evolves according to
+\[
+I_{t+1} = 0, 
+\quad x_{i,t+1} = x_{i+1,t} \ \text{ for } 1 \le i \le L-1, 
+\quad x_{L,t+1} = q_t.
+\]
+If the product is perishable and the system is back-order, then the state evolves according to
+\[
+I_{t+1} = \min\left\{ I_t + x_{1,t} - D_t, 0  \right\}, 
+\quad x_{i,t+1} = x_{i+1,t} \ \text{ for } 1 \le i \le L-1, 
+\quad x_{L,t+1} = q_t.
+\]
+A policy $\policy$ specifies order quantities $q_1^\policy, \ldots, q_T^\policy$. A policy $\policy$ is \emph{feasible} if it is non-anticipative: for each $t$, $q_t^\policy$ depends only on past and current states $\{(I_\tau^\policy, x_{1,\tau}^\policy, \ldots, x_{L,\tau}^\policy): \tau \le t\}$ and realized demand information $\{D_{\tau}: \tau \le t\}$. The distribution $F(\cdot)$ is unknown and must be learned.
+The period-$t$ cost under policy $\policy$ is
+\[
+C_t^\policy \;=\; H\cdot \mathds{1}_{\{q^\policy_t>0\}} + h \cdot \big(I_t + x_{1,t} - D_t\big)^+ \;+\; b \cdot \big(D_t - I_t - x_{1,t}\big)^+.
+\]
+The expected cumulative cost over $T$ periods is
+\[
+C^\policy(T, L) \;=\; \sum_{t=1}^T \mathds{E}[C_t^\policy]
+\;=\; \sum_{t=1}^T \mathds{E}\!\left[H\cdot \mathds{1}_{\{q^\policy_t>0\}} + h \cdot \big(I_t + x_{1,t} - D_t\big)^+ + b \cdot \big(D_t - I_t - x_{1,t}\big)^+\right].
+\]
+We develop policies to minimize the long-run average cost given by $C^\policy(T, L)$.
+
+\subsection{An Overview of Heuristic Policies}
+We introduce several heuristic policies for the periodic-review, lead-time inventory problem described above, covering lost-sales and backorder systems as well as perishable and non-perishable products. 
+
+\noindent\textbf{Order-up-to policy}.
+A natural starting point is the \textit{order-up-to}, or \textit{base-stock policy}. In each period, the firm raises its inventory position---defined as the sum of on-hand inventory and the $L$ outstanding pipeline orders---to a target level $S$ by ordering $q_t = [S - \mathrm{IP}_t]^+$, where $\mathrm{IP}_t = I_t + \sum_{i=1}^L x_{i,t}$. Under non-perishable items with backorders, linear holding and backorder costs, and i.i.d.\ demand, base-stock policies are often optimal; the target $S$ can be set using the newsvendor fractile for the $L$-period protection demand, when the distribution is given, or by set using a bi-section method when the distribution is unknown and only historical samples are available. In lost-sales systems, base-stock policies remain widely used though optimality is more delicate; in practice, $S$ is tuned by minimizing an approximate expected holding and lost-sales cost over the protection period.
+
+\noindent\textbf{Constant-order policy}. The \textit{constant-order policy} prescribes ordering the same quantity in every period, independent of the current state. Formally, fix a constant $q \ge 0$ and set $q_t \equiv q$ for all $t$. The constant $q$ can be chosen using historical demand information, e.g., $q \approx \mathds{E}[D]$, or tuned via optimization or simulation to balance holding and shortage costs under the given lead time $L$. This policy is particularly appealing in lost-sales systems with long lead times and high penalty $b/h$, where smoothing the pipeline can mitigate stockouts while avoiding excessive accumulation. Variants include \textit{capped constant-order} policies, where the order is truncated to respect capacity constraints, $q_t = \min\{\bar{Q}, q\}$, or combined with minimal state dependence through caps on the inventory position, $q_t = \min\{\bar{Q}, [S - \mathrm{IP}_t]^+\}$ with a fixed $S$.
+
+\noindent\textbf{$(s, S)$ policy}.
+We now introduce the \textit{$(s, S)$ policy}, a classical state-dependent rule that generalizes the base-stock policy and is particularly suitable when the setup cost $H$ is positive. The $(s, S)$ policy is characterized by two parameters with $0 \le s \le S$. In each period $t$, the firm observes its inventory position $\mathrm{IP}_t = I_t + \sum_{i=1}^L x_{i,t}$ and orders only if $\mathrm{IP}_t < s$; when an order is placed, it raises the position up to $S$. Formally, the order quantity is
+\[
+q_t^{(s,S)} \;=\; \big[\, S - \mathrm{IP}_t \,\big]^+ \cdot \mathds{1}\{\mathrm{IP}_t < s\}.
+\]
+Intuitively, $s$ serves as a reorder threshold that limits the frequency of orders, while $S$ controls the target protection level against lead-time demand. In non-perishable, backorder systems with linear holding and backorder costs plus a fixed setup cost, $(s, S)$ policies are often optimal; absent a fixed cost, the rule reduces to a base-stock policy with $s = S$. In lost-sales systems, $(s, S)$ remains a practical choice, where $S$ is tuned to the desired service level or the newsvendor quantile for the protection period and $s$ trades off order frequency and pipeline smoothing. Capacity constraints can be easily incorporated via truncation 
+\[
+q_t^{(s,S)} = \min\{\bar{Q}, \, [S - \mathrm{IP}_t]^+ \mathds{1}\{\mathrm{IP}_t < s\}\}.
+\]
+We refer interested readers to \cite{simchi2005logic} for the introduction of other heuristic policies.
+\subsection{General Policies via MDP Formulation}
+We now cast the problem as a Markov decision process. For non-perishable items with lead time $L$, the system state at the beginning of period $t$ is $s_t = (I_t, x_{1,t}, \ldots, x_{L,t})$, where $I_t$ denotes on-hand inventory (which may be negative in backorder systems) and $x_{i,t}$ denotes the pipeline order scheduled to arrive in $i$ periods. The action is the nonnegative order quantity $q_t$ chosen at the ordering epoch. Exogenous uncertainty enters through the demand $D_t$, which is i.i.d.\ over time and distributed according to an unknown distribution $F$ supported on $[0, \bar{D}]$. The state transition follows the operational sequence: the oldest pipeline order $x_{1,t}$ arrives before demand, the pipeline shifts forward with $x_{i,t+1} = x_{i+1,t}$ for $i = 1, \ldots, L-1$ and $x_{L,t+1} = q_t$, and the on-hand inventory updates according to the fulfillment convention. 
+
+In the non-perishable lost-sales model, $I_{t+1} = (I_t + x_{1,t} - D_t)^+$, whereas in the non-perishable backorder model, $I_{t+1} = I_t + x_{1,t} - D_t$. For perishable products with one-period shelf life under lost sales, any leftover inventory perishes at the end of the period and $I_{t+1} = 0$; for perishable products with backorders, we set $I_{t+1} = \min\{I_t + x_{1,t} - D_t, 0\}$ to reflect that unmet demand carries forward while excess perishables do not.
+
+The period cost $c(s_t, q_t, D_t)$ captures holding and shortage penalties given the realized demand. With per-unit holding cost $h$, lost-sales penalty $b$, and the setup-cost $H$, we take
+\[
+c(s_t, q_t, D_t) \;=\; H\cdot \mathds{1}_{\{q_t>0\}} + h \, (I_t + x_{1,t} - D_t)^+ \;+\; b \, (D_t - I_t - x_{1,t})^+.
+\]
+This form accommodates both lost-sales and backorder conventions by interpreting the positive and negative parts appropriately.
+
+A feasible policy $\policy$ is a non-anticipative mapping from the observed history—comprising past and current states and realized demand information—to actions, and is equivalently represented as a stationary or time-dependent decision rule in the MDP. For a finite horizon of $T$ periods, the objective is to minimize the expected cumulative cost 
+$$
+\mathds{E}\Bigg[\sum_{t=1}^T c(s_t, q_t, D_t)\Bigg],
+$$ 
+while in the long-run regime the objective is to minimize the average cost 
+\[
+\limsup_{T\to\infty} \; \frac{1}{T} \,\mathds{E}\Bigg[\sum_{t=1}^T c(s_t, q_t, D_t)\Bigg].
+\]
+The corresponding Bellman equations are standard: with known demand distribution, the finite-horizon value function satisfies $V_0(s) = 0$ and
+\[
+V_t(s) \;=\; \min_{q \ge 0} \ \mathds{E}_D\big[\, c(s, q, D) + V_{t-1}(f(s, q, D)) \,\big],
+\]
+and in the average-cost setting, one seeks a scalar $g$ that represents the optimal average cost per period and a relative value function $V$ solving
+\[
+g + V(s) \;=\; \min_{q \ge 0} \ \mathds{E}_D\big[\, c(s, q, D) + V(f(s, q, D)) \,\big],
+\]
+where $f$ encodes the state transition induced by arrivals, ordering, and demand realization. This MDP formulation encompasses lost-sales and backorder systems and naturally extends to perishable goods and to multi-item or multi-echelon generalizations by expanding the state to include additional inventories and flows.
+
+
+
+
+
+
+
+
+
+
+

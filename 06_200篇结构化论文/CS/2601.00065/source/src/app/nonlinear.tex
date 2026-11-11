@@ -1,0 +1,309 @@
+\section{Why Nonlinear Coefficient Solvers Preserve Shared-Anchor Reach}
+\label{app:nonlinear-shared-anchor}
+
+This appendix supports the main-text claim that asymmetric realizability is structural to shared-basis reconstruction, not to OMP being a linear sparse solver. Nonlinear donor-side maps such as ReLU-renormalized similarity, softmax attention, and local $k$-NN mixtures still output a coefficient vector $w(x_d)$, and the base row is still the anchor mixture $\Phi_b^\top w(x_d)$.
+
+Let $\mathcal{T}$ be the shared-anchor set with $N=|\mathcal{T}|$. Write
+\[
+\Phi_b=
+\begin{bmatrix}
+(\phi_1^{(b)})^\top\\
+\vdots\\
+(\phi_N^{(b)})^\top
+\end{bmatrix}
+\in\mathbb{R}^{N\times\delta_b},
+\qquad
+\Phi_d=
+\begin{bmatrix}
+(\phi_1^{(d)})^\top\\
+\vdots\\
+(\phi_N^{(d)})^\top
+\end{bmatrix}
+\in\mathbb{R}^{N\times\delta_d}.
+\]
+For $S\subseteq\mathcal{T}$, let $\Phi_{b,S}$ and $\Phi_{d,S}$ denote the row-restricted dictionaries. For an admissible coefficient set $\mathcal{W}\subseteq\mathbb{R}^N$, define
+\[
+\varepsilon_b(\mu;\mathcal{W})
+:=
+\inf_{w\in\mathcal{W}}\|\Phi_b^\top w-\mu\|_2.
+\]
+The target $\mu$ is instantiated as $\mu_{\mathrm{base}}$ in the breaker-token design.
+
+\begin{assumption}[Shared-anchor final reconstruction]
+\label{ass:shared-anchor-final}
+For a donor-only token row $x_d$, the transplant operator computes a possibly nonlinear donor-side coefficient map
+\[
+g_d:\mathbb{R}^{\delta_d}\to\mathcal{W}\subseteq\mathbb{R}^N
+\]
+and then synthesizes the base row by
+\[
+\widehat{x}_b(x_d)=\Phi_b^\top g_d(x_d).
+\]
+The set $\mathcal{W}$ encodes the operator's coefficient constraints. Signed sparse solvers use signed sparse subsets of $\mathbb{R}^N$; softmax and barycentric solvers use a simplex or a union of local simplexes; top-$k$ rules use a union of simplexes over donor-selectable supports.
+\end{assumption}
+
+\begin{assumption}[Signed base reach on a selected support]
+\label{ass:signed-span}
+There is a support $S\subseteq\mathcal{T}$ with $|S|=k$ such that
+\[
+A_S:=\Phi_{b,S}^\top\in\mathbb{R}^{\delta_b\times k}
+\]
+has rank $r_S$. Let $P_S$ be the orthogonal projector onto $\operatorname{range}(A_S)$ and let $\sigma_{S,r_S}>0$ be the smallest nonzero singular value of $A_S$. The full signed-reach case is $r_S=\delta_b$.
+\end{assumption}
+
+\begin{assumption}[Convex covering at the target]
+\label{ass:convex-cover}
+Let
+\[
+\Delta_N:=\left\{w\in\mathbb{R}^N:w_j\ge 0,\ \sum_{j=1}^N w_j=1\right\},
+\qquad
+\mathcal{C}_b:=\Phi_b^\top\Delta_N
+=
+\operatorname{conv}\{\phi_j^{(b)}:j\in\mathcal{T}\}.
+\]
+For a target $\mu$, write
+\[
+\epsilon_C:=\operatorname{dist}(\mu,\mathcal{C}_b).
+\]
+If an operator uses nonnegative weights with $\|w\|_1\le 1$ rather than $\|w\|_1=1$, replace $\mathcal{C}_b$ by $\operatorname{conv}(\{0\}\cup\{\phi_j^{(b)}:j\in\mathcal{T}\})$.
+\end{assumption}
+
+\begin{assumption}[Donor-map reachability]
+\label{ass:donor-reachability}
+For a desired coefficient vector $w^\star\in\mathcal{W}$ and tolerance $\eta\ge 0$, the donor-side coefficient map is $\eta$-reachable at $w^\star$ if there exists a donor row $x_d$ such that
+\[
+\|g_d(x_d)-w^\star\|_2\le \eta.
+\]
+If, in addition, $\|Ux_d\|_2\le\gamma$, it is $(\eta,\gamma)$-reachable under the donor innocuity subspace. Appendix~\ref{app:operator-specific-reachability} gives finite-dimensional reachability conditions for FOCUS, CLP, top-$k$, and WECHSEL.
+\end{assumption}
+
+\begin{theorem}[Signed shared-anchor reachability criterion]
+\label{thm:signed-anchor-representation}
+Assume Assumptions~\ref{ass:shared-anchor-final}, \ref{ass:signed-span}, and~\ref{ass:donor-reachability}. For every $\mu\in\mathbb{R}^{\delta_b}$ there is a signed coefficient vector $w_S^\star\in\mathbb{R}^{k}$ supported on $S$ such that
+\[
+\Phi_{b,S}^\top w_S^\star=P_S\mu
+\]
+and
+\[
+\|w_S^\star\|_2
+\le
+\frac{\|P_S\mu\|_2}{\sigma_{S,r_S}}.
+\]
+If the donor map is $\eta$-reachable at the zero-padded vector $w^\star\in\mathbb{R}^N$ corresponding to $w_S^\star$, then the resulting nonlinear shared-basis transplant row satisfies
+\[
+\|\widehat{x}_b(x_d)-\mu\|_2
+\le
+\operatorname{dist}(\mu,\operatorname{range}(\Phi_{b,S}^\top))
++
+\|\Phi_b\|_{\mathrm{op}}\eta.
+\]
+In the full signed-reach case $r_S=\delta_b$, this becomes
+\[
+\|\widehat{x}_b(x_d)-\mu\|_2
+\le
+\|\Phi_b\|_{\mathrm{op}}\eta,
+\qquad
+\|w_S^\star\|_2
+\le
+\frac{\|\mu\|_2}{\sigma_{\min}(\Phi_{b,S})}.
+\]
+\end{theorem}
+
+\begin{proof}
+Let $A_S=\Phi_{b,S}^\top$ and take its compact singular value decomposition $A_S=U\Sigma V^\top$, where the columns of $U$ span $\operatorname{range}(A_S)$ and the diagonal entries of $\Sigma$ are the nonzero singular values. Define
+\[
+w_S^\star:=V\Sigma^{-1}U^\top\mu.
+\]
+Then
+\[
+A_Sw_S^\star=U\Sigma V^\top V\Sigma^{-1}U^\top\mu=UU^\top\mu=P_S\mu,
+\]
+and
+\[
+\|w_S^\star\|_2
+\le
+\|\Sigma^{-1}\|_{\mathrm{op}}\|U^\top\mu\|_2
+=
+\frac{\|P_S\mu\|_2}{\sigma_{S,r_S}}.
+\]
+Let $w^\star$ be the zero-padded vector in $\mathbb{R}^N$. If $g_d(x_d)$ is within $\eta$ of $w^\star$, then by Assumption~\ref{ass:shared-anchor-final},
+\[
+\widehat{x}_b(x_d)-\mu
+=
+\Phi_b^\top(g_d(x_d)-w^\star)+(P_S\mu-\mu).
+\]
+Taking norms gives the stated bound.
+\end{proof}
+
+\begin{corollary}[Signed sparse support with donor reachability]
+\label{cor:signed-support}
+If there exists a support $S$ with $|S|=k$ and $\operatorname{rank}(\Phi_{b,S})=\delta_b$, and if the donor coefficient map is $\eta$-reachable at the corresponding min-norm signed coefficient vector, then every target direction $\mu_{\mathrm{base}}$ is realized by the nonlinear shared-basis operator up to error
+\[
+\|\widehat{x}_b(x_d)-\mu_{\mathrm{base}}\|_2
+\le
+\|\Phi_b\|_{\mathrm{op}}\eta.
+\]
+Thus changing the donor-side solver changes the reachable coefficient set, but once that set contains a neighborhood of the signed target, the base-side error is governed by the conditioning of the selected base anchors.
+\end{corollary}
+
+\begin{proof}
+Apply Theorem~\ref{thm:signed-anchor-representation} with $r_S=\delta_b$ and $\mu=\mu_{\mathrm{base}}$.
+\end{proof}
+
+\begin{theorem}[Nonnegative and sparse convex anchor mixtures]
+\label{thm:convex-anchor-mixtures}
+Assume Assumptions~\ref{ass:shared-anchor-final}, \ref{ass:convex-cover}, and~\ref{ass:donor-reachability}. Define
+\[
+R_b:=\max_{j\in\mathcal{T}}\|\phi_j^{(b)}\|_2,
+\qquad
+D_b:=\sup_{y,z\in\mathcal{C}_b}\|y-z\|_2\le 2R_b.
+\]
+For any target $\mu\in\mathbb{R}^{\delta_b}$, the following hold.
+\begin{enumerate}[leftmargin=*]
+\item There exists $w^\star\in\Delta_N$ such that
+\[
+\|\Phi_b^\top w^\star-\mu\|_2=\epsilon_C.
+\]
+If the donor map is $\eta$-reachable at $w^\star$, then
+\[
+\|\widehat{x}_b(x_d)-\mu\|_2
+\le
+\epsilon_C+
+\|\Phi_b\|_{\mathrm{op}}\eta.
+\]
+\item For any $\tau\in(0,1)$, there exists a strictly positive vector $w_\tau\in\Delta_N$ with $(w_\tau)_j\ge \tau/N$ such that
+\[
+\|\Phi_b^\top w_\tau-\mu\|_2
+\le
+\epsilon_C+\tau D_b.
+\]
+If a softmax donor map is $\eta$-reachable at $w_\tau$, then the resulting base row has error at most
+\[
+\epsilon_C+\tau D_b+
+\|\Phi_b\|_{\mathrm{op}}\eta.
+\]
+\item There is a nearest convex representative $\bar w\in\Delta_N$ with support size at most $\delta_b+1$ and
+\[
+\|\Phi_b^\top\bar w-\mu\|_2=\epsilon_C.
+\]
+This is the Carath\'eodory support bound.
+\item For every integer $k\ge 1$, there exists a $k$-sparse vector $w^{(k)}\in\Delta_N$ such that
+\[
+\|\Phi_b^\top w^{(k)}-\mu\|_2
+\le
+\epsilon_C+\frac{R_b}{\sqrt{k}}.
+\]
+If a local top-$k$ or barycentric donor map is $\eta$-reachable at this sparse vector, the realized base error is at most
+\[
+\epsilon_C+\frac{R_b}{\sqrt{k}}+
+\|\Phi_b\|_{\mathrm{op}}\eta.
+\]
+\end{enumerate}
+\end{theorem}
+
+\begin{proof}
+The simplex $\Delta_N$ is compact and $w\mapsto\|\Phi_b^\top w-
+\mu\|_2$ is continuous, so a minimizer $w^\star$ exists. The donor-map error term follows from
+\[
+\|\Phi_b^\top g_d(x_d)-\mu\|_2
+\le
+\|\Phi_b^\top w^\star-\mu\|_2
++
+\|\Phi_b^\top(g_d(x_d)-w^\star)\|_2.
+\]
+
+For the strictly positive approximation, let $u=(1/N)\mathbf{1}$ and set
+\[
+w_\tau=(1-\tau)w^\star+\tau u.
+\]
+Then $w_\tau\in\Delta_N$, each coordinate is at least $\tau/N$, and
+\[
+\|\Phi_b^\top w_\tau-\Phi_b^\top w^\star\|_2
+=
+\tau\|\Phi_b^\top u-\Phi_b^\top w^\star\|_2
+\le
+\tau D_b.
+\]
+Adding the nearest-point error and the donor-map error proves the second claim.
+
+For the Carath\'eodory support bound, let $y^\star=\Phi_b^\top w^\star$. If $w^\star$ has more than $\delta_b+1$ nonzero coordinates, the active anchors are affinely dependent in $\mathbb{R}^{\delta_b}$. Thus there is a nonzero vector $a$ supported on the active set such that
+\[
+\sum_j a_j=0,
+\qquad
+\sum_j a_j\phi_j^{(b)}=0.
+\]
+Moving $w^\star$ along this null affine direction until one active coordinate reaches zero preserves nonnegativity, the sum-to-one constraint, and the represented point $y^\star$. Repeating yields a representative with support at most $\delta_b+1$.
+
+For the Maurey-type bound, sample $J_1,\ldots,J_k$ independently from the distribution $w^\star$ and define
+\[
+\widetilde{w}^{(k)}=\frac{1}{k}\sum_{\ell=1}^{k}e_{J_\ell},
+\qquad
+\widetilde{y}^{(k)}=\Phi_b^\top\widetilde{w}^{(k)}.
+\]
+Then $\mathbb{E}\widetilde{y}^{(k)}=y^\star$ and
+\[
+\mathbb{E}\|\widetilde{y}^{(k)}-y^\star\|_2^2
+=
+\frac{1}{k}\mathbb{E}\|\phi_{J_1}^{(b)}-y^\star\|_2^2
+\le
+\frac{R_b^2}{k}.
+\]
+Therefore some realization satisfies $\|\widetilde{y}^{(k)}-y^\star\|_2\le R_b/\sqrt{k}$. Choosing that realization as $w^{(k)}$ gives
+\[
+\|\Phi_b^\top w^{(k)}-\mu\|_2
+\le
+\|\Phi_b^\top w^{(k)}-y^\star\|_2+
+\|y^\star-\mu\|_2
+\le
+\frac{R_b}{\sqrt{k}}+\epsilon_C.
+\]
+The final donor-map bound is again the operator-norm perturbation inequality. This empirical-method argument is the finite-dimensional form of Maurey-type convex approximation \citep{maureypisier1981,barron1993universal}.
+\end{proof}
+
+\begin{proposition}[Nonlinear donor maps inherit base-dictionary reach]
+\label{prop:nonlinear-map-error}
+Assume Assumption~\ref{ass:shared-anchor-final}. Let $w^\star\in\mathcal{W}$ satisfy
+\[
+\|\Phi_b^\top w^\star-\mu_{\mathrm{base}}\|_2\le \epsilon_b.
+\]
+If there exists a donor row $x_d$ such that
+\[
+\|g_d(x_d)-w^\star\|_2\le \eta
+\qquad
+\text{and}
+\qquad
+\|Ux_d\|_2\le \gamma,
+\]
+then the transplanted base row obeys
+\[
+\|\widehat{x}_b(x_d)-\mu_{\mathrm{base}}\|_2
+\le
+\epsilon_b+
+\|\Phi_b\|_{\mathrm{op}}\eta,
+\]
+while the planted donor row obeys the same donor-innocuity bound $\|Ux_d\|_2\le\gamma$. If the coefficient error is measured in $\ell_1$, the second term may be replaced by
+\[
+\max_{j\in\mathcal{T}}\|\phi_j^{(b)}\|_2\|g_d(x_d)-w^\star\|_1.
+\]
+\end{proposition}
+
+\begin{proof}
+By Assumption~\ref{ass:shared-anchor-final},
+\[
+\widehat{x}_b(x_d)-\mu_{\mathrm{base}}
+=
+\Phi_b^\top(w^\star)-\mu_{\mathrm{base}}
++
+\Phi_b^\top(g_d(x_d)-w^\star).
+\]
+The triangle inequality and the operator-norm bound give the $\ell_2$ claim. The $\ell_1$ version follows from
+\[
+\|\Phi_b^\top(g_d(x_d)-w^\star)\|_2
+\le
+\sum_{j\in\mathcal{T}}|g_{d,j}(x_d)-w_j^\star|\,\|\phi_j^{(b)}\|_2.
+\]
+The donor-innocuity statement is one of the hypotheses on $x_d$.
+\end{proof}
+
+\noindent\textbf{Security interpretation.}
+For signed solvers, the attack is controlled by the conditioning of $\Phi_{b,S}^\top$ and the donor map's ability to reach a signed coefficient neighborhood. For convex and softmax solvers, the relevant quantity is the distance from $\mu_{\mathrm{base}}$ to the convex hull of base anchors, with explicit $\tau D_b$ and $R_b/\sqrt{k}$ approximation terms for interior and sparse mixtures. Proposition~\ref{prop:nonlinear-map-error} is the composition step: once any nonlinear donor map reaches the target weights, the base-side error is exactly the dictionary approximation error plus the coefficient-reachability perturbation.

@@ -1,0 +1,874 @@
+
+\documentclass{article} % For LaTeX2e
+\usepackage{iclr2026_conference,times}
+\iclrfinalcopy
+\usepackage{booktabs}   % 三线表
+\usepackage{multirow}   % 合并单元格
+
+\input{math_commands.tex}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{wrapfig}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{colortbl} 
+\usepackage{CJK}
+\usepackage{hyperref}
+\usepackage{svg}
+\usepackage{url}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{markdown}
+\usepackage{xcolor}  
+\usepackage{fontawesome5}
+\usepackage[utf8]{inputenc}
+\usepackage[most]{tcolorbox}  
+\usepackage{bbm}
+\newcommand{\amapagent}{Amap Agent }
+\newcommand{\ie}{i.e.}
+\newcommand{\eg}{e.g.}
+
+\usepackage{xspace}
+\newcommand{\model}{STAgent\xspace}
+
+\definecolor{mycolor}{HTML}{eff6fd}
+\definecolor{color_amapblue}{HTML}{3472ed}
+\definecolor{color_amaplightblue}{HTML}{87e1f9}
+\definecolor{color_amapgreen}{HTML}{c1fca0}
+\definecolor{color_amapgrey}{HTML}{e5eff0}
+
+
+\title{AMAP Agentic Planning Technical Report}
+
+
+\makeatletter
+\def\@maketitle{%
+  \newpage
+  \null
+  \vskip 2em%
+  \begin{center}% % 关键：确保标题在center环境中
+    {\LARGE \@title \par}%
+    \vskip 1.5em%
+    {\large
+      \begin{tabular}[t]{c}%
+        \centering \@author
+      \end{tabular}\par}%
+    \vskip 1em%
+    % {\large \@date}%
+  \end{center}%
+  \par
+  \vskip 1.5em
+}
+\makeatother
+
+
+
+
+
+\author{
+  \centerline{AMAP AI Agent LLM Team}
+}
+ 
+
+
+
+\newcommand{\fix}{\marginpar{FIX}}
+\newcommand{\new}{\marginpar{NEW}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present \model, an agentic large language model tailored for spatio-temporal understanding, designed to solve complex tasks such as constrained point-of-interest discovery and itinerary planning. \model is a specialized model capable of interacting with ten distinct tools within spatio-temporal scenarios, enabling it to explore, verify, and refine intermediate steps during complex reasoning. Notably, \model effectively preserves its general capabilities. We empower \model with these capabilities through three key contributions: (1) a stable tool environment that supports over ten domain-specific tools, enabling asynchronous rollout and training; (2) a hierarchical data curation framework that identifies high-quality data like a needle in a haystack, curating high-quality queries by retaining less than 1\% of the raw data, emphasizing both diversity and difficulty; and (3) a cascaded training recipe that starts with a seed SFT stage acting as a guardian to measure query difficulty, followed by a second SFT stage fine-tuned on queries with high certainty, and an ultimate RL stage that leverages data of low certainty. Initialized with Qwen3-30B-A3B-2507 to establish a strong SFT foundation and leverage insights into sample difficulty, \model yields promising performance on TravelBench while maintaining its general capabilities across a wide range of general benchmarks, thereby demonstrating the effectiveness of our proposed agentic model.
+\end{abstract}
+
+
+\section{Introduction}
+The past year has witnessed the development of Large Language Models (LLMs) incorporating tool invocation for complex task reasoning, significantly pushing the frontier of general intelligence~\cite{kimi_k2,glm_4.5,deepseek_v32,qwen3}. Tool-integrated reasoning (TIR)~\cite{qu2025tool} empowers LLMs with the capability to interact with the tool environment, allowing the model to determine the next move based on feedback from the tools~\cite{tir_tora,tir_search,arpo,rstar2agent}. Crucially, existing TIR efforts mostly focus on scenarios like mathematical reasoning and code testing~\cite{agentic_rl_survey,TIR_understand}, while solutions for more practical real-world settings remain lacking.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.98\textwidth]{resources/model_stru2.pdf}
+  \caption{The overall framework of \model. It presents a comprehensive pipeline designed for real-world spatio-temporal reasoning. The framework consists of three key phases: (1) \textbf{Robust Interactive Environment}, supported by the ROLL infrastructure and FastMCP protocol to enable efficient, asynchronous tool-integrated reasoning. (2) \textbf{High-Quality Data Construction}, which utilizes a self-evolving selection framework to filter diverse and challenging queries from massive unsupervised data; (3) \textbf{Cascade Training Recipe}, an SFT-Guided RL paradigm that categorizes samples by difficulty to synergize supervised fine-tuning with reinforcement learning.}
+\label{fig:framework}
+\end{figure}
+
+Real-world reasoning tasks can be categorized based on cognitive cost and processing speed into System 1 and System 2 modes~\cite{li2025system}: the former is rapid, whereas the latter necessitates extensive and complex deliberation. Reasoning tasks in spatio-temporal scenarios~\cite{zheng2025spatio,stma} represent typical System 2 scenarios. As depicted in Figure~\ref{fig:examples.}, such complex tasks involve identifying locations, designing driving routes, or planning travel itineraries subject to numerous constraints~\cite{ning2025deeptravel,xie2024travelplanner}, necessitating the coordination of heterogeneous external tools for resolution~\cite{agentic_rl_survey,toucan}. Consequently, TIR interleaves thought generation with tool execution, empowers the model to verify intermediate steps and dynamically adjust its planning trajectory based on observation feedback, and exhibits an inherent advantage in addressing these real-world tasks.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=1.0\linewidth]{resources/typical-tasks.pdf}
+    \vspace{-15pt} 
+    \caption{Typical reasoning tasks under spatio-temporal scenario.}
+    \label{fig:examples.}
+\end{figure}
+
+
+However, unlike general reasoning tasks such as mathematics~\cite{rstar2agent} or coding~\cite{glm_4.5}, addressing these real-world tasks inherently involves several challenges. \textbf{First}, how can a flexible and stable reasoning environment be constructed? On one hand, a feasible environment requires a toolset capable of handling massive concurrent tool call requests, which will be invoked by both offline data curation and online reinforcement learning (RL)~\cite{agentic_limits}. On the other hand, during training, maintaining effective synchronization between tool calls and trajectory rollouts, and guaranteeing that the model receives accurate reward signals, constitute the cornerstone of effective TIR for such complex tasks. \textbf{Second}, how can high-quality training data be curated? In real-world spatio-temporal scenarios, massive real-world queries are sent by users and stored in databases; however, this data is unsupervised and lacks necessary knowledge, \eg, the category and difficulty of each query~\cite{demystify_agentic_rl}, making the model unaware of the optimization direction~\cite{difficulty_know}. Therefore, it is critical to construct a query taxonomy to facilitate high-quality data selection for model optimization. \textbf{Third}, how should effective training for real-world TIR be conducted? Existing TIR efforts mostly focus on the adaptation between algorithms and tools. For instance, monitoring interleaved tool call entropy changes to guide further token rollout~\cite{arpo} or increasing rollout batch sizes to mitigate tool noise~\cite{rstar2agent}. Nevertheless, the uncertain environment and diverse tasks in real-world scenarios pose extra challenges when applying these methods. Therefore, deriving a more tailored training recipe is key to elevating the upper bound of TIR performance.    
+
+ 
+
+
+
+In this work, we propose \model, the pioneering agentic model designed for real-world spatio-temporal TIR reasoning. We develop a comprehensive pipeline encompassing a Interactive Environment, High-Quality Data Curation, and a Cascade Training Recipe, as shown in Figure~\ref{fig:framework}. Specifically, \model features three primary aspects. For environment and infrastructure, we established a robust reinforcement training environment supporting ten domain-specific tools across four categories, including map, travel, weather, and information retrieval tools. On the one hand, we encapsulated these tools using FastMCP~\footnote{\url{https://github.com/jlowin/fastmcp}}, standardizing parameter formats and invocation protocols, which significantly facilitates future tool modification. On the other hand, we collaborated with the ROLL~\cite{roll}~\footnote{\url{https://github.com/alibaba/ROLL}} team to optimize the RL training infrastructure, offering two core features: asynchronous rollout and training. Compared to the popular open-source framework Verl~\footnote{\url{https://github.com/volcengine/verl}}, ROLL yields an 80\% improvement in training efficiency. Furthermore, we designed a meticulous query selection framework to hierarchically extract high-quality queries from massive historical candidates. We focus on query diversity and difficulty, deriving a self-evolving query selection framework to filter approximately 200,000 queries from an original historical dataset of over 30 million, which serves as the candidate query pool for subsequent SFT and RL training. Lastly, we designed a cascaded training paradigm—specifically an SFT-Guided RL approach—to ensure continuous improvement in model capability. By training a Seed SFT model to serve as an evaluator, we assess the difficulty of the query pool to categorize queries for subsequent SFT updates and RL training. Specifically, SFT is refined with samples of higher certainty, while RL targets more challenging samples from the updated SFT model. This paradigm significantly enhances the generalization of the SFT model while enabling the RL model to push beyond performance ceilings.
+
+ 
+
+The final model, \model, was built upon Qwen3-30B-A3B-2507~\cite{qwen3}. Notably, during the SFT stage, \model incorporated only a minimal amount of general instruction-following data~\cite{toucan} to enhance tool invocation capabilities, with the vast majority consisting of domain-specific data. Remarkably, as a specialized model, \model demonstrates significant advantages on TravelBench~\cite{Cheng2025TravelBenchAR} compared to models with larger parameter sizes. Furthermore, despite not being specifically tuned for the general domain, \model achieved improvements on numerous general-domain benchmarks, demonstrating its strong generalization capability.
+
+
+
+\section{Methodology}
+\subsection{Overview}
+We formally present \model in this section, focusing on three key components:
+\begin{itemize}
+\item Tool environment construction. We introduce details of the in-domain tools used in Section~\ref{sec:env}.
+\item High-quality prompt curation. We present the hierarchical prompt curation pipeline in Section~\ref{sec:prompt}, including the derivation of a prompt taxonomy, large-scale prompt annotation, and difficulty measurement.
+\item Cascaded agentic post-training recipe. We present the post-training procedure in Section~\ref{sec:reward}, Section~\ref{sec:sft}, and Section~\ref{sec:rl}, which corresponds to reward design, agentic SFT, and SFT-guided RL training, respectively.
+\end{itemize}
+
+
+\subsection{Environment Construction} \label{sec:env}
+To enable \model to interact with real-world spatio-temporal services in a controlled and reproducible manner, we developed a high-fidelity sandbox environment built upon FastMCP. This environment serves as the bridge between the agent's reasoning capabilities and the underlying spatio-temporal APIs, providing a standardized interface for tool invocation during both training and evaluation. To reduce API latency and costs during large-scale RL training, we implemented a tool-level LRU caching mechanism with parameter normalization to maximize cache hit rates.
+
+Our tool library comprises \textbf{10 specialized tools} spanning four functional categories, designed to cover the full spectrum of spatio-temporal user needs identified in our Intent Taxonomy (Section \ref{sec:prompt}). All tool outputs are post-processed into structured natural language to facilitate the agent's comprehension and reduce hallucination risks. We describe the summary of the tool definition in Table~\ref{tab:tool_library}, more tool details can be found in Appendix~\ref{app:tools}.
+\begin{table}[htbp]
+\centering
+\caption{Summary of the tool library for the \amapagent sandbox environment.}
+\label{tab:tool_library}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Category} & \textbf{Tool} & \textbf{Description} \\
+\midrule
+\multirow{5}{*}{Map \& Navigation}
+& map\_search\_places & Search POIs by keyword, location, or region \\
+& map\_compute\_routes & Route planning supporting multiple transport modes \\
+& map\_search\_along\_route & Find POIs along a route corridor \\
+& map\_search\_central\_places & Locate optimal meeting points for multiple origins \\
+& map\_search\_ranking\_list & Query curated ranking lists \\
+\midrule
+\multirow{2}{*}{Travel}
+& travel\_search\_flights & Search flights with optional multi-day range \\
+& travel\_search\_trains & Query train schedules and fares \\
+\midrule
+\multirow{2}{*}{Weather}
+& weather\_current\_conditions & Get real-time weather and AQI \\
+& weather\_forecast\_days & Retrieve multi-day forecasts \\
+\midrule
+Information & web\_search & Open-domain web search \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\input{sec2-3_promptcuration}
+
+    
+
+    
+
+
+
+
+
+\subsection{Reward Design}
+\label{sec:reward}
+
+
+
+
+To evaluate the quality of agent interactions, we employ a rubrics-as-reward~\citep{hashemi2024llm,gunjal2025rubrics} method to assess trajectories based on three core dimensions: \textit{Reasoning and Proactive Planning}, \textit{Information Fidelity and Integration}, and \textit{Presentation and Service Loop}. The scalar reward $R \in [0, 1]$ is derived from the following criteria:
+\begin{itemize}
+    \item \textbf{Dimension 1, Reasoning and Proactive Planning:} This dimension evaluates the agent's ability to formulate an economic and effective execution plan. A key metric is \textit{proactivity}: when faced with ambiguous or slightly incorrect user premises (e.g., mismatched location names), the agent is rewarded for correcting the error and actively attempting to solve the underlying intent, rather than passively rejecting the request. It also penalizes the inclusion of redundant parameters in tool calls.
+    
+    \item \textbf{Dimension 2, Information Fidelity and Integration:} This measures the accuracy with which the agent extracts and synthesizes information from tool outputs. We enforce a strict veto policy for hallucinations: any fabrication of factual data (e.g. time, price and distance) that cannot be grounded in the tool response results in an immediate reward of $0$. Conversely, the agent is rewarded for correctly identifying and rectifying factual errors in the user's query using tool evidence.
+    
+    \item \textbf{Dimension 3, Presentation and Service Loop:} This assesses whether the final response effectively closes the service loop. We prioritize responses that are structured, helpful, and provide actionable next steps. The agent is penalized for being overly conservative or terminating the service flow due to minor input errors.
+\end{itemize}
+
+Crucially, we recognize that different user intents require different capabilities. Therefore, we implement a \textbf{Dynamic Scoring Mechanism} where the evaluator autonomously determines the importance of each dimension based on the task type, rather than using fixed weights.
+
+\paragraph{Dynamic Weight Determination.} For every query, the evaluator first analyzes the complexity of the user's request and categorizes it into one of three scenarios to assign specific weights ($w$):
+\begin{itemize}
+    \item \textbf{Scenario A: Complex Planning} (e.g., "Plan a 3-day itinerary"). The system prioritizes logical coherence and error handling. 
+    \textit{Reference Weights:} $w_{\text{reas}} \approx 0.6, w_{\text{info}} \approx 0.3, w_{\text{pres}} \approx 0.1$.
+    \item \textbf{Scenario B: Information Retrieval} (e.g., "What is the weather today?"). The system prioritizes factual accuracy and data extraction. 
+    \textit{Reference Weights:} $w_{\text{reas}} \approx 0.2, w_{\text{info}} \approx 0.6, w_{\text{pres}} \approx 0.2$.
+    \item \textbf{Scenario C: Consultation \& Explanation} (e.g., "Explain this policy"). The system prioritizes clarity and user interaction. 
+    \textit{Reference Weights:} $w_{\text{reas}} \approx 0.3, w_{\text{info}} \approx 0.3, w_{\text{pres}} \approx 0.4$.
+\end{itemize}
+
+\paragraph{Score Aggregation and Hallucination Veto.}
+Once the weights are established, the final reward $R$ is calculated using a weighted sum of the dimension ratings $s \in [0, 1]$. To ensure factual reliability, we introduce a \textbf{Hard Veto} mechanism for hallucinations. Let $\mathbb{1}_{H=0}$ be an indicator function where $H=1$ denotes the presence of hallucinated facts. The final reward is formulated as:
+\begin{equation}
+R = \mathbbm{1}_{H=0} \times \sum_{k \in \{\text{reas, info, pres}\}} w_k \cdot s_k.
+\end{equation}
+This formula ensures that any trajectory containing hallucinations is immediately penalized with a zero score, regardless of its reasoning or presentation quality.
+
+
+
+\subsection{Supervised Fine-Tuning} \label{sec:sft}
+
+Our Supervised Fine-Tuning (SFT) stage is designed to transition the base model from a general-purpose LLM into a specialized spatio-tempora agent. Rather than merely teaching the model to follow instructions, our primary objective is to develop three core agentic capabilities:
+
+\textbf{Strategic Planning.} The ability to decompose abstract user queries (e.g., \textit{Plan a next-weekend trip}) into a logical chain of executable steps.
+
+\textbf{Precise Tool Orchestration.} The capacity to orchastrate a series of tool calls leading to task fulfillment, ensuring syntactic correctness in parameter generation.
+
+\textbf{Grounded Summarization.} The capability to synthesize final answer from heterogeneous tool outputs (e.g., \textit{maps, weather, flights}) into a coherent, well-organized response without hallucinating parameters not present in the observation.
+
+\subsubsection{In-Domain Data Construction}
+
+We construct our training data from the curated high-quality prompt pool derived in Section \ref{sec:prompt}. To address the long-tail distribution of real-world scenarios where frequent tasks like \textit{navigation} dominate while complex planning tasks are scarce, we employ a hybrid construction strategy:
+
+\textbf{Offline Sampling with Strong LLMs.} For collected queries, we utilize a Strong LLM (DeepSeek-R1) to generate TIR trajectories. To ensure data quality, we generate $K=8$ candidate trajectories per query and employ a Verifier (Gemini-3-Pro-Preview) to score them based on the reward dimensions defined in Section \ref{sec:reward}. Only trajectories achieving perfect scores across all dimensions are retained.
+
+\textbf{Synthetic Long-Tail Generation.} To bolster the model's performance on rare, complex tasks (e.g., multi-city itinerary planning with budget constraints), we employ In-Context Learning (ICL) to synthesize data. We sample complex tool combinations rarely seen in the existing data distribution and prompt a Strong LLM to synthesize user queries ($q_s$) that necessitate these specific tools in random orders. These synthetic queries are then validated through the offline sampling pipeline to ensure executability.
+
+\subsubsection{Multi-Step Tool-Integrated Reasoning SFT}
+
+We formalize the agent's interaction as a multi-step trajectory optimization problem. Unlike single-turn conversation, agentic reasoning requires the model to alternate between reasoning, tool invocation and tool observation processing. 
+
+We model the probability of a trajectory $o$ as the product of conditional probabilities over tokens. The training objective minimizes the negative log-likelihood:
+
+\begin{equation}
+\mathcal{L}_{\mathrm{SFT}}(o_{i} \mid \theta) = \frac{1}{C} \sum_{t=1}^{|o_{i}|} \mathbb{I}(o_{i,t}) \log \pi_{\theta}(o_{i,t} \mid q_i)
+\end{equation}
+
+where $o_{i,t}$ denotes the $t$-th token of trajectory $o_{i}$. In practice, $q_s$ is optionally augmented with a corresponding user profile including user state (e.g., current location) and preferences (e.g., personal interests). $\mathbb{I}(o_{i,t})$ is a indicator function used for masking:
+\begin{equation}
+C = - \sum_{t=1}^{|o_{i}|} \mathbb{I}(o_{i,t})
+\end{equation}
+where text segments corresponding to tool observations do not contribute to the final loss calculation.
+
+\subsubsection{Dynamic Capability-Aware Curriculum}
+A core challenge in model training is determining which data points provide the highest information gain~\cite{difficulty_know}. Static difficulty metrics are insufficient because difficulty is inherently relative to the policy model's current parameterization. However, a task may be trivial for a strong LLM but lie outside the support of our policy model. Training on trivial samples yields vanishing gradients and increases the risk of overfitting, while training on impossible samples leads to high-bias updates and potential distribution collapse. In fact, samples that are trivial for a strong model but difficult for a weak model indicate a distribution gap between the two, and forcing the weak model to fit the distribution of the strong model in such cases can compromise generalization capability~\cite{weak2strong}. To bridge this gap, we define \textit{learnability} not as a static property of the prompt, but as the dynamic relationship between task difficulty and the policy's current capability. Learnable tasks are those that reside on the model's decision boundary—currently uncertain but solvable. Figure~\ref{fig:sft_stru} illustrates the training procedure of the SFT phase.
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\textwidth]{resources/SFT_str4.pdf}
+  \caption{The training procedure in the SFT phase.}
+  \label{fig:sft_stru}
+\end{figure}
+
+
+To address this, we introduce a \textbf{Dynamic Capability-Aware Curriculum} that actively selects data points based on the policy model's evolving capability distribution. This process consists of four phases:
+
+\textbf{Phase 1: Policy Initialization.} 
+We first establish a baseline capability to allow for meaningful self-assessment. We subsample a random 10\% Tiny Dataset from the curated prompt pool (denoted as $\mathcal{D}_{pool}$) and generate ground truth trajectories using the Strong LLM. We warm up our policy model by training on this subset to obtain the initial policy $\pi_{\theta_{0}}$. Specifically, for each prompt, we sample $K=8$ trajectories and employ a verifier to select the highest-scored generation as the ground truth.
+
+\textbf{Phase 2: Distributional Capability Probing.} 
+To construct a curriculum aligned with the policy's intrinsic capabilities, we perform a distributional probe of the initialized policy $\pi_{\theta_{0}}$ against the full unlabeled pool $\mathcal{D}_{pool}$. Rather than relying on external difficulty heuristics, we estimate the \textit{local solvability} of each task. For every query $q_i \in \mathcal{D}_{pool}$, we generate $K=8$ trajectories $\{o_{i,k}\}_{k=1}^K \sim \pi_{\theta_{0}}(\cdot|q_i)$ and use a verifier to evaluate their rewards $r_{i,k}$. This yields the mean the variance of the empirical reward distribution, $\hat{\mu}_i$ and $\hat{\sigma}^2_i$.
+
+Here, $\hat{\sigma}^2_i$ serves as an approximate proxy for \textit{uncertainty}, where the policy parameters are unstable yet capable of generating high-reward solutions. Unlike random noise, when paired with a non-zero mean, this variance signifies the presence of a learnable signal within the policy's sampling space.
+
+\textbf{Phase 3: Signal-to-Noise Filtration.} 
+We formulate data selection as a signal maximization problem. Effective training samples must possess high gradient variance to drive learning while ensuring the gradient direction is grounded in the policy model's distribution. Based on the estimated statistics, we categorize the data into three regions:
+\begin{itemize}
+    \item \textbf{Trivial Region ($\hat{\mu} \approx 1, \hat{\sigma}^2 \to 0$):} Tasks where the policy has converged to high-quality solutions with high confidence. Training on these samples yields negligible gradients ($\nabla \mathcal{L} \approx 0$) and potentially leads to overfitting.
+    \item \textbf{Noise Region ($\hat{\mu} \approx 0, \hat{\sigma}^2 \to 0$):} Tasks effectively outside the policy's current capability scope or containing noisy data. Training the model on these samples often leads to hallucination or negative transfer, as the ground truth lies too far outside the policy's effective support.
+    \item \textbf{Learnable Region (High $\hat{\sigma}^2$, Non-zero $\hat{\mu}$):} Tasks maximizing training signals. These samples lie on the decision boundary where the policy is inconsistent but capable.
+\end{itemize}
+We retain only the Learnable Region. To quantify the learnability on a per-query basis, we introduce the \textit{Learnability Potential Score} $S_i = \hat{\sigma}^2_i \cdot \hat{\mu}_i$. This metric inherently prioritizes samples that are simultaneously uncertain (high $\hat{\sigma}^2$) and feasibly solvable (non-zero $\hat{\mu}$), maximizing the expected improvement in policy robustness. The scores are normalized between 0-1.
+
+\textbf{Phase 4: Adaptive Trajectory Synthesis.} 
+Having identified the high-value distribution, we employ an adaptive compute allocation strategy to construct the final SFT dataset. We treat the Strong LLM as an expensive oracle. We allocate the sampling budget $B_i$ proportional to the task's learnability score, such that $B_i \propto \text{rank}(S_i)$. Tasks with more uncertainty receive up to $K_{max}=8$ samples from the Strong LLM to maximize the probability of recovering a valid reasoning path, while easier tasks receive fewer calls. This ensures that the supervision signal is densest where the policy model is most uncertain, effectively correcting the policy's decision boundary with high-precision ground truth.
+
+
+
+Finally, we aggregate the verified trajectories obtained from this phase. We empirically evaluate various data mixing ratios to determine the optimal training distribution, obtaining $\pi_{\theta_{1}}$, which serves as the backbone model for subsequent RL training.
+
+
+
+
+
+
+
+\subsection{RL} \label{sec:rl}
+The agentic post-training for \model follows the "SFT-Guided RL" training paradigm, with the RL policy model initialized from . This initialization provides the agent with foundational instruction-following capabilities prior to the exploration phase in the sandbox environment.
+
+
+
+
+
+GRPO~\citep{shao2024deepseekmath} has become the de facto standard for reasoning tasks. Training is conducted within a high-fidelity sandbox environment (described in Section \ref{sec:env}), which simulates real-world online scenarios. This setup compels the agent to interact dynamically with the environment, specifically learning to verify and execute tool calls to resolve user queries effectively. The training objective seeks to maximize the expected reward while restricting the policy update to prevent significant deviations from the reference model. We formulate the GRPO objective for \model as follows:
+\begin{equation}
+\begin{split}
+\mathcal{J}(\theta) = \mathbb{E}_{q \sim P(Q), \{o_i\}_{i=1}^G \sim \pi_{\theta_{\text{old}}}(O|q)} \Bigg[ \frac{1}{G} \sum_{i=1}^G \frac{1}{|o_i|} \sum_{t=1}^{|o_i|} \Bigg( \min \Bigg( \frac{\pi_\theta(o_{i,t} | q, o_{i,<t})}{\pi_{\theta_{\text{old}}}(o_{i,t} | q, o_{i,<t})} \hat{A}_i, \\
+\text{clip} \left( \frac{\pi_\theta(o_{i,t} | q, o_{i,<t})}{\pi_{\theta_{\text{old}}}(o_{i,t} | q, o_{i,<t})}, 1-\epsilon, 1+\epsilon \right) \hat{A}_i \Bigg) - \beta \mathbb{D}_{KL} \Bigg) \Bigg],
+\end{split}
+\end{equation}
+where $\pi_{\theta}$ and $\pi_{\theta_{\text{old}}}$ denote the current and old policies, respectively. 
+The optimization process operates iteratively on batches of queries. For each query $q$, we sample a group of $G$ independent trajectories $\{o_1, o_2, \dots, o_G\}$ from the  policy $\pi_\theta$. Once the trajectories are fully rolled out, the reward function detailed in Section \ref{sec:reward} evaluates the quality of the interaction. The advantage $\hat{A}_i$ for the $i$-th trajectory is computed as:
+$
+\hat{A}_i = \frac{r_i - \text{mean}(\{r_1, \dots, r_G\})}{\text{std}(\{r_1, \dots, r_G\}) + \delta}.
+$ $\mathbb{D}_{KL}$ refers to the KL divergence between the current policy $\pi_\theta$ and the reference policy $\pi_{\text{ref}}$. $\beta$ is the KL coefficient.
+
+
+\model is built upon Qwen3-30B-A3B, which features a Mixture-of-Experts (MoE) architecture. In practice, we employ the GRPO variant, Group Sequence Policy Optimization (GSPO)~\citep{zheng2025group}, to stabilize training. Unlike the standard token-wise formulation, GSPO enforces a sequence-level optimization constraint by redefining the importance ratio. Specifically, it computes the ratio as the geometric mean of the likelihood ratios over the entire generated trajectory length :
+\begin{equation}
+s_i(\theta) = \exp \left( \frac{1}{|o_i|} \sum_{t=1}^{|o_i|} \log \frac{\pi_\theta(o_{i,t}|q, o_{i,<t})}{\pi_{\theta_{\text{old}}}(o_{i,t}|q, o_{i,<t})} \right).
+\end{equation}
+
+\section{Experiments}
+\subsection{Experiment Setups}
+
+Our evaluation protocol is designed to comprehensively assess \model across two primary dimensions: domain-specific expertise and general-purpose capabilities across a wide spectrum of tasks.
+
+\subsubsection*{In-domain Evaluation}
+
+To evaluate the \model's specialized performance in real-world and simulated travel scenarios, we conduct assessments in two environments:
+
+\textbf{Indomain Online Evaluation.} To rapidly evaluate performance in real online environments, we extracted 1,000 high-quality queries covering five task types and seven difficulty levels (as detailed in Section \ref{sec:prompt}). For each query, we performed inference 8 times and calculated the average scores. We employ Gemini-3-flash-preview as the judge to compare the win rates between Amap Agent and baselines across different dimensions.
+
+\textbf{Indomain Offline Evaluation.} We evaluate Amap Agent on TravelBench~\cite{Cheng2025TravelBenchAR}, a static sandbox environment containing multi-turn, single-turn, and unsolvable subsets. Following the default protocol, we run inference three times per query (temperature 0.7) and report the average results. GPT-4.1-0414 is used to simulate the user, and Gemini-3-flash-preview serves as the grading model.
+
+
+
+\subsubsection*{General Capabilities Evaluation}
+
+To comprehensively evaluate the general capabilities of our model, we conduct assessments across a diverse set of benchmarks.
+Unless otherwise specified, we standardize the evaluation settings across all general benchmarks with a temperature of 0.6 and a maximum generation length of 32k tokens.
+The benchmarks are categorized as follows:
+
+\textbf{Tool Use \& Agentic Capabilities.} To test the model's proficiency in tool use and complex agentic interactions, we utilize ACEBench~\cite{acebench} and $\tau^{2}$-Bench~\cite{tau2bench}. Furthermore, we evaluate function-calling capabilities using the BFCL v3~\cite{bfcl}.
+
+\textbf{Mathematical Reasoning.} We assess advanced mathematical problem-solving abilities using the AIME 24 and AIME 25~\cite{aime}, which serve as proxies for complex logical reasoning.
+
+\textbf{Coding.} We employ LiveCodeBench~\cite{livecodebench} to evaluate coding capabilities on contamination-free problems. We evaluate on both the v5 (167 problems) and v6 (175 problems) subsets. Specifically, we set the temperature to 0.2, sample once per problem, and report the Pass@1 accuracy.
+
+\textbf{General \& Alignment Tasks.} We evaluate general knowledge and language understanding using MMLU-Pro~\cite{mmlupro} and, specifically for Chinese proficiency, C-Eval~\cite{ceval}. To assess how well the model aligns with human preferences and instruction following, we employ ArenaHard-v2.0~\cite{arenahard} and IFEval~\cite{ifeval}, respectively.
+
+
+
+\subsection{Main Results}
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.85\linewidth]%{resources/model_comparison_indomain.pdf}
+    {resources/model_comparison_with_labels}
+    \caption{Amap indomain online benchmark evaluation.}
+    \label{fig:win_rate}
+\end{figure}
+
+\paragraph{Amap Indomain online benchmark.} The experimental results, as illustrated in Figure \ref{fig:win_rate}, demonstrate the superior performance and robustness of \model. Specifically, Compared with the baseline model, Qwen3-30B-A3B-Thinking-2507, \model demonstrates substantial improvements across all three evaluation dimensions. Notably, in terms of contextual summarization/extraction (win rate: 81.9\%) and content presentation (win rate: 73.7\%), our model exhibits a robust capability to accurately synthesize preceding information and effectively present solutions that align with user requirements. When compared to Qwen-Plus-Latest, while \model shows a performance gap in reasoning and planning, it achieves a marginal lead in presentation and a significant advantage in the summarization dimension. Regarding other models such as MiniMax-M2, Kimi-K2, and Gemini-3-Pro-preview, a performance disparity persists across all three dimensions; we attribute this primarily to the constraints of model scale (30B), which limit the further enhancement of \model’s capabilities. Overall, these results validate the efficacy and promising potential of our proposed solution in strengthening tool invocation, response extraction, and summarization within map-based scenarios.
+
+
+\paragraph{Amap Indomain offline benchmark.} 
+As shown in Table~\ref{tab:travelbench}, our model trained on top of Qwen3-30B achieves consistent improvements across all three subtasks, with gains of \textbf{+11.7\%} (Multi-turn), \textbf{+5.8\%} (Single-turn), and \textbf{+26.1\%} (Unsolved) over the Qwen3-30B-thinking baseline. It also delivers a higher overall score (\textbf{70.3}) than substantially larger models such as DeepSeek R1 and Qwen3-235B-Instruct. Notably, our model attains the best performance on the Multi-turn subtask (\textbf{66.6}) and the second-best performance on the Single-turn subtask (\textbf{73.4}), which further supports the effectiveness of our training pipeline.
+
+\paragraph{General domain evaluation.} The main experimental results, summarized in Table~\ref{tab:experimental_results_transposed}, shows several key observation. Firstly, \model achieves a significant performance leap on the private domain benchmark, marking a substantial improvement over its initialization model, Qwen3-30B-A3B-Thinking. Notably, \model surpasses larger-scale models, including Qwen3-235B-A22B-Thingking-2507 and DeepSeek-R1-0528, while comparable to Qwen3-235B-A22B-Instruct-2507. Secondly, \model shows a notable performance in Tool Use benchmarks, which suggests that models trained on our private domain tools possess a strong ability to generalize their tool-calling capabilities to other diverse functional domains. Finally, the model effectively maintains its high performance across public benchmarks for mathematics, coding, and general capabilities , proving that our domain-specific reinforcement learning process does not lead to a degradation of general-purpose performance or fundamental reasoning skills. Despite being a specialized model for the spatio-temporal domain, \model still achieves excellent performance in general domains while maintaining its strong in-domain capabilities, demonstrating the effectiveness of our training methodology.
+
+ 
+
+
+
+
+
+ 
+
+ 
+% \begin{table}[]
+% \centering
+% \caption{Results on TravelBench, covering three subtasks: Multi-turn, Single-turn, and Unsolved.}
+%   \label{tab:travelbench}
+% \begin{tabular}{@{}ccccc@{}}
+% \toprule
+% Model                 & Multi-turn & Single-turn & Unsolved & Overall \\ \midrule
+% Deepseek R1-0528      & 34.3      & 76.1       & 83.7    & 64.7   \\
+% Qwen3-235B-A22B-Ins-2507   & 60.1      & 69.7       & 80.0       & \underline{69.9}   \\
+% Qwen3-235B-A22B-Th-2507   & 56.6      & 73.2       & 51.7    & 60.5   \\
+% Qwen3-30B-A3B-Th-2507    & 59.6      & 69.4       & 56.3    & 61.8   \\
+% Qwen3-14B             & 47.0      & 57.0       & 54.0       & 52.7   \\
+% Qwen3-4B              & 42.0      & 42.1       & 73.0       & 52.4   \\ \midrule
+% \model & 66.6      & 73.4       & 71.0       & \textbf{70.3}   \\ \bottomrule
+% \end{tabular}
+% \end{table}
+
+
+
+\begin{table}[ht]
+\centering
+\caption{Results on TravelBench, covering three subtasks: Multi-turn, Single-turn, and Unsolved.}
+\label{tab:travelbench}
+\resizebox{0.8\textwidth}{!}{
+\begin{tabular}{@{}ccccc@{}}
+\toprule
+Model                 & Multi-turn & Single-turn & Unsolved & Overall \\ \midrule
+Deepseek R1-0528      & 34.3      & 76.1       & 83.7    & 64.7   \\
+Qwen3-235B-A22B-Ins-2507   & 60.1      & 69.7       & 80.0       & \underline{69.9}   \\
+Qwen3-235B-A22B-Th-2507   & 56.6      & 73.2       & 51.7    & 60.5   \\
+Qwen3-30B-A3B-Th-2507    & 59.6      & 69.4       & 56.3    & 61.8   \\
+Qwen3-14B             & 47.0      & 57.0       & 54.0       & 52.7   \\
+Qwen3-4B              & 42.0      & 42.1       & 73.0       & 52.4   \\ \midrule
+\model & 66.6 & 73.4 & 71.0 & \textbf{70.3} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+ 
+
+
+ 
+
+
+\begin{table}[h]
+\centering
+\caption{Model performance evaluation across general and in-domain benchmarks.}
+\label{tab:experimental_results_transposed}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{@{}cccccccccc@{}}
+\toprule
+Domain                    & Benchmark        & \begin{tabular}[c]{@{}c@{}}Qwen3-4B-\\ Thinking-2507\end{tabular} & \begin{tabular}[c]{@{}c@{}}Qwen3\\ 14B\end{tabular} & \begin{tabular}[c]{@{}c@{}}Qwen3-30B-\\ A3B-2507\end{tabular} & \begin{tabular}[c]{@{}c@{}}Qwen3-235B-\\ A22B-Ins-2507\end{tabular} & \begin{tabular}[c]{@{}c@{}}Qwen3-235B-\\ A22B-Th-2507\end{tabular} & \begin{tabular}[c]{@{}c@{}}DeepSeek-\\ R1-0528\end{tabular} & STAgent & 
+\begin{tabular}[c]{@{}c@{}}$\Delta$\\ (30B-A3B)\end{tabular}
+ \\ \midrule
+\multirow{3}{*}{Tool Use} & ACEBench         & 71.7                                                              & 69.8      & 75.7                                                          & 75.6                                                                & 75.7                                                               & -                                                           & 75.3    & -0.4  \\
+                          & Tau2-Bench       & 46.2                                                              & 37.6      & 47.7                                                          & 52.4                                                                & 58.5                                                               & 52.7                                                        & 47.0      & -0.7  \\
+                          & BFCL V3          & 71.2                                                              & 70.4      & 72.4                                                          & 70.9                                                                & 71.9                                                               & 63.8                                                        & 76.8    & 4.4   \\ \midrule
+\multirow{2}{*}{Math}     & AIME 24          & 83.8                                                              & 79.3      & 91.3                                                          & 80.8                                                                & 93.8                                                               & 91.4                                                        & 90.2    & -0.9  \\
+                          & AIME 25          & 81.3                                                              & 70.4      & 85.0                                                          & 70.3                                                                & 92.3                                                               & 87.5                                                        & 85.2    & 0.2   \\ \midrule
+\multirow{2}{*}{Coding}   & LiveCodeBench-v5 & 61.7                                                              & 63.5      & 70.1                                                          & 57.5                                                                & 68.3                                                               & -                                                           & 70.7    & 0.6   \\
+                          & LiveCodeBench-v6 & 55.2                                                              & 55.4      & 66.0                                                          & 51.8                                                                & 74.1                                                               & 73.3                                                        & 66.3    & 0.3   \\ \midrule
+\multirow{4}{*}{General}  & ArenaHard-v2.0   & 34.9                                                              & 30.4      & 51.4                                                          & 79.2                                                                & 79.7                                                               & -                                                           & 46.4    & -5.0  \\
+                          & IFEval           & 87.4                                                              & 85.4      & 88.9                                                          & 88.7                                                                & 87.8                                                               & 79.1                                                        & 87.1    & -1.8  \\
+                          & MMLU-Pro         & 74.0                                                              & 77.4      & 80.9                                                          & 83.0                                                                & 84.4                                                               & 85.0                                                          & 80.5    & -0.4  \\
+                          & C-Eval           & 72.3                                                              & 87.5      & 87.1                                                          & 90.7                                                                & 92.0                                                               & 91.5                                                        & 87.9    & 0.8   \\ \midrule
+In-domain                 & TravelBench      & 60.8                                                              & 52.7      & 60.2                                                          & 69.9                                                                & 60.5                                                               & 64.7                                                        & 70.3    & 10.1  \\ \bottomrule
+\end{tabular}
+}
+\end{table}
+
+
+
+
+\section{Conclusion}
+In this work, we present \model, a agentic model specifically designed to address the complex reasoning tasks within real-world spatio-temporal scenarios. A stable tool calling environment, high-quality data curation, and a difficulty-aware training recipe collectively contribute to the model's performance. Specifically, we constructed a calling environment that supports tools across 10 distinct domains, enabling stable and highly concurrent operations. Furthermore, we curated a set of high-quality candidate queries from a massive corpus of real-world historical queries, employing an exceptionally low filtering ratio. Finally, we designed an SFT-guided RL training strategy to ensure the model's capabilities continuously improve  throughout the training process. Empirical results demonstrate that \model, built on Qwen3-30B-A3B-thinking-2507, significantly outperforms models with larger parameter sizes on domain-specific benchmarks such as TravelBench, while maintaining strong generalization across general tasks. We believe this work not only provides a robust solution for spatio-temporal intelligence but also offers a scalable and effective paradigm for developing specialized agents in other complex, open-ended real-world environments.
+\subsubsection*{Author Contributions}
+\textbf{Project Leader}
+
+Yulan Hu
+
+\textbf{Core Contributors}
+
+Xiangwen Zhang, Sheng Ouyang, Hao Yi, Lu Xu, Qinglin Lang, Lide Tan, Xiang Cheng
+
+\textbf{Contributors}
+
+Tianchen Ye, Zhicong Li, Ge Chen, Wenjin Yang, Zheng Pan, Shaopan Xiong, Siran Yang, Ju Huang, Yan Zhang, Jiamang Wang, Yong Liu, Yinfeng Huang, Ning Wang, Tucheng Lin, Xin Li, Ning Guo
+
+
+\subsubsection*{Acknowledgments}
+We extend our sincere gratitude to the ROLL~\cite{roll} team for their exceptional support on the training infrastructure. Their asynchronous rollout and training strategy enabled a nearly 80\% increase in training efficiency. We also thank Professor Yong Liu from the Gaoling School of Artificial Intelligence, Renmin University of China, for his insightful guidance on our SFT-guided RL training recipe.
+
+
+
+\bibliography{iclr2026_conference}
+\bibliographystyle{iclr2026_conference}
+
+\appendix
+\section{Tool Schemas and Prompt Templates} \label{app:prompt}
+\subsection{Tool schemas}~\label{app:tools}
+
+
+\paragraph{1. Map \& Navigation Tools}
+\begin{itemize}
+    \item \textbf{map\_search\_places}: Searches for Points of Interest (POIs) based on keywords, categories, or addresses. Supports nearby search with customizable radius, administrative region filtering, and multiple sorting options (distance, rating, price). Returns rich metadata including ratings, prices, business hours, and user reviews.
+    \item \textbf{map\_compute\_routes}: Computes optimal routes from origin to destination with optional waypoints. Supports six transport modes: driving, walking, cycling, public transit, motorcycle, and truck. Provides optional real-time traffic awareness and route preferences (e.g., avoid tolls, prefer highways).
+    \item \textbf{map\_search\_along\_route}: Finds POIs within a buffer zone along a planned route, ideal for scenarios like ``find a gas station on my way home.'' Automatically plans the base route and searches within the specified corridor.
+    \item \textbf{map\_search\_central\_places}: Locates places that are convenient for multiple parties by computing distance metrics to all origins. Supports three optimization strategies: balanced (overall optimal), minimize maximum distance (fairness-oriented), and minimize total distance (efficiency-oriented).
+    \item \textbf{map\_search\_ranking\_list}: Retrieves curated ranking lists such as ``Must-Eat List'' or ``Black Pearl'' for a specified category and region. Returns ranked POIs with detailed recommendation reasons and featured tags.
+\end{itemize}
+
+\paragraph{2. Travel \& Transportation Tools}
+\begin{itemize}
+    \item \textbf{travel\_search\_flights}: Searches domestic flight information between cities. Supports optional multi-day queries for price comparison across consecutive dates. Returns flight numbers, airlines, departure/arrival times, aircraft types, and price ranges.
+    \item \textbf{travel\_search\_trains}: Queries train and high-speed rail schedules between cities. Supports multi-day queries for schedule comparison. Returns train numbers, schedules, duration, stations, and ticket prices.
+\end{itemize}
+
+\paragraph{3. Weather Tools}
+\begin{itemize}
+    \item \textbf{weather\_current\_conditions}: Retrieves real-time weather conditions for a specified location, including temperature, feels-like temperature, weather phenomena, wind direction/speed, and Air Quality Index (AQI).
+    \item \textbf{weather\_forecast\_days}: Provides multi-day weather forecasts (up to 5 additional days) for a given location. Supports both specific date queries and date range queries.
+\end{itemize}
+
+\paragraph{4. Information Retrieval Tools}
+\begin{itemize}
+    \item \textbf{web\_search}: Performs open-domain web search for general knowledge, real-time news, historical events, and policy information that falls outside the spatio-tempora domain.
+\end{itemize}
+
+
+\subsection{User Instruction Annotation Prompt Template}
+\label{app:intent_classification_prompt}
+
+
+\begin{lstlisting}[language=XML, basicstyle=\ttfamily\scriptsize,showstringspaces=false, breaklines=true, frame=single, caption={Prompt template used for user instruction classification.}]
+# Amap User Instruction Annotation System
+
+## Role And Task
+
+You are an expert annotation specialist for Amap user instructions. Your task is to analyze user instructions submitted to Amap (text or voice transcribed via ASR) and classify them using a comprehensive, hierarchical taxonomy system.
+
+**Your Objectives:**
+1. Identify the PRIMARY INTENT that represents the user's main goal
+2. Identify up to 3 SECONDARY INTENTS that represent additional goals (if applicable)
+3. Annotate ALL EXPLICIT CONSTRAINTS from the 5 auxiliary dimensions
+4. For Route Planning and Itinerary Planning intents ONLY: specify departure/arrival time constraints in temporal_details
+
+**Key Principles:**
+- Base all annotations on the explicit content of the instruction
+- Use geospatial and temporal common sense (e.g., approximate adjacency between cities, typical trip durations) to infer real user intent
+- Do not invent or assume new constraints (budget, preferences, time limits, etc.) that are not explicitly stated
+- Focus on the user's core action/goal when selecting primary intent
+- Use fully-qualified hierarchical IDs of the leaf intent for both primary and auxiliary dimensions
+
+---
+
+## Input and Output Format
+
+### Input Format
+
+Each task provides a single user instruction wrapped in `instruction` tags.
+
+```
+<instruction>
+{instruction}
+</instruction>
+```
+
+### Output Format
+
+Your output MUST follow this XML structure exactly and contain ONLY this XML block:
+
+```xml
+<primary_intent>
+intent_id_with_full_path
+</primary_intent>
+
+<secondary_intents>
+secondary_intent_id_1
+secondary_intent_id_2
+secondary_intent_id_3
+</secondary_intents>
+
+<auxiliary_dimensions>
+dimension_id_1
+dimension_id_2
+dimension_id_3
+</auxiliary_dimensions>
+
+<temporal_details>
+<departure>
+temporal_constraint_id
+</departure>
+<arrival>
+temporal_constraint_id
+</arrival>
+</temporal_details>
+```
+
+---
+...
+
+[Table of User Intent Taxonomy]
+
+...
+---
+
+## Annotation Guidelines
+
+### Multi-Intent Annotation Framework
+
+**Structure:**
+- **Primary Intent** (Required): The main goal driving the instruction. Choose the best-matched leaf intent from the intents defined in "Primary Dimension: User Intent Taxonomy" section.
+- **Secondary Intents** (Optional): Up to 3 supporting leaf intents that complement the primary intent. List in order of importance.
+- **Auxiliary Dimensions** (Optional): ALL explicit leaf constraints mentioned in the instruction.
+- **Temporal Details** (Optional): Only output the `<temporal_details>` block when the instruction involves departure/arrival timing or trip start/end concepts. This is especially important for `planning_and_decision.route_planning` and `planning_and_decision.itinerary_planning` intents, which typically involve such temporal information. If no departure/arrival timing is mentioned, omit the entire block.
+
+### Systematic Annotation Process
+
+Follow this systematic approach for every annotation:
+
+**Step 1: Identify Core Action/Goal**
+- What is the primary action the user wants to perform?
+- Search/Discover? Plan/Route? Compare? Query info? Navigate? Check rules?
+- Focus on explicit action verbs and functional goals, NOT contextual hints or scenario keywords
+- Ask: "What would the system need to do to fulfill this instruction?"
+
+**Step 2: Select Primary Intent**
+- Based on the core action, select the specific leaf intent from "Primary Dimension: User Intent Taxonomy" section
+- **Priority Rule:** 
+  - (1) More specific > More general
+  - (2) Action-oriented > Information-oriented 
+  - (3) Best supported by explicit constraints
+- Always specify the most appropriate leaf intent
+- **Out-of-domain:** If clearly non-travel/incomprehensible/pure greetings goes to `other_or_unclear` (and keep all lists empty)
+
+**Step 3: Check Exclusion Features**
+- Verify the instruction does NOT match any "NOT" exclusion criteria in taxonomy definitions
+- Use "Critical Distinctions and Edge Cases" section to resolve common confusions
+- Ensure contextual hints have not misled the classification
+
+**Step 4: Identify Secondary Intents**
+- Determine if the instruction expresses additional goals beyond the primary intent
+- Annotate up to 3 secondary intents ordered by importance
+- Only annotate what is clearly expressed or strongly implied
+- Order by importance relative to the primary goal
+
+**Step 5: Annotate Auxiliary Dimensions**
+- Extract ALL explicit constraints from the instruction
+- Use fully-qualified IDs (e.g., `spatial_constraints.within_city.nearby`)
+- Multiple values within same dimension are allowed
+- Use basic geospatial/temporal common sense to map explicit mentions to taxonomy buckets
+
+**Step 6: Add Temporal Details (When Applicable)**
+- Only output `<temporal_details>` block if instruction involves departure/arrival timing or trip start/end concepts
+- Pay special attention for Route Planning and Itinerary Planning intents (typically involve temporal information)
+- Use IDs from `temporal_constraints` hierarchy
+- **Departure:** When user wants to start the journey or start the trip
+- **Arrival:** When user needs to reach the destination or finish the trip
+- **If either departure or arrival has no value**: Omit that field entirely (do not output empty tags)
+- Use `temporal_constraints.fuzzy_time.flexible` only when user explicitly states no time constraints
+- **If no temporal information**: Omit the entire `<temporal_details>` block
+
+---
+
+## Annotation Examples and Critical Distinctions
+
+This section provides complete annotation examples and highlights critical distinctions between commonly confused intents.
+...
+
+---
+
+### Critical Distinctions and Edge Cases
+
+This section highlights the most commonly confused intent pairs and critical decision points.
+...
+\end{lstlisting}
+
+\subsection{Difficulty Scoring Annotation Prompt Template}
+\label{app:difficulty_scoring_prompt}
+\begin{lstlisting}[language=XML, basicstyle=\ttfamily\scriptsize,showstringspaces=false, breaklines=true, frame=single, caption={Prompt template used for difficulty scoring.}]
+# Role
+You are an expert **Amap Agent Simulator and Difficulty Evaluator**. Your objective is to assess the difficulty of a user's query by first **simulating** the execution plan using a strict set of tools, and then **scoring** the complexity based on that simulation.
+
+# Input Data
+You will receive:
+1.  **User Query**: The user's natural language command.
+2.  **Context**: Current location, time, user profile, etc.
+3.  **Tool Definitions**: A list of available tools will be given in Appendix.
+
+# Task Workflow
+
+## Step 1: Intent & Context Analysis (Mental Sandbox)
+Analyze the user's intent and available context. Determine if the task is feasible.
+* **Feasibility Check**: Do you have the *necessary and sufficient conditions* to start planning?
+* **Missing Information**: Distinguish between "Contextual Missing" (e.g., "Go *there*" with no reference -> Unexecutable) vs "Retrievable Missing" (e.g., "Find *nearest gas station*" -> Executable via search).
+* **Tool Coverage**: Can the request be fulfilled using ONLY the provided tools?
+
+## Step 2: Simulation Planning (The "Dry Run")
+If the task is feasible, generate a logical **Tool Chain**.
+* **Dependency**: Ensure Step B can only happen after Step A if B needs A's output.
+* **Data Flow**: Explicitly state where parameters come from (e.g., `$Context.location`, `$Step1.poi_id`).
+* **Logic**: Describe branching logic for complex scenarios (e.g., "If tickets available, then Book; else Waitlist").
+* **Anti-Hallucination**:
+    * **Strict Toolset**: Use ONLY tools defined in `<tools>`. If a needed tool doesn't exist, mark as `MissingTool`.
+    * **No Magic Data**: Do not invent coordinates, POI IDs, or user preferences. If they aren't in Context or previous tool outputs, you must plan a tool call to get them.
+    * **Time Awareness**: Use the provided `User Query Time` as the anchor for all temporal queries.
+
+## Step 3: Difficulty Scoring (Based on Simulation)
+Assign a score from **-1 to 5** based on the simulation experience.
+
+# Scoring Rubric
+
+## Special Categories (Score: -1 or 0)
+
+### Score -1: Unexecutable
+The query cannot be solved by the agent regardless of reasoning capabilities.
+* **Case A (MissingInfo):** Critical entities are missing, and context/history cannot resolve them. (e.g., "Go to that mall" with no context).
+* **Case B (MissingTool):** The intent is clear, but the functionality is outside the agent's scope. (e.g., "Change the backend code of Google Maps", "Play a video").
+* **Note:** If a query falls here, stop analysis and assign -1.
+
+### Score 0: No Tool Required
+The query is chitchat, general knowledge, or a greeting that requires no geospatial tool execution. (e.g., "Hello", "Who are you?", "Tell me a joke").
+
+---
+
+## Graded Difficulty (Score: 1 to 5)
+For executable queries, assign a score based on the **Orthogonal Matrix** of Cognitive Load (Tool Selection) and Mechanical Load (Execution Steps).
+
+### Score 1: Very Easy (Atomic)
+* **Tool Selection:** **Trivial**. The query explicitly keywords a specific tool or intent (e.g., "Navigate to...", "Search for..."). No reasoning required.
+* **Execution:** Single-step execution (1 turn). Uses 1 tool type.
+* **Query Quality:** Clear and unambiguous.
+* **Example:** "Navigate to the Eiffel Tower." / "What is the weather in London?"
+
+### Score 2: Easy (Linear Chain)
+* **Tool Selection:** **Straightforward**. Requires mapping a standard intent to a standard tool sequence. The path is linear.
+* **Execution:** Short sequence (2 turns). Uses 1-2 tool types. Typically involves `Search` -> `Action` (e.g., Navigate).
+* **Query Quality:** Good.
+* **Example:** "Find a gas station nearby and take me there." (Search -> Select -> Navigate)
+
+### Score 3: Medium (Conditional / Parameterized)
+* **Tool Selection:** **Moderate**. Requires analyzing constraints or filters. The agent must extract specific parameters (price, rating, open status) to configure the tools correctly.
+* **Execution:** Medium sequence (3 turns). Uses 1-3 tool types.  Involves filtering, sorting, or "Search Along Route" logic.
+* **Query Quality:** Average to Good. May require slight inference.
+* **Example:** "Find a cheap Italian restaurant on the way to the airport that is open now." (Route planning -> Search along route -> Filter by price/cuisine/time).
+
+### Score 4: Hard (Multi-Intent / Optimization)
+* **Tool Selection:** **Challenging**. The query contains multiple distinct sub-goals or requires comparison/optimization logic. The agent must decompose the query into parallel or complex serial tasks.
+* **Execution:** Long sequence (4-6 turns). Uses multiple tool types (3+ types).
+* **Query Quality:** May contain implicit requirements or complex sentence structures.
+* **Example:** "Plan a date night: first a movie at a cinema with good ratings, then a nearby bar, and finally drive me home. Avoid highways." (Multi-stage planning + Preferences).
+
+### Score 5: Very Hard (Complex Reasoning / Edge Cases)
+* **Tool Selection:** **Expert Level**. The user's intent is abstract, highly implicit, or requires cross-referencing multiple domains. The agent must "invent" a solution path using the tools creatively.
+* **Execution:** Massive sequence (7+ turns). High tool variety.
+* **Query Quality:** Poor/Ambiguous (requiring deep inference) OR Excellent but extremely complex constraints.
+* **Example:** "I have 3 hours to kill before my flight at JFK. Find me a scenic spot to read a book within 20 mins drive, get me coffee on the way, and make sure I don't hit traffic coming back." (Time budgeting + Traffic prediction + Multi-stop + Vague "scenic" definition).
+
+---
+
+# Output Format
+
+Your output MUST follow the structure below exactly. It consists of an `<analysis>` XML block followed by a `<response>` block.
+
+```xml
+<analysis>
+    <intent_analysis>
+        <intent>Brief description of user intent</intent>
+        <feasibility>Executable | MissingInfo | MissingTool | NoToolNeeded</feasibility>
+        <missing_details>Describe what is missing (if any)</missing_details>
+    </intent_analysis>
+
+    <simulation>
+        <step id="1">
+            <tool_name>tool_name_here</tool_name>
+            <reason>Why this tool is needed</reason>
+            <parameters>
+                <param name="arg_name">Source (e.g., $Context.lat or 'gas station')</param>
+            </parameters>
+        </step>
+        <step id="2">
+            <tool_name>tool_name_here</tool_name>
+            <parameters>
+                <param name="arg_name">$Step1.result.id</param>
+            </parameters>
+        </step>
+    </simulation>
+
+    <scoring>
+        <tool_selection_difficulty>
+            <rating>very easy | easy | medium | hard | very hard</rating>
+            <reasoning>
+                Explain the cognitive load required to select these tools. Was it obvious? Did it require inferring implicit constraints?
+            </reasoning>
+        </tool_selection_difficulty>
+        
+        <execution_complexity>
+            <estimated_turns>Integer (e.g., 3)</estimated_turns>
+            <tool_variety>Integer (e.g., 2 types)</tool_variety>
+        </execution_complexity>
+
+        <query_quality>
+            <rating>poor | average | good | excellent</rating>
+            <impact>How quality affected the difficulty</impact>
+        </query_quality>
+
+        <final_score>Integer (-1 to 5)</final_score>
+    </scoring>
+</analysis>
+<response>
+    * MissingInfo: [[true/false]]
+    * MissingTool: [[true/false]]
+    Rating: [[X]]
+</response>
+```
+-----
+## Appendix: List of Available Tools
+You have access to the following tools definitions to assist with your simulation.
+
+<tools>
+{tools_json_schema}
+</tools>
+
+\end{lstlisting}
+
+\subsection{Reward Model Prompt Template}
+\label{app:reward_prompt}
+
+The following prompt illustrates the dynamic evaluation logic used to score \amapagent trajectories. The evaluator first classifies the task type to assign weights, checks strictly for hallucinations, and then provides a reasoned score.
+
+\begin{lstlisting}[language=XML, basicstyle=\ttfamily\scriptsize, breaklines=true, frame=single, caption={Prompt template with dynamic weighting and hallucination veto logic.}]
+## Role
+You are a senior AI Agent Evaluation Expert. Evaluate the interaction based on tool usage, reasoning, and the final answer.
+
+## Evaluation Criteria (Summary)
+1. Reasoning & Proactivity: 
+   - Does the model correct user errors proactively (e.g., fixing location mismatches) instead of rejecting them?
+   - Are tool arguments precise without redundancy?
+2. Information Fidelity:
+   - STRICT VETO: Any hallucinated fact (price, time, distance) results in a Final Score of 0.
+   - Must strictly ground answers in <tool_response>.
+3. Presentation:
+   - Does it close the service loop with actionable next steps?
+   - Is the format structured and user-friendly?
+
+## Dynamic Scoring Logic
+Step 1: Determine Weights (w_reasoning + w_integration + w_presentation = 1.0)
+   - Scenario A (Complex Planning): Focus on Reasoning (e.g., 0.6 / 0.3 / 0.1)
+   - Scenario B (Data Retrieval): Focus on Fidelity (e.g., 0.2 / 0.6 / 0.2)
+   - Scenario C (Consultation): Focus on Presentation (e.g., 0.3 / 0.3 / 0.4)
+
+Step 2: Calculate Score
+   - final_score = (Rating1 * w1) + (Rating2 * w2) + (Rating3 * w3)
+   - If <has_hallucination> is true, final_score = 0.0
+
+## Output Format
+Strictly output raw XML without Markdown blocks.
+
+```xml
+<evaluation_report>
+    <hallucination_analysis>
+        <has_hallucination></has_hallucination>
+        <details></details>
+    </hallucination_analysis>
+    <weight_analysis>
+        <rationale></rationale>
+        <weights>
+            <w_reasoning>...</w_reasoning>
+            <w_integration>...</w_integration>
+            <w_presentation>...</w_presentation>
+        </weights>
+    </weight_analysis>
+    <dimension_reasoning>
+        <rationale>...</rationale>
+        <rating></rating>
+    </dimension_reasoning>
+    <dimension_integration>
+        <rationale>...</rationale>
+        <rating>...</rating>
+    </dimension_integration>
+    <dimension_presentation>
+        <rationale>...</rationale>
+        <rating>...</rating>
+    </dimension_presentation>
+    <final_score></final_score>
+</evaluation_report>
+\end{lstlisting}
+
+
+\input{adix-B_casestudy}
+
+\section{Training Dynamic}
+Figure~\ref{fig:reward_curve} shows the progression of the reward signal over the process of the training iterations.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{resources/training_reward.pdf} 
+    \caption{Training reward.}
+    \label{fig:reward_curve}
+\end{figure}
+ 
+\end{document}

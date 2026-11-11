@@ -1,0 +1,31 @@
+\section{Training}
+\label{sec:training}
+% \todoq{training can be merged into Method section}
+
+\paragraph{Two-Stage Training Strategy}
+We employ a two-stage training strategy to balance computational efficiency and model performance:
+
+\begin{itemize}
+    \item \textbf{Stage 1 (Small Crop Size)}: We train on crops of $384$ tokens with a diffusion batch size of $64$ for $60$k iterations. This stage allows for faster iteration and efficient exploration of the loss landscape.
+    \item \textbf{Stage 2 (Large Crop Size)}: We increase the crop size to $640$ tokens and reduce the diffusion batch size to $32$, training for an additional $40$k iterations. This stage improves the model's ability to handle longer sequences and complex structures.
+\end{itemize}
+
+\paragraph{Training Configuration}
+All models are trained with a batch size of $256$ using the AdamW optimizer~\cite{loshchilov2017decoupled}. We adopt a step decay learning rate schedule with a maximum learning rate of $0.0018$ for our base model. During training, we randomly drop MSA with a probability of $10\%$ and sample monomer distillation data with a ratio of $50\%$. 
+
+\paragraph{Precision} Since the Structure Module operates in the coordinate space, while the Pairformer learns the latent space, their training and inference require different levels of precision. We use \texttt{bfloat16} for the MSA Module and the Pairformer, and consistently ensure that the Structure Module uses \texttt{float32}. Our experimental practice demonstrates that this approach achieves a balanced tradeoff between precision and computational speed. It is worth noting that if the Structure Module is run with \texttt{bfloat16}, local distance metrics (lDDT) will decrease significantly, whereas global metrics (DockQ) will remain relatively unchanged. This phenomenon is explicable because full precision exerts a considerably larger impact on local distances.
+
+\paragraph{Training Stability}
+Scaling the model width introduces training instabilities. When the Pairformer width exceeds $256$, we observe gradient norm explosions and loss collapse in early training. We adopt the following techniques to stabilize training:
+
+\begin{itemize}
+    \item \textbf{Extended Warmup}: We extend the warmup period from $1000$ to $3000$ to facilitate the gradual adaptation of large parameter matrices.
+    \item \textbf{Reduced Learning Rate}: We use a smaller learning rate ($0.001$) for larger models ($512$-width). This aligns with common practice in large language models, where larger models require smaller learning rates to stabilize training~\cite{touvron2023llama}.
+\end{itemize}
+
+These techniques enabled the successful training of the large model to convergence. In this paper, we mainly present two models: 
+
+\begin{itemize}
+    \item \textbf{SeedFold}: a 512-width model equipped with vanilla triangular attention. Training folding models using a vanilla attention-based model yields greater stability, compared with its linear counterparts.
+    \item \textbf{SeedFold-Linear}: a 384-width model integrated with \texttt{GatedLinearTriAtt}. We chose \texttt{GatedLinearTriAtt} due to its superior performance on DNA/RNA sequences, compared to \texttt{AdditiveLinearTriAtt}. We did not continue scaling the linear attention-based models due to resource limitations and potential convergence issues, and we will leave this for future work.
+\end{itemize}

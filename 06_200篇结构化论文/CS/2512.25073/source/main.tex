@@ -1,0 +1,1213 @@
+\documentclass[runningheads]{llncs}
+
+% ---------------------------------------------------------------
+% Include basic ECCV package
+ 
+% TODO REVIEW: Insert your submission number below by replacing '*****'
+% TODO FINAL: Comment out the following line for the camera-ready version
+% \usepackage[review,year=2026,ID=660]{eccv}
+% TODO FINAL: Un-comment the following line for the camera-ready version
+%\usepackage{eccv}
+
+% OPTIONAL: Un-comment the following line for a version which is easier to read
+% on small portrait-orientation screens (e.g., mobile phones, or beside other windows)
+\usepackage[mobile]{eccv}
+
+
+% ---------------------------------------------------------------
+% Other packages
+
+% Commonly used abbreviations (\eg, \ie, \etc, \cf, \etal, etc.)
+\usepackage{eccvabbrv}
+\usepackage{makecell}
+
+% Include other packages here, before hyperref.
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+% The "axessiblity" package can be found at: https://ctan.org/pkg/axessibility?lang=en
+\usepackage[accsupp]{axessibility}  % Improves PDF readability for those with disabilities.
+
+
+% ---------------------------------------------------------------
+% Hyperref package
+
+% It is strongly recommended to use hyperref, especially for the review version.
+% Please disable hyperref *only* if you encounter grave issues.
+% hyperref with option pagebackref eases the reviewers' job, but should be disabled for the final version.
+%
+% If you comment hyperref and then uncomment it, you should delete
+% main.aux before re-running LaTeX.
+% (Or just hit 'q' on the first LaTeX run, let it finish, and you
+%  should be clear).
+
+% TODO FINAL: Comment out the following line for the camera-ready version
+%\usepackage[pagebackref,breaklinks,colorlinks,citecolor=eccvblue]{hyperref}
+% TODO FINAL: Un-comment the following line for the camera-ready version
+\usepackage{hyperref}
+\usepackage{color, colortbl}
+\usepackage{stfloats}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{xstring}
+\usepackage{multirow}
+\usepackage{xspace}
+\usepackage{url}
+\usepackage{subcaption}
+\usepackage{xcolor}
+\usepackage[hang,flushmargin]{footmisc}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{wrapfig}
+\usepackage{placeins}
+
+
+
+% Support for ORCID icon
+\usepackage{orcidlink}
+
+
+\begin{document}
+
+% ---------------------------------------------------------------
+% TODO REVIEW: Replace with your title
+\title{GaMO: Geometry-aware Multi-view Diffusion Outpainting for Sparse-View 3D Reconstruction} 
+
+% TODO REVIEW: If the paper title is too long for the running head, you can set
+% an abbreviated paper title here. If not, comment out.
+\titlerunning{Abbreviated paper title}
+
+% TODO FINAL: Replace with your author list. 
+% Include the authors' OCRID for the camera-ready version, if at all possible.
+\author{Yi-Chuan Huang \and Hao-Jen Chien \and Chin-Yang Lin \and Chih-Yu Chang \and Ying-Huan Chen \and Yu-Lun Liu}
+
+% TODO FINAL: Replace with an abbreviated list of authors.
+\authorrunning{Y.-C.~Huang et al.}
+% First names are abbreviated in the running head.
+% If there are more than two authors, 'et al.' is used.
+
+% TODO FINAL: Replace with your institution list.
+\institute{National Yang Ming Chiao Tung University\\
+\email{yichuanh.cs12@nycu.edu.tw, yulunliu@cs.nycu.edu.tw}}
+
+\maketitle
+
+
+\begin{center}
+  \includegraphics[width=\textwidth]{figures/teaser.pdf}
+  \captionsetup{type=figure}
+  \caption{
+\textbf{Overview and comparison.}
+\emph{(Top)} Our method, \textbf{GaMO} (\textbf{G}eometry-\textbf{a}ware \textbf{M}ulti-view Diffusion \textbf{O}utpainter), expands sparse input views into wide-FOV outpainted views via a multi-view diffusion model, which are then used to refine 3D Gaussian Splatting (3DGS)~\cite{kerbl20233d} reconstruction, producing high-fidelity novel views with improved geometric consistency and visual clarity. 
+\emph{(Bottom)} Qualitative comparison with existing methods, including 3DGS~\cite{kerbl20233d}, FSGS~\cite{zhu2024fsgs}, Difix3D~\cite{wu2025difix3d+}, and GuidedVD-3DGS~\cite{zhong2025taming}. Previous approaches suffer from \textit{holes}, \textit{ghosting}, or \textit{inconsistent geometry} when trained with sparse inputs. In contrast, our method effectively mitigates these artifacts and achieves superior image quality.
+}
+  \label{fig:teaser}
+\end{center}
+
+
+\begin{abstract}
+Recent 3D reconstruction methods achieve impressive results with dense multi-view imagery but struggle when only a few views are available. Various approaches, including regularization techniques, semantic priors, and geometric constraints, have been implemented to address this challenge. Recent diffusion-based approaches further improve performance by generating novel views to augment training data. Despite this progress, we identify three critical limitations in current state-of-the-art approaches: (i) inadequate coverage beyond known view peripheries, (ii) geometric inconsistencies across generated views, and (iii) computational inefficiency due to expensive pipelines. We introduce \textbf{GaMO} (\textbf{G}eometry-\textbf{a}ware \textbf{M}ulti-view \textbf{O}utpainter), a framework that reformulates sparse-view reconstruction through multi-view outpainting. Instead of generating new viewpoints, GaMO expands the field of view from existing camera poses, which inherently preserves geometric consistency while providing broader scene coverage. Our approach employs multi-view conditioning and geometry-aware denoising strategies in a zero-shot manner without training. Extensive experiments on Replica, ScanNet++, and Mip-NeRF 360 demonstrate strong reconstruction performance across sparse-view settings (3, 6, and 9 input views). Notably, our method is significantly more efficient than existing diffusion-based approaches, reducing the overall runtime to within 10 minutes.
+Project page: \url{https://yichuanh.github.io/GaMO/}
+  \keywords{Sparse-view 3D Reconstruction \and Multi-View Outpainting \and Geometry-aware Diffusion}
+\end{abstract}
+
+
+\section{Introduction}
+\label{sec:intro}
+
+Reconstructing complete 3D scenes from limited input views is a fundamental problem with numerous tangible applications, ranging from virtual property tours to immersive telepresence. However, it remains notoriously difficult, often resulting in broken geometry and visible visual artifacts. Previous approaches attempted to address the sparsity of input views through regularization, semantic priors, or geometric constraints~\cite{niemeyer2022regnerf,jain2021dietnerf,yang2023freenerf,zhu2024fsgs,wang2023sparsenerf,li2024dngaussian}. These methods remain limited in handling unobserved regions. 
+
+Recently, diffusion-based approaches~\cite{zhong2025taming,wu2025genfusion,wu2024reconfusion,wu2025difix3d+,anciukevicius2023renderdiffusion} have generated novel views to improve the reconstruction quality for sparse observations. Nevertheless, these methods show three fundamental limitations: (1) novel view generation mainly focuses on enhancing angular coverage of existing geometry and often overlooks the extension beyond the periphery, leaving persistent \textbf{holes} and \textbf{ghostings} in the reconstruction; (2) geometric and photometric \textbf{inconsistencies} across novel and input views inevitably become prominent as view overlap increases due to internal diffusion variations; (3) novel view generation requires elaborate trajectory planning and camera pose sampling, making the process \textbf{time-consuming}.
+% Firstly, the generated novel views typically cover limited viewing angles and fail to extend beyond the periphery of known views, leaving persistent \textbf{holes} and \textbf{blurred edges} in the reconstruction. Secondly, geometric and photometric \textbf{inconsistencies} emerge both among generated views and between generated and input views, introducing visual artifacts that degrade reconstruction quality. Thirdly, the generation pipeline is computationally expensive and procedurally complex, requiring elaborate trajectory planning and careful camera pose sampling, making the entire process tedious and \textbf{time-consuming}. 
+
+Recent multi-view diffusion models incorporate geometry-aware priors and achieve strong geometric consistency across generated views. However, we find that directly using them to expand camera viewpoints is not suitable under extremely sparse-view settings. Fig.~\ref{fig:moti} shows an experiment where three input views are used to generate interpolated novel views via diffusion, which are then used to train 3DGS~\cite{kerbl20233d}. Increasing the number of generated views (from 3 to 13 total views) degrades reconstruction quality, leading to lower SSIM and higher LPIPS. This observation suggests that generating additional viewpoints is not always beneficial under sparse-view settings. 
+
+Instead, we observe that \textit{outpainting}, rather than novel view generation, better leverages the geometry-aware priors of multi-view diffusion models and provides a more suitable paradigm for sparse-view 3D reconstruction. By extending content around existing input views, outpainting expands spatial coverage while preserving geometric consistency. Based on this insight, we propose \textbf{GaMO} (\textbf{G}eometry-\textbf{a}ware \textbf{M}ultiview \textbf{O}utpainting), which (1) expands the field of view (FOV) to cover unobserved regions while preserving geometric consistency, (2) avoids fusing multiple hallucinated views in 3D space, reducing misalignment artifacts, and (3) reconstructs scenes efficiently through a single outpainting pass, achieving tens-of-times speedup over video diffusion-based methods. We evaluate our approach on Replica~\cite{straub2019replica}, ScanNet++~\cite{yeshwanth2023scannet++}, and Mip-NeRF 360~\cite{barron2023mipnerf360}, demonstrating competitive performance with improved perceptual quality.
+
+\noindent We summarize our contributions as follows:
+\begin{itemize}
+% Paradigm Shift: 
+\item We establish outpainting as a superior paradigm for sparse-view reconstruction, eliminating common issues including holes, ghosting artifacts, and geometric inconsistencies.
+% Technical Innovation: 
+\item We develop a geometry-aware outpainting approach with novel conditioning and denoising strategies in zero-shot manner without finetuning.
+% Performance and Efficiency: 
+\item We achieve competitive performance across the Replica, ScanNet++, and Mip-NeRF 360 datasets. Our method provides strong geometric accuracy and perceptual quality across 3, 6, and 9 input views, while significantly reducing reconstruction time to under 10 minutes.
+
+% % 要不要總結成以上三點就好
+%     \item We argue that diffusion-based outpainting is fundamentally more suitable than novel view synthesis for sparse-view 3D reconstruction, introducing a new paradigm for few-shot indoor scene reconstruction.
+%     \item We propose a geometry-aware multi-view diffusion outpainter with novel conditioning, noise, and masking schedules that enable zero-shot and few-shot generalization.
+%     \item We present a single-step outpainting approach that eliminates complex trajectory planning, reducing the reconstruction time to under 10 minutes.
+%     \item Our method achieves state-of-the-art performance on Replica~\cite{straub2019replica} and ScanNet++~\cite{yeshwanth2023scannet++} across 3, 6, and 9 input views, with substantial gains in geometric accuracy and perceptual quality.
+\end{itemize}
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1\columnwidth]{figures/Sanity.pdf}
+    % \vspace{-6mm}
+\caption{
+\textbf{Motivation: Outpainting vs. diffusion-generated novel views.}
+Using multi-view diffusion~\cite{cao2025mvgenmaster}, we train 
+3DGS~\cite{kerbl20233d} with three settings: interpolated views (\textcolor{green!70!black}{green}), a 3-view baseline (\textcolor{cyan}{blue}), and outpainting (\textcolor{orange}{orange}). 
+\textbf{Top:} Adding more diffusion-generated views (3--13) may introduce geometric inconsistencies under sparse-view conditions. 
+\textbf{Bottom:} SSIM/LPIPS show a similar trend: increasing generated views can degrade reconstruction quality, while outpainting remains more stable.
+}
+    \label{fig:moti} 
+\end{figure}
+
+
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Sparse-view 3D Gaussian Splatting.}
+While 3DGS~\cite{kerbl20233d} achieves remarkable quality with dense inputs, sparse-view reconstruction remains challenging, particularly for indoor scenes~\cite{li2024genrc}. Recent methods employ depth regularization~\cite{li2024dngaussian,chung2023depth}, proximity-guided unpooling~\cite{zhu2024fsgs}, dual-field co-regularization~\cite{zhang2024cor}, structural regularization via random Gaussian dropping~\cite{park2025dropgaussian}, matching-prior-based structure consistency~\cite{peng2024scgaussian}, and robust handling of unposed inputs~\cite{lin2025longsplat}. Diffusion-augmented approaches use generative models to synthesize pseudo-views for enhanced training supervision~\cite{kong2025generative,yang2024gaussianobject}. Feed-forward approaches leverage cost volumes~\cite{chen2024mvsplat,charatan2024pixelsplat}, Gaussian bundle adjustment~\cite{fan2024instantsplat}, depth-integrated splatting~\cite{xu2025depthsplat}, multi-view stereo features~\cite{liu2024mvsgaussian}, or transformer architectures~\cite{wang2024freesplat,xu2025freesplatter,tang2024hisplat,min2024epipolar,szymanowicz2024splatter}. Methods combining depth priors include DN-Splatter~\cite{turkulainen2025dn} with depth and normal cues, SplatFields~\cite{mihajlovic2024splatfields} regularizing spatial autocorrelation, and large model priors~\cite{yu2024lm,wang2024use,he2025see,shih2025prior}. While these methods \emph{regularize} 3D representations, our work \emph{augments} training data through geometry-aware outpainting for more complete scene coverage.
+
+\paragraph{Multi-view diffusion models for 3D.}
+Multi-view diffusion enables consistent 3D generation through multi-view attention~\cite{shi2023mvdream,wang2023imagedream}, synchronized volume attention~\cite{liu2023syncdreamer}, orthogonal view generation~\cite{shi2023zero123++}, and cross-domain diffusion~\cite{long2024wonder3d}. Recent advances enforce consistency via 3D feature unprojection~\cite{yang2024consistnet}, epipolar attention~\cite{huang2024epidiff,kuang2024collaborative}, depth-guided attention~\cite{hu2024mvd}, differentiable rasterization~\cite{lu2024direct2}, and pose-free dense generation~\cite{tang2024mvdiffusion++}. Large multi-view Gaussian models enable high-resolution content creation~\cite{tang2024lgm}. Video diffusion models provide temporal consistency for multi-view synthesis~\cite{voleti2024sv3d,gao2024cat3d,kwak2024vivid,zhang20244diffusion,chen2024mvsplat360,chen2024v3d,yu2024viewcrafter}, with view-integrated attention~\cite{xu2024cavia} and multi-view video generation~\cite{li2024vivid} further improving spatiotemporal coherence. Additional methods include mesh generation~\cite{xu2024instantmesh}, epipolar constraints~\cite{li2024era3d}, combined 2D-3D priors~\cite{liu2024one}, correspondence-aware attention~\cite{Tang2023mvdiffusion}, and 3D feature fields~\cite{chan2023generative}. These methods generate \emph{novel views} from different poses. Our work performs \emph{multi-view outpainting} to expand field-of-view of existing views, maintaining stronger geometric consistency for sparse-view scene reconstruction.
+
+\paragraph{Diffusion priors for 3D reconstruction.}
+Diffusion models provide learned priors through Score Distillation Sampling~\cite{poole2022dreamfusion,wang2023prolificdreamer,liang2024luciddreamer}. Improvements address over-smoothing~\cite{lukoianov2024score}, mode collapse~\cite{wang2024taming}, provide unified frameworks~\cite{mcallister2024rethinking}, classifier-based distillation~\cite{yu2023text}, ODE-based sampling~\cite{wu2024consistent3d,lee2024dreamflow}, and optimize both 3D models and priors~\cite{yang2024learn,chen2024vividdreamer}. Video diffusion serves as powerful priors~\cite{liu2024reconx,melas20243d,yi2024gaussiandreamer}. Reconstruction methods use multi-view conditioning~\cite{wu2024reconfusion}, pseudo-observation enhancement~\cite{liu2024deceptive}, scene-grounding guidance~\cite{zhong2025taming}, iterative refinement~\cite{wu2025genfusion,wu2025difix3d+,liu20243dgs}, inline prior-guided score matching under sparse views~\cite{wang2024use}, visibility-guided decompositional reconstruction~\cite{ni2025decompositional}, and various coupling strategies~\cite{xu2024bayesian,hui2024microdiffusion,muller2024multidiff,liu2024meshformer,xue2024human}. Native 3D diffusion includes latent approaches~\cite{lan2024ln3diff,he2024gvgen,wu2024direct3d,wu2024unique3d,yang2024scenecraft} and RL finetuning~\cite{xie2024carve3d}. While these methods generate additional views or provide guidance, they face multi-view \emph{inconsistency}. Our insight: diffusion models suit \emph{outpainting known views} better than hallucinating novel perspectives, maintaining stronger geometric grounding.
+
+\paragraph{Geometry-aware generation.}
+Geometric consistency leverages Pl\"ucker coordinates for camera conditioning~\cite{xu2023dmv3d,kant2024spad,zhang2024cameras,xu2024camco,ji2025campvg,he2024cameractrl,bahmani2025vd3d} and epipolar constraints or voxel representations~\cite{tu2023imgeonet} for multi-view consistency~\cite{huang2024epidiff,ye2024diffpano,wang2024mvdd,kupyn2025epipolar,muller2024multidiff,xu20243difftection,zheng2024cami2v}. Camera motion control in video diffusion extends these representations to temporal settings~\cite{wang2024motionctrl}. Joint pixel-level image and depth synthesis further improves geometric fidelity~\cite{guizilini2025zero}. Depth and normal conditioning proves critical~\cite{lu2024direct2,long2024wonder3d,ke2024repurposing,fu2024geowizard,patni2024ecodepth,hu2024mvd,duan2024diffusiondepth,wang2024depthanywhere,qiu2024richdreamer}. Recent panoramic generation~\cite{zhang2024continuous,wang2024360dvd} and video outpainting~\cite{yu2025unboxed} typically operate in 2D or single-view scenarios. Our approach uniquely combines \emph{multi-view outpainting} with \emph{geometry awareness} through coarse 3DGS rendering, opacity-based masking, and noise resampling for consistent, geometrically plausible FOV expansion.
+
+\paragraph{Outpainting and FOV expansion.}
+Diffusion-based outpainting includes panoramic methods~\cite{zhang2024continuous,wu2023panodiffusion,kalischek2025cubediff,yuan2025camfreediff,feng2023diffusion360,shi2023fishdreamer,yu2024shadow,zhang2024taming,lu2024autoregressive,liu2024panofree} and restoration tasks~\cite{tsai2025lightsout,liu2025corrfill}. Video outpainting methods leverage input-specific adaptation~\cite{wang2024your} and temporal diffusion~\cite{zhang2024avid}. For 3D scenarios, methods employ visibility-aware inpainting~\cite{liu2024novel,wu2025aurafusion360}, generative scene completion via grid priors~\cite{weber2024nerfiller} or interactive extrapolation~\cite{yu2025wonderworld}, reference-adapted diffusion for 3D inpainting~\cite{mirzaei2024reffusion}, video diffusion priors~\cite{liu2024novel}, NeRF-guided training~\cite{yu2024nerf}, iterative 3DGS updates~\cite{yu2025unboxed}, and multi-view SDS~\cite{chen2024mvip}. General sparse-view baselines include feed-forward prediction~\cite{charatan2024pixelsplat,chen2024mvsplat}, regularized optimization~\cite{paliwal2024coherentgs,xu2024sparp}, and NeRF-based methods~\cite{wang2023sparsenerf,yang2023freenerf,niemeyer2022regnerf,lin2025frugalnerf,su2024boostmvsnerfs}. These works require per-scene fine-tuning or focus on single-view outpainting. Our method performs \emph{zero-shot multi-view outpainting} using pre-trained MVGenMaster~\cite{cao2025mvgenmaster} with geometry-aware mechanisms ensuring cross-view consistency without scene-specific training.
+
+
+% \section{Related Work}
+% \label{sec:related}
+
+% \paragraph{Sparse-view 3D Gaussian Splatting.}
+% While 3DGS~\cite{kerbl20233d} achieves remarkable quality with dense inputs, sparse-view reconstruction remains challenging, particularly for indoor scenes~\cite{li2024genrc}. Recent methods employ depth regularization~\cite{li2024dngaussian,chung2024depth}, proximity-guided unpooling~\cite{zhu2024fsgs}, dual-field co-regularization~\cite{zhang2024cor}, and robust handling of unposed inputs~\cite{lin2025longsplat}. Feed-forward approaches leverage cost volumes~\cite{chen2024mvsplat,charatan2024pixelsplat}, Gaussian bundle adjustment~\cite{fan2024instantsplat}, or transformer architectures~\cite{wang2024freesplat,xu2025freesplatter,tang2024hisplat}. Methods combining depth priors include DN-Splatter~\cite{turkulainen2025dn} with depth and normal cues, SplatFields~\cite{mihajlovic2024splatfields} regularizing spatial autocorrelation, and large model priors~\cite{yu2024lm,wang2024use,he2025see,shih2025prior}. While these methods \emph{regularize} 3D representations, our work \emph{augments} training data through geometry-aware outpainting for more complete scene coverage.
+% \paragraph{Multi-view diffusion models for 3D.}
+% Multi-view diffusion enables consistent 3D generation through multi-view attention~\cite{shi2023mvdream}, synchronized volume attention~\cite{liu2023syncdreamer}, orthogonal view generation~\cite{shi2023zero123++}, and cross-domain diffusion~\cite{long2024wonder3d}. Recent advances enforce consistency via 3D feature unprojection~\cite{yang2024consistnet}, epipolar attention~\cite{huang2024epidiff}, depth-guided attention~\cite{hu2024mvd}, and differentiable rasterization~\cite{lu2024direct2}. Video diffusion models provide temporal consistency for multi-view synthesis~\cite{voleti2024sv3d,gao2024cat3d,kwak2024vivid,zhang20244diffusion,chen2024mvsplat360}. Additional methods include mesh generation~\cite{xu2024instantmesh}, epipolar constraints~\cite{li2024era3d}, combined 2D-3D priors~\cite{liu2024one}, correspondence-aware attention~\cite{Tang2023mvdiffusion}, and 3D feature fields~\cite{chan2023generative}. These methods generate \emph{novel views} from different poses. Our work performs \emph{multi-view outpainting} to expand field-of-view of existing views, maintaining stronger geometric consistency for sparse-view scene reconstruction.
+% \paragraph{Diffusion priors for 3D reconstruction.}
+% Diffusion models provide learned priors through Score Distillation Sampling~\cite{poole2022dreamfusion,wang2023prolificdreamer,liang2024luciddreamer}. Improvements address over-smoothing~\cite{lukoianov2024score}, provide unified frameworks~\cite{mcallister2024rethinking}, and optimize both 3D models and priors~\cite{yang2024learn,chen2024vividdreamer}. Video diffusion serves as powerful priors~\cite{liu2024reconx,melas20243d,yi2024gaussiandreamer}. Reconstruction methods use multi-view conditioning~\cite{wu2024reconfusion}, pseudo-observation enhancement~\cite{liu2024deceptive}, scene-grounding guidance~\cite{zhong2025taming}, iterative refinement~\cite{wu2025genfusion,wu2025difix3d+,liu20243dgs}, and various coupling strategies~\cite{xu2024bayesian,hui2024microdiffusion,muller2024multidiff,liu2024meshformer,xue2024human}. Native 3D diffusion includes latent approaches~\cite{lan2024ln3diff,he2024gvgen,wu2024direct3d,wu2024unique3d,yang2024scenecraft} and RL finetuning~\cite{xie2024carve3d}. While these methods generate additional views or provide guidance, they face multi-view \emph{inconsistency}. Our insight: diffusion models suit \emph{outpainting known views} better than hallucinating novel perspectives, maintaining stronger geometric grounding.
+% \paragraph{Geometry-aware generation.}
+% Geometric consistency leverages Plücker coordinates for camera conditioning~\cite{xu2023dmv3d,kant2024spad,zhang2024cameras,xu2024camco,ji2025campvg} and epipolar constraints or voxel representations~\cite{tu2023imgeonet} for multi-view consistency~\cite{huang2024epidiff,ye2024diffpano,wang2024mvdd,kupyn2025epipolar,muller2024multidiff,xu20243difftection}. Depth and normal conditioning proves critical~\cite{lu2024direct2,long2024wonder3d,ke2024repurposing,fu2024geowizard,patni2024ecodepth,hu2024mvd,duan2024diffusiondepth,wang2024depth}. Recent panoramic generation~\cite{zhang2024continuous,wang2024360dvd} and video outpainting~\cite{yu2025unboxed} typically operate in 2D or single-view scenarios. Our approach uniquely combines \emph{multi-view outpainting} with \emph{geometry awareness} through coarse 3DGS rendering, opacity-based masking, and noise resampling for consistent, geometrically plausible FOV expansion.
+% \paragraph{Outpainting and FOV expansion.}
+% Diffusion-based outpainting includes panoramic methods~\cite{zhang2024continuous,wu2023panodiffusion,kalischek2025cubediff,yuan2025camfreediff,feng2023diffusion360,shi2023fishdreamer,yu2024shadow} and restoration tasks~\cite{tsai2025lightsout,liu2025corrfill}. For 3D scenarios, methods employ visibility-aware inpainting~\cite{liu2024novel,wu2025aurafusion360}, video diffusion priors~\cite{liu2024novel}, NeRF-guided training~\cite{yu2024nerf}, iterative 3DGS updates~\cite{yu2025unboxed}, and multi-view SDS~\cite{chen2024mvip}. General sparse-view baselines include feed-forward prediction~\cite{charatan2024pixelsplat,chen2024mvsplat}, regularized optimization~\cite{paliwal2024coherentgs,xu2024sparp}, and NeRF-based methods~\cite{wang2023sparsenerf,yang2023freenerf,niemeyer2022regnerf,lin2025frugalnerf,su2024boostmvsnerfs}. These works require per-scene fine-tuning or focus on single-view outpainting. Our method performs \emph{zero-shot multi-view outpainting} using pre-trained MVGenMaster~\cite{cao2025mvgenmaster} with geometry-aware mechanisms ensuring cross-view consistency without scene-specific training.
+
+
+
+\section{Preliminaries}
+
+\paragraph{3D Gaussian Splatting }
+(3DGS)~\cite{kerbl20233d} uses a collection of anisotropic 3D Gaussian primitives to present a scene. Each Gaussian is defined by its center position $\boldsymbol{\mu} \in \mathbb{R}^3$, a 3D covariance matrix $\boldsymbol{\Sigma}$, an opacity value $\alpha \in [0,1]$, and spherical harmonic coefficients for view-dependent color. The covariance matrix is decomposed into a scaling vector $\mathbf{s} \in \mathbb{R}^3$ and rotation quaternion $\mathbf{q} \in \mathbb{R}^4$ as $\boldsymbol{\Sigma} = \mathbf{R}\mathbf{S}\mathbf{S}^T\mathbf{R}^T$, where $\mathbf{R}$ is derived from $\mathbf{q}$ and $\mathbf{S} = \text{diag}(\mathbf{s})$. The Gaussian function is:
+\begin{equation}
+\mathcal{G}(\mathbf{x}) = \exp\left(-\frac{1}{2}(\mathbf{x} - \boldsymbol{\mu})^T\boldsymbol{\Sigma}^{-1}(\mathbf{x} - \boldsymbol{\mu})\right).
+\end{equation}
+
+To render a given viewpoint, 3DGS projects each 3D Gaussian onto the 2D image plane, obtaining a 2D Gaussian $\mathcal{G}'(\mathbf{u})$, where $\mathbf{u}$ is pixel coordinates. The color of pixel $\mathbf{u}$ is computed via $\alpha$-blending of ordered Gaussians:
+\begin{equation}
+\mathbf{C}(\mathbf{u}) = \sum_{i \in \mathcal{N}} \mathbf{c}_i \sigma_i \prod_{j=1}^{i-1} (1 - \sigma_j),
+\end{equation}
+where $\mathcal{N}$ denotes the set of Gaussians overlapping pixel $\mathbf{u}$, sorted in depth order, $\mathbf{c}_i$ represents the color of the $i$-th Gaussian, and $\sigma_i = \alpha_i \mathcal{G}'_i(\mathbf{u})$ is the opacity contribution.
+
+\paragraph{Diffusion Models}
+generate samples through a learned denoising process that reverses a forward noising process. The forward process gradually adds Gaussian noise to data $\mathbf{x}_0$ over $T$ timesteps: $\mathbf{x}_t = \sqrt{\bar{\alpha}_t}\mathbf{x}_0 + \sqrt{1-\bar{\alpha}_t}\boldsymbol{\epsilon}$, where $\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ and $\bar{\alpha}_t$ is a predefined noise schedule. The reverse process learns to denoise $\mathbf{x}_t$ back to $\mathbf{x}_0$ by training a neural network $\epsilon_\theta$ to predict the noise at each timestep. The training objective is the simplified loss function:
+\begin{equation}
+\mathcal{L}_{\text{simple}} = \mathbb{E}_{t,\mathbf{x}_0,\boldsymbol{\epsilon}}\left[\|\boldsymbol{\epsilon} - \epsilon_\theta(\mathbf{x}_t, t, \mathbf{c})\|^2\right],
+\end{equation}
+where $\mathbf{c}$ represents conditioning information, and the model learns to minimize the mean squared error between the true noise $\boldsymbol{\epsilon}$ and the predicted noise. During inference, samples are generated by iteratively denoising from pure noise $\mathbf{x}_T \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ using the DDIM~\cite{song2021denoising} sampling process.
+
+
+
+\section{Method}
+\label{sec:method}
+%\vspace{-2mm}
+
+
+
+
+To address challenges in sparse-view 3D reconstruction, we perform geometry-aware outpainting by leveraging multi-view diffusion models.
+By expanding the field-of-view (FOV) of input images, our method simultaneously fills holes, fixes blurred boundaries, and preserves geometric consistency without modifying existing content, resulting in a significantly simpler and faster reconstruction process.
+
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1\columnwidth]{figures/pipeline_small.pdf}
+    % \vspace{-6mm}
+    \caption{
+    \textbf{Overview of Our Pipeline.}
+    Given sparse input views, our method follows a three-stage process. 
+    \textbf{(a) Coarse 3D Initialization:} We obtain geometry priors from initial 3D reconstruction, including an opacity mask and coarse render that provide essential structural cues. 
+    \textbf{(b) Geometry-aware Multi-view Outpainter:} Using the geometry priors, GaMO generates outpainted views with enlarged FOV via a multi-view diffusion model. 
+    \textbf{(c) Refined Reconstruction:} The outpainted views are used to refine the 3D reconstruction, resulting in improved completeness and consistency.
+    }
+     \label{fig:pipeline}
+\end{figure}
+
+
+
+
+% \begin{wrapfigure}{r}{0.50\columnwidth}
+% \vspace{-32pt}
+% \setlength{\intextsep}{0pt}
+% \setlength{\textfloatsep}{0pt}
+% \centering
+% \includegraphics[width=0.49\columnwidth]{figures/pipeline.pdf}
+% \vspace{-6pt}
+% \caption{
+% \textbf{Overview of Our Pipeline.}
+% (a) Coarse 3D initialization.
+% (b) Geometry-aware multi-view outpainting (GaMO).
+% (c) Refined reconstruction.
+% }
+% \label{fig:pipeline}
+% \vspace{-25pt}
+% \end{wrapfigure}
+% % \wrapfill
+
+As illustrated in Fig.~\ref{fig:pipeline}, our pipeline consists of three stages: coarse 3D initialization to obtain geometry priors (Sec.~\ref{sec:coarse_init}), geometry-aware multi-view outpainting to generate enlarged FOV views (Sec.~\ref{sec:GaMO}), and refined 3D reconstruction using the outpainted views (Sec.~\ref{sec:Refine}).
+
+\FloatBarrier
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/GaMO.pdf}
+    % \vspace{-6mm}
+    \caption{\textbf{Overview of GaMO (Geometry-aware Multi-view Diffusion Outpainter).}
+    (a) Multi-view Diffusion Conditioning: Sparse input views are encoded into clean latents and combined with multi-view conditions, including Plücker ray embeddings for input views ($\mathcal{P}_r$) and the target view with enlarged FOV ($\mathcal{P}_t^*$), along with original and augmented Canonical Coordinate Map (CCM) and RGB, to provide both geometric and appearance cues for diffusion model conditioning.
+    (b) Denoising Process: Coarse geometry priors (opacity mask and coarse render) guide the denoising through mask latent blending performed at multiple timesteps ($t_1, t_2, ..., t_N$) with progressive dilation and noise resampling, generating outpainted views with enlarged FOV (c).}
+    \label{fig:GaMO}
+\end{figure}
+
+
+
+\subsection{Coarse 3D Initialization}
+\label{sec:coarse_init}
+
+To ensure geometric consistency in the diffusion model, we use DUSt3R~\cite{wang2024dust3r} to generate an initial point cloud and train a coarse 3DGS model to capture the scene geometry. Using this coarse model, we identify outpainting regions by rendering an opacity mask with a FOV wider than the input views. We also render a coarse color image to provide appearance priors for the outpainting process in Sec.~\ref{sec:GaMO}.
+
+\paragraph{Opacity Mask.}
+We enlarge the FOV by reducing the focal lengths with a scaling ratio $S_k < 1$ (i.e., $f_x' = f_x \times S_k$, $f_y' = f_y \times S_k$). For each target outpainted view, we first render an opacity map $\mathcal{O}$ by $\alpha$-blending the opacity values of the Gaussians:
+\begin{equation}
+\mathcal{O}(\mathbf{u}) = \sum_{i \in \mathcal{N}} \sigma_i \prod_{j=1}^{i-1} (1 - \sigma_j),
+\end{equation}
+where $\sigma_i = \alpha_i \mathcal{G}'_i(\mathbf{u})$ denotes the opacity contribution of the $i$-th Gaussian at pixel $\mathbf{u}$. The opacity mask $\mathcal{M}$ is then obtained by thresholding the opacity map with $\mathcal{M} = \mathbb{I}(\mathcal{O} < \eta_{\text{mask}})$, where $\eta_{\text{mask}}$ is a threshold value and $\mathbb{I}(\cdot)$ is the indicator function. Regions where $\mathcal{M} = 1$ correspond to areas with low opacity that require outpainting.
+
+\paragraph{Coarse Rendering.}
+We render a color image $I_{\text{coarse}}$ with the enlarged FOV from the coarse 3DGS model. This coarse rendering serves as a reference that provides geometric and appearance priors to the diffusion model, maintaining consistency between outpainted and existing scene content.
+
+\subsection{GaMO: Geometry-aware Multi-view Diffusion Outpainter}
+\label{sec:GaMO}
+
+\noindent Our geometry-aware outpainting method operates through three key components: (1) multi-view conditioning that provides structural and appearance guidance; (2) mask latent blending that integrates coarse geometry priors during denoising; and (3) iterative mask scheduling with noise resampling that ensure smooth transitions. The model operates in latent space using DDIM sampling~\cite{song2021denoising} for efficient denoising.
+
+
+\paragraph{Multi-View Conditioning.}
+Given a set of sparse input RGB images $\{I_i\}_{i=1}^N$ and their corresponding camera parameters $\{\Pi_i\}_{i=1}^N$, our model generates outpainted views conditioned on camera representations, geometric correspondences, and appearance features, as illustrated in Fig.~\ref{fig:GaMO}(a).
+
+For camera representation, we employ Plücker ray embeddings~\cite{xu2024dmv3d} that provide dense 6D ray parameterizations for each pixel, compactly encoding both ray origin and direction for geometry-aware reasoning. The embedding of each input view $\mathcal{P}_r$ is derived from its corresponding camera parameters $\Pi_r$, while the embedding of the outpainted view $\mathcal{P}_t^*$ uses the same camera parameters with scaled focal lengths $(f_x', f_y')$ to align with the enlarged FOV.
+
+
+
+For geometric correspondence, we warp input RGB images and Canonical Coordinate 
+Maps (CCM)~\cite{li2024sweetdreamer} to align with the expanded FOV by unprojecting pixels to 3D and 
+reprojecting onto the outpainted camera plane, producing $\mathcal{C}_{r \rightarrow t}^{\text{warp}}$ 
+and $I_{r \rightarrow t}^{\text{warp}}$. We then downsample the original inputs 
+by factor $S_k$ and place them at the center of the warped features, creating 
+augmented signals $I_{r \rightarrow t}^{\text{aug}}$ and $\mathcal{C}_{r \rightarrow t}^{\text{aug}}$ 
+where the center preserves exact input information while the periphery retains 
+warped geometric structure to guide outpainting.
+
+For appearance features, the input RGB images are encoded through a variational autoencoder (VAE) to obtain clean latent features $\mathbf{z}_r$. The noisy latent features $\mathbf{z}_t$ are randomly generated and will be denoised to generate the outpainted views. 
+
+All conditioning signals are processed through lightweight convolutional encoders. 
+For input views, Plücker ray embeddings $\mathcal{P}_r$, CCM $\mathcal{C}_r$, 
+and RGB images $I_r$ are jointly added to the clean latent features $\mathbf{z}_r$. 
+For the target outpainted view, $\mathcal{P}_t^*$, $\mathcal{C}_{r \rightarrow t}^{\text{aug}}$, 
+and $I_{r \rightarrow t}^{\text{aug}}$ are jointly added to the noisy latent 
+features $\mathbf{z}_t$. We then condition the pre-trained diffusion model with 
+the fused features to generate outpainted view latents in a zero-shot manner:
+\begin{equation}
+p_\theta(\mathbf{z}_t | \mathbf{z}_r, \mathcal{P}_r, \mathcal{C}_r, I_r, \mathcal{P}_t^*, \mathcal{C}_{r \rightarrow t}^{\text{aug}}, I_{r \rightarrow t}^{\text{aug}}),
+\label{eq:diffusion_conditioning}
+\end{equation}
+where $\theta$ denotes the pre-trained model~\cite{cao2025mvgenmaster} parameters. These multi-view conditions ensure that the diffusion process maintains geometric consistency across views, even under an enlarged FOV.
+
+\paragraph{Denoising Process with Mask Latent Blending.}
+As the central component of our geometry-aware framework, mask latent blending integrates coarse geometry priors from the coarse 3D initialization (Sec.~\ref{sec:coarse_init}) into the diffusion loop. As outlined in Alg.~\ref{alg:gamo}, this process ensures that outpainted content respects existing scene structures while generating plausible peripheral regions. Fig.~\ref{fig:GaMO}(b) shows that the opacity mask $\mathcal{M}$ and coarse rendering $I_{\text{coarse}}$ provide consistent structural guidance throughout denoising.
+
+
+
+At selected denoising timesteps $\{t_1, t_2, ..., t_N\}$, we perform \textit{mask latent blending} between the denoised latent and the coarse geometry prior. To ensure both latents share the same noise level, we add noise to the coarse latent, which is obtained by encoding the coarse rendering into latent space, before blending them using a latent-space mask $\mathcal{M}_{\text{latent}}$. The mask evolution is controlled by iterative mask scheduling (Sec.~\ref{sec:IMS}):
+\begin{equation}
+\mathbf{z}^{\text{blend}}_{t_k} = (1 - \mathcal{M}_{\text{latent}}^{(k)} ) \odot 
+\mathbf{z}^{\text{coarse}}_{t_k} + \mathcal{M}_{\text{latent}}^{(k)} \odot \mathbf{z}_{t_k},
+\label{eq:IMS}
+\end{equation}
+where $\mathbf{z}_{t_k}$ is the denoised latent, $\mathbf{z}^{\text{coarse}}_{t_k}$ 
+is the coarse latent with matching noise level (Alg.~\ref{alg:gamo}, line 11), 
+$\mathcal{M}_{\text{latent}}^{(k)}$ is the dilated mask at iteration $k$, and 
+$\odot$ denotes element-wise multiplication.
+
+
+
+\begin{wrapfigure}{R}{0.55\textwidth}
+    \begin{minipage}{\linewidth}
+    \vspace{-40pt} 
+    \begin{algorithm}[H]
+        \caption{Geometry-aware Multi-view Outpainter}
+        \label{alg:gamo}
+        \scriptsize
+        \begin{algorithmic}[1]
+            \STATE \textbf{Input:} Coarse render $I_{\text{coarse}}$, opacity mask $\mathcal{M}$
+            \STATE \textbf{Output:} Outpainted views $\{S_j^{\text{out}}\}_{j=1}^M$
+            \STATE \textbf{Setup:} Noise schedule $\Sigma = \{\sigma_1, \ldots, \sigma_T\}$
+            \STATE \textbf{Setup:} latent blending iterations $\{t_1, \ldots, t_N\}$
+            \STATE \textbf{Setup:} resampling iterations $R$
+            \STATE $\mathbf{z}^{\text{coarse}} \gets \text{Encode}(I_{\text{coarse}})$
+            \STATE $\mathbf{z}_T \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$
+            \FOR{$s = T, \ldots, 1$}
+                \STATE $\mathbf{z}_{s-1} = \text{Denoise}(\mathbf{z}_s, \text{conditions})$ \hfill $\triangleright$ Eq.~\eqref{eq:diffusion_conditioning}
+                \IF{$s \in \{t_1, \ldots, t_N\}$}
+                    \STATE $\mathbf{z}_{s-1}^{\text{coarse}} = \text{AddNoise}(\mathbf{z}^{\text{coarse}}, \sigma_{s-1})$
+                    \STATE $\mathbf{z}_{s-1}^{\text{blend}} = \text{IMS}(\mathcal{M}, \mathbf{z}_{s-1}, \mathbf{z}_{s-1}^{\text{coarse}})$ \hfill $\triangleright$ Eq.~\eqref{eq:IMS}
+                    \STATE $\mathbf{z}_{s-1} = \mathbf{z}_{s-1}^{\text{blend}}$
+                    \FOR{$r$ in $R$}
+                        \STATE $\hat{\mathbf{z}}_0 = \text{Predict}(\mathbf{z}_{s-1})$
+                        \STATE $\mathbf{z}_s^{\text{resamp}} \gets \text{AddNoise}(\hat{\mathbf{z}}_0, \sigma_s)$ \hfill $\triangleright$ Eq.~\eqref{eq:resamp}
+                        \STATE $\mathbf{z}_{s-1} \gets \text{Denoise}(\mathbf{z}_s^{\text{resamp}}, \text{conditions})$
+                    \ENDFOR
+                \ENDIF
+            \ENDFOR
+            \STATE $\{S_j^{\text{out}}\}_{j=1}^M = \text{Decode}(\mathbf{z}_0)$
+        \end{algorithmic}
+    \end{algorithm}
+    \vspace{-40pt}
+    \end{minipage}
+\end{wrapfigure}
+
+\paragraph{Iterative Mask Scheduling and Noise Resampling.}
+\label{sec:IMS}
+To gradually integrate generated content with the existing geometric structure, Iterative Mask Scheduling progressively adjusts $\mathcal{M}_{\text{latent}}^{(k)}$ over iterations $k$ to control the ratio between outpainting and known coarse regions. The mask dilation is progressively reduced as denoising proceeds, allowing the model to first explore peripheral content and later refine geometry within coarse regions.
+
+To maintain smooth transitions across blended regions, we perform noise resampling after each blending operation. After blending, we perform noise resampling $R$ times on the blended latent to eliminate boundary artifacts and ensure smooth integration between the coarse geometry and generated content (Alg.~\ref{alg:gamo}, lines 14–17). Specifically, we first predict the clean latent $\hat{\mathbf{z}}_0$ from the blended latent, then add noise back to the current timestep $t_k$:
+\begin{equation}
+\mathbf{z}^{\text{resamp}}_{t_k} = \sqrt{\bar{\alpha}_{t_k}} \hat{\mathbf{z}}_0 + \sqrt{1 - \bar{\alpha}_{t_k}} \boldsymbol{\epsilon},
+\label{eq:resamp}
+\end{equation}
+where $\hat{\mathbf{z}}_0$ is the predicted clean latent from $\mathbf{z}^{\text{blend}}_{t_k}$ and $\boldsymbol{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})$ denotes sampled Gaussian noise. This resampling prevents boundary artifacts and ensures smooth blending.
+
+This framework ensures that outpainted regions seamlessly blend with known content while maintaining geometric plausibility, with the coarse 3DGS geometry providing structural guidance throughout the generation process. Importantly, it requires only inference without fine-tuning the backbone diffusion model.
+
+
+\subsection{3DGS Refinement with Outpainted Views} \label{sec:Refine}
+Given the original input views $\{I_i^{gt}\}_{i=1}^N$ and the generated outpainted views $\{S_j^{\text{out}}\}_{j=1}^M$ from Sec.~\ref{sec:GaMO}, we refine the 3DGS model by jointly optimizing with both sets of views. During training, we sample either an input view or an outpainted view for supervision at each iteration. 
+
+\noindent\textbf{Loss for Input Views.}
+We employ the standard 3DGS reconstruction loss~\cite{kerbl20233d} to ensure accurate reconstruction of the observed regions:
+\begin{equation}
+\mathcal{L}_{\text{input}} = (1-\lambda_s)\mathcal{L}_1(I_i, I^{gt}_i) + \lambda_s\mathcal{L}_{\text{D-SSIM}}(I_i, I^{gt}_i),
+\label{eq:loss_input}
+\end{equation}
+where $I_i$ denotes the rendered image from input viewpoint, $I^{gt}_i$ is the ground truth input view, and $\lambda_s$ is a weighting factor that balances the $\mathcal{L}_1$ loss and structural similarity loss.
+
+\noindent\textbf{Loss for Outpainted Views.}
+Relying solely on reconstruction loss fails to fill unobserved regions and causes artifacts. We incorporate perceptual loss~\cite{johnson2016perceptual} $\mathcal{L}_{\text{LPIPS}}$ to provide balanced gradients across outpainted and original regions, effectively guiding training while maintaining perceptual consistency. The loss is:
+\begin{equation}
+\begin{aligned}
+\mathcal{L}_{\text{recon}} &= (1-\lambda_s)\mathcal{L}_1(S_j, S^{\text{out}}_j) 
++ \lambda_s\mathcal{L}_{\text{D-SSIM}}(S_j, S^{\text{out}}_j), \\
+\mathcal{L}_{\text{outpainted}} &= \mathcal{L}_{\text{recon}}(S_j, S^{\text{out}}_j) 
++ \lambda_{\text{perc}}\mathcal{L}_{\text{LPIPS}}(S_j, S^{\text{out}}_j),
+\end{aligned}
+\label{eq:loss_outpaint}
+\end{equation}
+where $S_j$ denotes the rendered wide-FOV image and $S^{\text{out}}_j$ is the generated outpainted image.
+
+
+
+\section{Experiments}
+
+
+\subsection{Experimental Setups}
+
+\paragraph{Datasets and Evaluation Protocol.}
+We evaluate on \textbf{Replica}~\cite{straub2019replica}, \textbf{ScanNet++}~\cite{yeshwanth2023scannet++}, and \textbf{Mip-NeRF 360}~\cite{barron2023mipnerf360}. 
+Following~\cite{zhong2025taming,zhong2025empowering}, we adopt sparse-view settings with 3, 6, and 9 views for indoor datasets (\textbf{Replica} and \textbf{ScanNet++}), where the 9-view results are reported in the supplementary material, and 6 and 9 views for the unbounded \textbf{Mip-NeRF 360} dataset. 
+For Replica and ScanNet++, we follow the view splits used in~\cite{zhong2025taming,zhong2025empowering}, while for Mip-NeRF 360 we use the original 6- and 9-view configurations. 
+For ScanNet++, we additionally construct the 3- and 9-view setups to ensure suitable coverage for training and evaluation. 
+Performance is evaluated using PSNR, SSIM~\cite{wang2004image}, and LPIPS~\cite{zhang2018unreasonable}.
+
+\paragraph{Implementation Details.}
+We adopt \textbf{MVGenMaster}~\cite{cao2025mvgenmaster} as the diffusion backbone to incorporate geometry-aware priors in a zero-shot manner. 
+For fair comparison, image resolutions are standardized: \textbf{Replica} is set to $512 \times 384$, while \textbf{ScanNet++} and \textbf{Mip-NeRF 360} are set to $576 \times 384$. 
+GaMO reconstructs a scene in approximately 8 minutes on a single RTX 4090 GPU, including diffusion outpainting and the final 3DGS optimization. 
+Additional implementation details, hyperparameters, optimization settings, runtime breakdown, and extended results are provided in the supplementary material.
+
+
+\begin{figure*}[t]
+\centering
+% \vspace{-3mm}
+
+% % ========================== TABLE ==========================
+% \begin{minipage}{\textwidth}
+% \centering
+% \small
+% \setlength{\tabcolsep}{4pt}
+% \renewcommand{\arraystretch}{1.1}
+
+% \captionof{table}{
+% \textbf{Quantitative comparison on Replica~\cite{straub2019replica} and ScanNet++~\cite{yeshwanth2023scannet++} with 3 and 6 input views.}
+% }
+% \label{tab:comparison_3v6v}
+
+
+% \resizebox{\textwidth}{!}{
+% \begin{tabular}{lcccccccccccc}
+% \toprule
+% & \multicolumn{3}{c}{\textsc{Replica (3 views)}} 
+% & \multicolumn{3}{c}{\textsc{Replica (6 views)}} 
+% & \multicolumn{3}{c}{\textsc{ScanNet++ (3 views)}} 
+% & \multicolumn{3}{c}{\textsc{ScanNet++ (6 views)}} \\
+% \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+% \cmidrule(lr){8-10} \cmidrule(lr){11-13}
+
+% Method
+% & PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$
+% & PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$
+% & PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$
+% & PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$ \\
+% \midrule
+
+% % SEVA & 18.52 & 0.677 & 0.193 & 18.64 & 0.691 & 0.206 & 15.79 & 0.613 & 0.343 & 16.93 & 0.640 & 0.276 \\
+
+% 3DGS & 20.39 & 0.818 & \cellcolor{yellow!25}0.154
+% & 24.74 & \cellcolor{yellow!25}0.862 & \cellcolor{orange!25}0.124
+% & 16.60 & 0.710 & 0.313
+% & 21.71 & \cellcolor{orange!25}0.818 & \cellcolor{orange!25}0.186 \\
+
+% FSGS & 20.84 & 0.815 & 0.172
+% & 23.91 & 0.846 & 0.145
+% & 16.62 & 0.690 & 0.359
+% & 21.69 & 0.801 & 0.298 \\
+
+% InstantSplat & \cellcolor{yellow!25}21.42 & 0.830 & \cellcolor{orange!25}0.137
+% & 23.09 & 0.849 & \cellcolor{yellow!25}0.141
+% & 16.72 & 0.720 & \cellcolor{yellow!25}0.312
+% & 21.19 & 0.811 & \cellcolor{yellow!25}0.193 \\
+
+% Difix3D+ & 19.47 & 0.783 & 0.194
+% & 21.86 & 0.811 & 0.188
+% & 15.64 & 0.659 & 0.346
+% & 20.62 & 0.764 & 0.244 \\
+
+% GenFusion & 22.34 & \cellcolor{yellow!25}0.833 & 0.172
+% & 23.98 & 0.855 & 0.142
+% & \cellcolor{yellow!25}18.05 & \cellcolor{yellow!25}0.732 & 0.326
+% & \cellcolor{yellow!25}21.96 & 0.808 & 0.218 \\
+
+% GuidedVD-3DGS$^\dagger$
+% & \textcolor{gray}{23.98} & \textcolor{gray}{0.848} & \textcolor{gray}{0.136}
+% & \textcolor{gray}{26.35} & \textcolor{gray}{0.872} & \textcolor{gray}{0.122}
+% & \textcolor{gray}{-} & \textcolor{gray}{-} & \textcolor{gray}{-}
+% & \textcolor{gray}{23.89} & \textcolor{gray}{0.850} & \textcolor{gray}{0.182} \\
+
+% GuidedVD-3DGS$^\ddagger$
+% & \cellcolor{red!25}25.26 & \cellcolor{orange!25}0.864 & 0.138
+% & \cellcolor{red!25}26.68 & \cellcolor{orange!25}0.880 & 0.133
+% & \cellcolor{orange!25}19.93 & \cellcolor{orange!25}0.759 & \cellcolor{orange!25}0.297
+% & \cellcolor{orange!25}22.98 & \cellcolor{yellow!25}0.815 & 0.204 \\
+
+% Ours
+% & \cellcolor{orange!25}24.40 & \cellcolor{red!25}0.865 & \cellcolor{red!25}0.117
+% & \cellcolor{orange!25}26.40 & \cellcolor{red!25}0.882 & \cellcolor{red!25}0.104
+% & \cellcolor{red!25}20.00 & \cellcolor{red!25}0.765 & \cellcolor{red!25}0.268
+% & \cellcolor{red!25}23.41 & \cellcolor{red!25}0.835 & \cellcolor{red!25}0.181 \\
+
+% \bottomrule
+% \end{tabular}
+% }
+
+% \vspace{-3mm}
+% \begin{flushleft}
+% \scriptsize $^\dagger$ Reported in paper, $^\ddagger$ Our reproduction.
+% \end{flushleft}
+% \end{minipage}
+
+
+% ========================== TABLE ==========================
+\begin{minipage}{\textwidth}
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.1}
+
+\captionof{table}{
+\textbf{Quantitative comparison on Replica~\cite{straub2019replica} and ScanNet++~\cite{yeshwanth2023scannet++} with 3 and 6 input views.}
+}
+\label{tab:comparison_3v6v}
+
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lccccccccccccc}
+\toprule
+& \multicolumn{3}{c}{\textsc{Replica (3 views)}} 
+& \multicolumn{3}{c}{\textsc{Replica (6 views)}} 
+& \multicolumn{3}{c}{\textsc{ScanNet++ (3 views)}} 
+& \multicolumn{3}{c}{\textsc{ScanNet++ (6 views)}} & \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10} \cmidrule(lr){11-13}
+
+Method
+& PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$
+& PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$
+& PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$
+& PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$
+& Run time \\
+\midrule
+
+3DGS & 20.39 & 0.818 & \cellcolor{yellow!25}0.154
+& 24.74 & \cellcolor{yellow!25}0.862 & \cellcolor{orange!25}0.124
+& 16.60 & 0.710 & 0.313
+& 21.71 & \cellcolor{orange!25}0.818 & \cellcolor{orange!25}0.186 
+& 2 min \\
+
+FSGS & 20.84 & 0.815 & 0.172
+& 23.91 & 0.846 & 0.145
+& 16.62 & 0.690 & 0.359
+& 21.69 & 0.801 & 0.298 
+& 12 min \\
+
+InstantSplat & \cellcolor{yellow!25}21.42 & 0.830 & \cellcolor{orange!25}0.137
+& 23.09 & 0.849 & \cellcolor{yellow!25}0.141
+& 16.72 & 0.720 & \cellcolor{yellow!25}0.312
+& 21.19 & 0.811 & \cellcolor{yellow!25}0.193 
+& 1 min \\
+
+Difix3D+ & 19.47 & 0.783 & 0.194
+& 21.86 & 0.811 & 0.188
+& 15.64 & 0.659 & 0.346
+& 20.62 & 0.764 & 0.244 
+& 31 min \\
+
+GenFusion & 22.34 & \cellcolor{yellow!25}0.833 & 0.172
+& 23.98 & 0.855 & 0.142
+& \cellcolor{yellow!25}17.97 & \cellcolor{yellow!25}0.725 & 0.354
+& \cellcolor{yellow!25}21.96 & 0.808 & 0.218 
+& 22 min \\
+
+GuidedVD-3DGS$^\dagger$
+& \textcolor{gray}{23.98} & \textcolor{gray}{0.848} & \textcolor{gray}{0.136}
+& \textcolor{gray}{26.35} & \textcolor{gray}{0.872} & \textcolor{gray}{0.122}
+& \textcolor{gray}{-} & \textcolor{gray}{-} & \textcolor{gray}{-}
+& \textcolor{gray}{23.89} & \textcolor{gray}{0.850} & \textcolor{gray}{0.182} 
+& - \\
+
+GuidedVD-3DGS$^\ddagger$
+& \cellcolor{red!25}25.26 & \cellcolor{orange!25}0.864 & 0.138
+& \cellcolor{red!25}26.68 & \cellcolor{orange!25}0.880 & 0.133
+& \cellcolor{orange!25}18.82 & \cellcolor{orange!25}0.720 & \cellcolor{orange!25}0.328
+& \cellcolor{orange!25}22.98 & \cellcolor{yellow!25}0.815 & 0.204 
+& 3h 20 min \\
+
+Ours
+& \cellcolor{orange!25}24.40 & \cellcolor{red!25}0.865 & \cellcolor{red!25}0.117
+& \cellcolor{orange!25}26.40 & \cellcolor{red!25}0.882 & \cellcolor{red!25}0.104
+& \cellcolor{red!25}20.06 & \cellcolor{red!25}0.759 & \cellcolor{red!25}0.265
+& \cellcolor{red!25}23.41 & \cellcolor{red!25}0.835 & \cellcolor{red!25}0.181 
+& 8 min \\
+
+\bottomrule
+\end{tabular}
+}
+
+\vspace{-3mm}
+\begin{flushleft}
+\scriptsize $^\dagger$ Reported in paper, $^\ddagger$ Our reproduction.
+\end{flushleft}
+\end{minipage}
+
+\vspace{2mm}
+
+% ========================== FIGURE ==========================
+\begin{minipage}{\textwidth}
+\centering
+\includegraphics[width=\linewidth]{figures/Comparison.pdf}
+
+% \vspace{-3mm}
+\caption{
+\textbf{Qualitative comparison on Replica and ScanNet++ under sparse 3-view and 6-view settings.}
+Our method produces better coverage, improved geometric consistency, and fewer artifacts.
+White boxes highlight challenging regions.
+}
+\label{fig:comparison}
+\end{minipage}
+
+% \vspace{-4mm}
+\end{figure*}
+
+
+
+
+
+\paragraph{Baselines.}
+We compare against several state-of-the-art sparse-view reconstruction methods: 
+(1) vanilla 3DGS; 
+(2) \textbf{FSGS}~\cite{zhu2024fsgs}, using depth-guided Gaussian unpooling; 
+(3) \textbf{InstantSplat}~\cite{fan2024instantsplat}, employing MASt3R priors and self-supervised bundle adjustment; 
+(4) \textbf{Difix3D}~\cite{wu2025difix3d+}, applying single-step diffusion refinement; 
+(5) \textbf{GenFusion}~\cite{wu2025genfusion}, integrating reconstruction and video diffusion via cyclical fusion; and 
+(6) \textbf{GuidedVD-3DGS}~\cite{zhong2025taming}, leveraging video diffusion and evaluated using the authors' official implementation and settings. 
+For fair comparison, all methods except InstantSplat use DUSt3R~\cite{wang2024dust3r} for initialization.
+
+% \yulunliu{Need to mention that the numbers are different from those reported in the taming paper. But emphasize that we use their official implementation.}
+
+
+\subsection{Comparisons}
+\noindent\textbf{Quantitative Results.} 
+Tab.~\ref{tab:comparison_3v6v} and Tab.~\ref{tab:mipnerf360_6_9_colored} report comparisons on Replica, ScanNet++, and Mip-NeRF 360 under sparse-view settings. Our method consistently achieves strong performance across all datasets. On Replica and ScanNet++, we obtain the best SSIM and lowest LPIPS in most settings, indicating superior structural consistency and perceptual quality. On the challenging Mip-NeRF 360 benchmark, our method achieves the best PSNR and SSIM for both 6-view and 9-view inputs while maintaining competitive LPIPS. In addition, GaMO is highly efficient, achieving up to $25\times$ speedup over the diffusion-based GuidedVD-3DGS~\cite{zhong2025taming}, reducing the reconstruction time to under 10 minutes.
+
+\begin{figure}[t]
+\centering
+\vspace{-2mm}
+
+% ===================== TABLE =====================
+\begin{minipage}{\linewidth}
+\centering
+\scriptsize
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{0.9}
+
+\captionof{table}{
+\textbf{Quantitative comparison on MipNeRF360~\cite{barron2023mipnerf360} with 6 and 9 input views.}
+}
+\label{tab:mipnerf360_6_9_colored}
+
+\begin{tabular}{lccc ccc}
+\toprule
+\multirow{2}{*}{Method} 
+& \multicolumn{3}{c}{\textsc{Mip-NeRF 360 (6 views)}}
+& \multicolumn{3}{c}{\textsc{Mip-NeRF 360 (9 views)}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+ & PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$
+ & PSNR $\uparrow$ & SSIM $\uparrow$ & LPIPS $\downarrow$ \\
+\midrule
+
+% SEVA & 15.72 & 0.283 & \cellcolor{red!25}{0.330} & 16.57 & 0.301 & \cellcolor{red!25}{0.286} \\
+
+3DGS 
+& \cellcolor{yellow!25}{15.30} & \cellcolor{yellow!25}{0.342} & 0.459
+& \cellcolor{orange!25}16.29 & \cellcolor{yellow!25}0.383 & \cellcolor{yellow!25}0.385 \\
+
+FSGS 
+& 14.76 & 0.326 & 0.532
+& 15.36 & 0.374 & 0.502 \\
+
+InstantSplat 
+& \cellcolor{orange!25}{15.91} & \cellcolor{orange!25}{0.388} & \cellcolor{yellow!25}0.443
+& \cellcolor{yellow!25}16.10 & \cellcolor{orange!25}{0.433} & 0.419 \\
+
+
+Difix3D+ 
+& 14.94 & 0.308 & \cellcolor{red!25}{0.419}
+& 16.04 & 0.368 & \cellcolor{red!25}{0.371} \\
+
+
+GenFusion & 16.40 & 0.384 & 0.487 & 17.55 & 0.435 & 0.409 \\
+
+GuidedVD-3DGS
+& 13.89 & 0.273 & 0.640
+& 15.77 & 0.386 & 0.418 \\
+
+Ours 
+& \cellcolor{red!25}{16.74} & \cellcolor{red!25}{0.393} & \cellcolor{orange!25}{0.436}
+& \cellcolor{red!25}{17.56} & \cellcolor{red!25}{0.448} & \cellcolor{orange!25}{0.381} \\
+
+\bottomrule
+\end{tabular}
+
+\end{minipage}
+
+\vspace{3mm}
+
+% ===================== FIGURE =====================
+\begin{minipage}{\linewidth}
+\centering
+\includegraphics[width=\linewidth]{figures/Mipnerf.pdf}
+
+% \vspace{-3mm}
+\captionof{figure}{
+\textbf{Qualitative comparison on MipNeRF360~\cite{barron2023mipnerf360}under sparse 6-view and 9-view settings.}
+Large-scale outdoor scenes with wide baselines make sparse-view reconstruction challenging.
+Our method achieves better coverage, improved geometric consistency, and fewer artifacts than prior methods.
+White boxes highlight challenging regions.
+}
+\label{fig:mipnerf360}
+\end{minipage}
+
+% \vspace{-4mm}
+\end{figure}
+
+
+\noindent\textbf{Qualitative Results.}
+Fig.~\ref{fig:comparison} and Fig.~\ref{fig:mipnerf360} show visual comparisons on representative scenes. Our method produces more complete reconstructions by effectively addressing the key challenges in sparse-view reconstruction: reducing black holes in unobserved regions, minimizing rendering artifacts, and improving geometric consistency. These results demonstrate the effectiveness of GaMO in generating high-quality outpainted views that enhance 3D reconstruction.
+
+
+
+
+
+
+
+
+\subsection{Ablation Studies}
+
+
+\begin{figure}[t]
+    \centering
+    \footnotesize
+    % --- 左側表格：Latent Blending ---
+    \begin{minipage}[t]{0.54\textwidth}
+        \vspace{0pt} 
+        \captionof{table}{\textbf{Quantitative ablation of blending components.} We evaluate the impact of augmented conditioning (Aug.), hard (H.)/soft (S.) mask blending, and noise resampling (N.). P, S, L denote PSNR$\uparrow$, SSIM$\uparrow$, and LPIPS$\downarrow$, respectively. Row 5 represents our full model.}
+        \label{tab:ablation_1} % 修正 Label 位置
+        \resizebox{\linewidth}{!}{
+            \setlength{\tabcolsep}{2pt}
+            \begin{tabular}{l cccc ccc ccc}
+                \toprule
+                & \multicolumn{4}{c}{Components} & \multicolumn{3}{c}{Outpainted} & \multicolumn{3}{c}{Novel View} \\
+                \cmidrule(lr){2-5}\cmidrule(lr){6-8}\cmidrule(lr){9-11}
+                \# & {Aug.} & {H.} & {S.} & {N.} & {P} & {S} & {L} & {P} & {S} & {L} \\
+                \midrule
+                1 & & & & & 18.97 & .776 & .210 & 22.37 & .821 & .197 \\
+                2 & \checkmark & & & & 19.11 & .779 & .207 & 22.53 & .822 & .192 \\
+                3 & \checkmark & \checkmark & & & 19.77 & .797 & .199 & 23.52 & .839 & .174 \\
+                4 & \checkmark & & \checkmark & \checkmark & 19.37 & .797 & .196 & 23.22 & \textbf{.840} & .173 \\
+                \rowcolor{black!10}
+                5* & \checkmark & \checkmark & \checkmark & \checkmark & \textbf{20.01} & \textbf{.800} & \textbf{.190} & \textbf{23.53} & .839 & \textbf{.172} \\
+                \bottomrule
+            \end{tabular}
+        }
+    \end{minipage}
+    \hfill
+    % --- 右側圖片 ---
+    \begin{minipage}[t]{0.44\textwidth}
+        \vspace{2.2mm} 
+        \centering
+        \includegraphics[width=1\linewidth]{figures/Ablation_1.pdf}
+        \vspace{-5mm} 
+        \caption{\textbf{Qualitative ablation.} (a) Aug. cond. aligns content. (b-c) Mask blending improves geometry. (d) Noise resampling removes seams.}
+        \label{fig:ablation_1}
+    \end{minipage}
+\end{figure}
+
+
+\label{sec:ablation}
+We conduct comprehensive ablation studies on Replica and ScanNet++ datasets with 6 input views. To separately assess the outpainted view quality and novel view synthesis performance, we center crop the input images to 0.6× of their original size. For each ablation, we provide quantitative results and visual comparisons, where numbered configurations (e.g., ``1.'') in figures correspond to table rows, and letters (e.g., (a), (b)) denote different visual comparison aspects.
+
+\paragraph{Latent Blending Strategies.}
+Tab.~\ref{tab:ablation_1} and Fig.~\ref{fig:ablation_1} present ablation results on our latent blending design. Augmenting the warped features with downscaled reference RGB and CCM (rows 1-2) prevents incorrect hallucinations in known regions (a). Mask latent blending (rows 2-3) prevents severe geometric misalignment (b, red circle) and improves PSNR by 0.66 dB. Hard masking (rows 4-5) produces sharper boundaries (c) with 0.64 dB gain over soft masking. Finally, noise resampling (rows 3 vs. 5) reduces blending artifacts by 0.24 dB, generating more coherent results (d).
+
+\paragraph{Mask Blending Scheduling.}
+Tab.~\ref{tab:ablation_2} and Fig.~\ref{fig:ablation_2} present ablation results on mask blending scheduling strategies. Single-step blending (row 1) is insufficient as coarse geometry is easily washed out during denoising, while multi-step blending (row 2) better preserves geometric cues (a-top). Blending at every step (row 3) achieves slightly higher PSNR/SSIM but causes blurred boundaries (a-bottom) and increases denoising time, making the range-based approach preferable. Finally, Iterative Mask Scheduling (rows 2 vs. 4) substantially improves perceptual quality through progressive mask dilation, providing better geometric guidance and smoother transitions for more coherent details (b).
+
+\paragraph{3DGS Refinement Components.}
+Tab.~\ref{tab:ablation_3} and Fig.~\ref{fig:ablation_3} present ablation results on 3DGS refinement components. Point cloud re-initialization using outpainted views (rows 1 vs. 3) enables the successful generation of Gaussian points in outpainted regions (a). Perceptual loss (rows 2 vs. 3) effectively fills holes and reduces artifacts by providing better gradient guidance for outpainted regions (b), producing cleaner and more realistic renderings.
+
+
+
+
+\begin{figure}[t]
+    \centering
+    \footnotesize
+    % --- 左側表格：Scheduling ---
+    \begin{minipage}[t]{0.56\textwidth}
+        \vspace{0pt} 
+        \captionof{table}{\textbf{Ablation on mask blending scheduling.} Comparison of blending at different timesteps: $t_k$ (single-step), $t_{1\to t_N}$ (multi-step), All (every step), and IMS (Iterative Mask Scheduling). Row 4* is our full method. \textit{Time (s)} is total generation time.}
+        \label{tab:ablation_2} % 修正 Label 位置
+        \resizebox{\linewidth}{!}{
+            \setlength{\tabcolsep}{2pt}
+            \begin{tabular}{l cccc cccc ccc}
+                \toprule
+                & \multicolumn{4}{c}{Scheduling} & \multicolumn{4}{c}{Outpainted} & \multicolumn{3}{c}{Novel View} \\
+                \cmidrule(lr){2-5}\cmidrule(lr){6-9}\cmidrule(lr){10-12}
+                \# & {$t_k$} & {$t_{1\!\to\!t_N}$} & {All} & {IMS} & {P$\uparrow$} & {S$\uparrow$} & {L$\downarrow$} & {T(s)$\downarrow$} & {P$\uparrow$} & {S$\uparrow$} & {L$\downarrow$} \\
+                \midrule
+                1 & \checkmark & & & & 20.09 & .804 & .198 & \textbf{85} & 23.38 & .837 & .176 \\
+                2 & & \checkmark & & & 19.85 & .799 & .173 & 93 & 23.53 & .839 & .179 \\
+                3 & & & \checkmark & & \textbf{20.31} & \textbf{.809} & .201 & 167 & \textbf{23.67} & \textbf{.842} & .178 \\
+                \rowcolor{black!10}
+                4* & & \checkmark & & \checkmark & 20.07 & .801 & \textbf{.169} & 93 & 23.65 & .839 & \textbf{.171} \\
+                \bottomrule
+            \end{tabular}
+        }
+    \end{minipage}
+    \hfill
+    % --- 右側圖片 ---
+    \begin{minipage}[t]{0.42\textwidth}
+        \vspace{2.2mm} 
+        \centering
+        \includegraphics[width=1\linewidth]{figures/Ablation_2.pdf}
+        \vspace{-5mm} 
+        \caption{\textbf{Qualitative ablation.} (a) Blending timesteps impact. (b) IMS progressively improves detail coherence and alignment.}
+        \label{fig:ablation_2}
+    \end{minipage}
+\end{figure}
+
+
+
+\begin{figure}[t]
+    \centering
+    \footnotesize
+    % --- 左側表格：3DGS Refinement ---
+    \begin{minipage}[t]{0.44\textwidth}
+        \vspace{0pt} 
+        \captionof{table}{\textbf{Ablation on 3DGS refinement.} Impact of point re-init. and perceptual loss on reconstruction quality. Row 3* is our full method.}
+        \label{tab:ablation_3} % 修正 Label 位置
+        \resizebox{\linewidth}{!}{
+            \setlength{\tabcolsep}{3pt}
+            \begin{tabular}{l cc ccc}
+                \toprule
+                & \multicolumn{2}{c}{Components} & \multicolumn{3}{c}{Novel View} \\
+                \cmidrule(lr){2-3}\cmidrule(lr){4-6}
+                \# & {Re-init.} & {Percep.} & {P$\uparrow$} & {S$\uparrow$} & {L$\downarrow$} \\
+                \midrule
+                1 & & \checkmark & 24.80 & .860 & .140 \\
+                2 & \checkmark & & \textbf{25.14} & .857 & .139 \\
+                \rowcolor{black!10}
+                3* & \checkmark & \checkmark & 24.93 & \textbf{.861} & \textbf{.135} \\
+                \bottomrule
+            \end{tabular}
+        }
+    \end{minipage}
+    \hfill
+    % --- 右側圖片 ---
+    \begin{minipage}[t]{0.54\textwidth}
+        \vspace{2.2mm} 
+        \centering
+        \includegraphics[width=1\linewidth]{figures/Ablation_3.pdf}
+        \vspace{-5mm} 
+        \caption{\textbf{Qualitative ablation.} (a) Re-init. enables Gaussian generation in new regions. (b) Perceptual loss recovers sharp details.}
+        \label{fig:ablation_3}
+    \end{minipage}
+\end{figure}
+
+
+\section{Conclusion}
+\label{sec:conclusion}
+We present \textit{GaMO}, which formulates novel view generation as an outpainting problem for sparse-view 3D reconstruction. By extending existing views instead of generating new perspectives, our approach preserves geometric consistency while expanding spatial coverage, effectively reducing holes and artifacts. Experiments show consistent improvements over prior methods with superior reconstruction quality and several tens of times faster runtime. GaMO also demonstrates strong zero-shot generalization, highlighting outpainting as an efficient and principled paradigm for sparse-view reconstruction.
+
+\paragraph{Limitations.}
+GaMO cannot recover content fully occluded from all input views. Its performance also depends on input view distribution, where clustered or misaligned views may degrade results. Future work could explore adaptive outpaint scaling and hybrid strategies for more challenging cases.
+
+
+
+% An example of a bad paper just asking to be rejected:
+% \begin{quote}
+%   \begin{center}
+%       An analysis of the frobnicatable foo filter.
+%   \end{center}
+
+%    In this paper we present a performance analysis of our previous paper [1], and show it to be inferior to all previously known methods.
+%    Why the previous paper was accepted without this analysis is beyond me.
+
+%    [1] Removed for blind review
+% \end{quote}
+
+% An example of an acceptable paper:
+% \begin{quote}
+%   \begin{center}
+%      An analysis of the frobnicatable foo filter.
+%   \end{center}
+
+%    In this paper we present a performance analysis of the  paper of Smith \etal [1], and show it to be inferior to all previously known methods.
+%    Why the previous paper was accepted without this analysis is beyond me.
+
+%    [1] Smith, L and Jones, C. ``The frobnicatable foo filter, a fundamental contribution to human knowledge''. Nature 381(12), 1-213.
+% \end{quote}
+
+% If you are making a submission to another conference at the same time, which covers similar or overlapping material, you may need to refer to that submission in order to explain the differences, just as you would if you had previously published related work.
+% In such cases, include the anonymized parallel submission [1] as supplemental material and cite it as
+% \begin{quote}
+%   [1] Authors. ``The frobnicatable foo filter'', ECCV \ECCVyear Submission ID 00324, Supplied as supplemental material {\tt 00324.pdf}.
+% \end{quote}
+
+% Finally, you may feel you need to tell the reader that more details can be found elsewhere, and refer them to a technical report.
+% For conference submissions, the paper must stand on its own, and not \emph{require} the reviewer to go to a tech report for further details.
+% Thus, you may say in the body of the paper ``further details may be found in~\cite{Anonymous24b}''.
+% Then submit the tech report as supplemental material.
+% Again, you may not assume the reviewers will read this material.
+
+% Sometimes your paper is about a problem, which you tested using a tool that is widely known to be restricted to a single institution.
+% For example, let's say it's 1969, you have solved a key problem on the Apollo lander, and you believe that the ECCV audience would like to hear about your
+% solution.
+% The work is a development of your celebrated 1968 paper entitled ``Zero-g frobnication: How being the only people in the world with access to the Apollo lander source code makes us a wow at parties'', by Zeus \etal.
+
+% You can handle this paper like any other.
+% Do not write ``We show how to improve our previous work [Anonymous, 1968].
+% This time we tested the algorithm on a lunar lander [name of lander removed for blind review]''.
+% That would be silly, and would immediately identify the authors.
+% Instead write the following:
+% \begin{quotation}
+%    We describe a system for zero-g frobnication.
+%    This system is new because it handles the following cases:
+%    A, B.  Previous systems [Zeus et al. 1968] did not  handle case B properly.
+%    Ours handles it by including a foo term in the bar integral.
+
+%    ...
+
+%    The proposed system was integrated with the Apollo lunar lander, and went all the way to the moon, don't you know.
+%    It displayed the following behaviours, which show how well we solved cases A and B: ...
+% \end{quotation}
+% As you can see, the above text follows standard scientific convention, reads better than the first version, and does not explicitly name you as the authors.
+% A reviewer might think it likely that the new paper was written by Zeus \etal, but cannot make any decision based on that guess.
+% He or she would have to be sure that no other authors could have been contracted to solve problem B.
+
+% For sake of anonymity, authors must omit acknowledgements in the review copy. 
+% They can be added later when you prepare the final copy.
+
+
+% \section{Formatting Guidelines}
+
+% \subsection{Headings}
+% Headings should be capitalized (\ie, nouns, verbs, and all other words except articles, prepositions, and conjunctions should be set with an initial capital) and should, with the exception of the title, be aligned to the left.
+% Only the first two levels of section headings should be numbered, as shown in \cref{tab:headings}.
+% The respective font sizes are also given in \cref{tab:headings}. 
+% Kindly refrain from using ``0'' when numbering your section headings.
+% Words joined by a hyphen are subject to a special rule. 
+% If the first word can stand alone, the second word should be capitalized.
+
+% \begin{table}[tb]
+%   \caption{Font sizes of headings. 
+%     Table captions should always be positioned \emph{above} the tables.
+%   }
+%   \label{tab:headings}
+%   \centering
+%   \begin{tabular}{@{}lll@{}}
+%     \toprule
+%     Heading level & Example & Font size and style\\
+%     \midrule
+%     Title (centered)  & {\Large\bf Lecture Notes \dots} & 14 point, bold\\
+%     1st-level heading & {\large\bf 1 Introduction} & 12 point, bold\\
+%     2nd-level heading & {\bf 2.1 Printing Area} & 10 point, bold\\
+%     3rd-level heading & {\bf Headings.} Text follows \dots & 10 point, bold\\
+%     4th-level heading & {\it Remark.} Text follows \dots & 10 point, italic\\
+%   \bottomrule
+%   \end{tabular}
+% \end{table}
+
+% Here are some examples of headings: 
+% ``Criteria to Disprove Context-Freeness of Collage Languages'', ``On Correcting the Intrusion of Tracing Non-deterministic Programs by Software'', ``A User-Friendly and Extendable Data Distribution System'', ``Multi-flip Networks: Parallelizing GenSAT'', ``Self-determinations of Man''.
+
+
+% \subsection{Figures}
+% \label{sect:figures}
+% For \LaTeX{} users, we recommend integrating figures in your paper using the package \texttt{graphicx}.
+
+% It is essential that all illustrations are clear and legible. 
+% Vector graphics (rather than rasterized images) should be used for diagrams and schemas whenever possible. 
+% Please check that the lines in line drawings are not interrupted and have a constant width. 
+% Line drawings are to have a resolution of at least 800 dpi (preferably 1200 dpi).
+% Grids and details within figures must be clearly legible and may not be written one on top of the other. 
+% The lettering in figures should not use font sizes smaller than 6\:pt ($\sim$2\:mm character height). 
+
+% Figures should be numbered and should have a caption, which should always be positioned \emph{under} the figures, in contrast to the caption belonging to a table, which should always appear \emph{above} the table.
+% Figures and Tables should be cross-referred in the text.
+
+% If they are short, they are centered between the margins (\cf \cref{fig:short}). 
+% Longer captions, covering more than one line, are justified (\cref{fig:example} shows an example). 
+% Captions that do not constitute a full sentence, do not have a period.
+
+
+% \begin{figure}[tb]
+%   \centering
+%   \includegraphics[height=6.5cm]{eijkel2}
+%   \caption{One kernel at $x_s$ (\emph{dotted kernel}) or two kernels at $x_i$ and $x_j$ (\emph{left and right}) lead to the same summed estimate at $x_s$.
+%     This shows a figure consisting of different types of lines.
+%     Elements of the figure described in the caption should be set in italics, in parentheses, as shown in this sample caption. 
+%     The last sentence of a figure caption should generally end with a full stop, except when the caption is not a full sentence.
+%   }
+%   \label{fig:example}
+% \end{figure}
+
+% \begin{figure}[tb]
+%   \centering
+%   \begin{subfigure}{0.68\linewidth}
+%     \fbox{\rule{0pt}{0.5in} \rule{.9\linewidth}{0pt}}
+%     \caption{An example of a subfigure}
+%     \label{fig:short-a}
+%   \end{subfigure}
+%   \hfill
+%   \begin{subfigure}{0.28\linewidth}
+%     \fbox{\rule{0pt}{0.5in} \rule{.9\linewidth}{0pt}}
+%     \caption{Another example of a subfigure}
+%     \label{fig:short-b}
+%   \end{subfigure}
+%   \caption{Centered, short example caption}
+%   \label{fig:short}
+% \end{figure}
+
+% If possible (\eg, if you use \LaTeX) please define figures as floating objects. 
+% \LaTeX{} users, please avoid using the location parameter ``h'' for ``here''. 
+% If you have to insert a pagebreak before a figure, please ensure that the previous page is completely filled.
+
+
+% \subsection{Formulas}
+% Displayed equations or formulas are centered and set on a separate line (with an extra line or half line space above and below). 
+% Equations should be numbered for reference. 
+% The numbers should be consecutive within the contribution, with numbers enclosed in parentheses and set on the right margin.
+% For example,
+% \begin{align}
+%   \psi (u) & = \int_{0}^{T} \left[\frac{1}{2}
+%   \left(\Lambda_{0}^{-1} u,u\right) + N^{\ast} (-u)\right] \text{d}t \; \\
+% & = 0
+% \end{align}
+% and 
+% \begin{equation}
+%   E = m\cdot c^2.
+%   \label{eq:important}
+% \end{equation}
+% Please do not include section counters in the numbering.
+
+% Numbering equations makes reviewing more efficient, because reviewers can refer to a line on a page.  
+% It is important for readers to be able to refer to any particular equation.
+% Just because you did not refer to it in the text does not mean some future reader might not need to refer to it.
+% It is cumbersome to have to use circumlocutions like ``the equation second from the top of page 3''.
+% (Note that the ruler will not be present in the final copy, so is not an alternative to equation numbers).
+% All authors will benefit from reading Mermin's description of how to write mathematics:
+% \url{https://doi.org/10.1063/1.2811173}.
+
+% % No color equations in Springer publications.
+% Equations should never be in color and should be punctuated in the same way as ordinary text.
+% They should not be pasted in as figures.
+
+
+% \subsubsection{Lemmas, Propositions, and Theorems.}
+% The numbers accorded to lemmas, propositions, and theorems, \etc should appear in consecutive order, starting with Lemma 1. 
+% Please do not include section counters in the numbering like ``Theorem 1.1''.
+
+
+% \subsection{Footnotes.}
+% The superscript numeral used to refer to a footnote appears in the text either directly after the word to be discussed or -- in relation to a phrase or a sentence -- following the punctuation mark (comma, semicolon, or period).%
+% \footnote{The footnote numeral is set flush left and the text follows with the usual word spacing. 
+%   Second and subsequent lines are indented. 
+% }
+% For remarks pertaining to the title or the authors' names, in the header of a paper, symbols should be used instead of a number.
+% Please note that no footnotes may be included in the abstract.
+
+
+% \subsection{Cross References}
+% For the benefit of author(s) and readers, please use the
+% \begin{verbatim}
+%   \cref{...}
+% \end{verbatim}
+% command for cross-referencing to figures, tables, equations, or sections.
+% This will automatically insert the appropriate label alongside the cross reference as in this example:
+% \begin{quotation}
+%   To see how our method outperforms previous work, please see \cref{fig:example} and \cref{tab:headings}.
+%   It is also possible to refer to multiple targets as once, \eg~to \cref{fig:example,fig:short-a}.
+%   You may also return to \cref{sec:intro} or look at \cref{eq:important}.
+% \end{quotation}
+% If you do not wish to abbreviate the label, for example at the beginning of the sentence, you can use the
+% \begin{verbatim}
+%   \Cref{...}
+% \end{verbatim}
+% command. Here is an example:
+% \begin{quotation}
+%   \Cref{fig:example} is also quite important.
+% \end{quotation}
+
+
+% \subsection{Program Code}
+% Program listings or program commands in the text are normally set in typewriter font (\eg, \texttt{printf("Hello world!\textbackslash{}n");}).
+
+
+% \subsection{Citations}
+% Arabic numbers are used for citation, which is sequential either by order of citation or by alphabetical order of the references, depending on which sequence is used in the list of references. 
+% The reference numbers are given in brackets and are not superscript.
+% Please observe the following guidelines:
+% \begin{itemize}
+% \item Single citation: \cite{Anonymous24}
+% \item Multiple citation: \cite{Alpher02,Alpher03,Alpher05,Anonymous24b,Anonymous24}. 
+%   The numbers should be listed in numerical order.
+%   If you use the template as advised, this will be taken care of automatically.
+% \item If an author's name is used in the text: Alpher \cite{Alpher02} was the first \ldots
+% \end{itemize}
+% Please write all references using the Latin alphabet. If the title of the book you are referring to is, \eg, in Russian or Chinese, then please write (in Russian) or (in Chinese) at the end of the transcript or translation of the title.
+% All references cited in the text should be in the list of references and vice versa.
+
+% References should be formatted with the official LNCS reference style.
+% The \LaTeX{} template already takes care of that through the use of the \texttt{splncs04.bst} Bib\TeX{} style file.
+% Springer strongly encourages you to include DOIs (Digital Object Identifiers) in your references (\cf \cite{ECCV2022}). 
+% The DOI is a unique code allotted by the publisher to each online paper or journal article. 
+% It provides a stable way of finding published papers and their metadata. 
+% The insertion of DOIs increases the overall length of the references section, but this should not concern you as the reference section is not counted toward the page limit.
+
+
+% \subsection{Miscellaneous}
+% Compare the following:
+% \begin{center}
+%   \begin{tabular}{ll}
+%     \verb'$conf_a$'          & $\qquad conf_a$ \\
+%     \verb'$\mathit{conf}_a$' & $\qquad \mathit{conf}_a$
+%   \end{tabular}
+% \end{center}
+% See The \TeX book, p.\ 165.
+
+% The space after \eg, meaning ``for example'', should not be a sentence-ending space.
+% So \eg is correct, \emph{e.g.} is not.
+% The provided \verb'\eg' macro takes care of this.
+
+% When citing a multi-author paper, you may save space by using ``et alia'', 
+% shortened to ``\etal'' (not ``{\em et.\ al.}'' as ``{\em et\hskip 0.1em}'' is a complete word).
+% If you use the \verb'\etal' macro provided, then you need not worry about double periods when used at the end of a sentence as in Alpher \etal.
+% However, use it only when there are three or more authors.
+% Thus, the following is correct:
+%    ``Frobnication has been trendy lately.
+%    It was introduced by Alpher~\cite{Alpher02}, and subsequently developed by
+%    Alpher and Fotheringham-Smythe~\cite{Alpher03}, and Alpher \etal~\cite{Alpher04}.''
+
+% This is incorrect: ``... subsequently developed by Alpher \etal~\cite{Alpher03} ...'' because reference~\cite{Alpher03} has just two authors.
+
+
+
+% \subsection{Most Frequently Encountered Issues}
+% Please kindly use the checklist below to deal with some of the most frequently encountered issues in the latex files of ECCV submissions.
+
+% \begin{itemize}
+% \item I have removed all \verb| \vspace| and \verb|\hspace|  commands from my paper.
+% \item I have not used \verb|\cite| command in the abstract.
+% \item I have entered a correct \verb|\titlerunning{}| command and selected a meaningful short name for the paper.
+% \item I have used the same name spelling in all my papers accepted to ECCV and ECCV Workshops.
+% \item I have added acknowledgments without a section number, e.g. using the \verb|\section*{}| command.
+% \item Excluding references and acknowledgments, my paper is no longer than 14 pages.
+% \item I have not decreased the font size of any part of the paper (except tables) to fit into 14 pages, I understand Springer editors will remove such commands.
+% \end{itemize}
+
+
+% \section{Conclusion}
+% The paper ends with a conclusion. 
+
+% \clearpage\mbox{}Page \thepage\ of the manuscript.
+% \clearpage\mbox{}Page \thepage\ of the manuscript.
+% \clearpage\mbox{}Page \thepage\ of the manuscript.
+% \clearpage\mbox{}Page \thepage\ of the manuscript.
+% \clearpage\mbox{}Page \thepage\ of the manuscript. This is the last page.
+% \par\vfill\par
+% Now we have reached the maximum length of an ECCV \ECCVyear{} submission (excluding references and acknowledgements).
+% References should start immediately after the main text, but can continue past p.\ 14 if needed. 
+% \clearpage  % TODO FINAL: This \clearpage needs to be removed from both review and camera-ready versions.
+
+
+
+\section*{Acknowledgements}
+This research was funded by the National Science and Technology Council, Taiwan, under Grants NSTC 112-2222-E-A49-004-MY2 and 113-2628-E-A49-023-. The authors are grateful to Google, NVIDIA, and MediaTek Inc. for their generous donations. Yu-Lun Liu acknowledges the Yushan Young Fellow Program by the MOE in Taiwan.
+
+% ---- Bibliography ----
+%
+% BibTeX users should specify bibliography style 'splncs04'.
+% References will then be sorted and formatted in the correct style.
+%
+\bibliographystyle{splncs04}
+\bibliography{main}
+
+
+\clearpage
+
+\appendix
+\input{11_appendix}
+
+
+\end{document}

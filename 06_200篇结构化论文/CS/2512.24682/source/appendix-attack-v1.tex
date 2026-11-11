@@ -1,0 +1,305 @@
+\section{New Vulnerabilities and Proof-of-concept Attacks}
+\label{append:new_vulnerabilities_v1_v7}
+
+
+\subsection{V3: Vulnerable DNS-Based PLMN Discovery over Non-3GPP Access}
+
+\noindent 3GPP TS~23.501 defines the support for non-3GPP access, including the non-roaming architecture, Local Breakout (LBO) architecture, and Home-Routed (HR) roaming architecture. In these architectures, a UE can attach via an untrusted non-3GPP access network (e.g., untrusted satellite, Wi-Fi) in a visited network. To integrate such access, the UE's traffic is routed through the Non-3GPP Interworking Function (N3IWF) associated with the appropriate Public Land Mobile Networks (PLMN), enforcing access control and mobility anchoring. 
+
+To bootstrap 5G connectivity over untrusted non-3GPP access, the UE must discover an appropriate N3IWF. TS~23.501 specifies a DNS-based PLMN Discovery for non-3GPP access, where the UE performs a DNS NAPTR query to obtain service instance identifiers in the form of `<MNC>.<MCC>.pub.3gppnetwork.org'; the UE then uses DNS to resolve the IP addresses of N3IWF. This design is attractive from a deployment perspective because it reuses widely available DNS infrastructure without requiring pre-provisioned, static endpoint lists hardcoded on the UE. 
+However, it also introduces a DNS attack surface. Prior measurements report that 88\% of organizations have experienced DNS attacks~\cite{PaloAltoDNSAttack}.
+Importantly, the specification does not mandate authenticated DNS transport or DNSSEC validation. Consequently, the DNS-based PLMN discovery responses can be spoofed or manipulated and an adversary can steer the victim toward the attacker-controlled or unreachable endpoints. 
+While subsequent N3IWF procedures include cryptographic protection and authentication, this discovery-stage misdirection can create meaningful denial-of-service by preventing the UE from connecting to a legitimate N3IWF. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[page=3,width=0.8\linewidth]{pic/New_Vulnerabilities.pdf}
+    \vspace{-0.15in}
+    \caption{Vulnerable DNS-Based PLMN Discovery over Non-3GPP Access}
+    \label{fig:dns-base}
+    \vspace{-0.2in}
+\end{figure}
+
+\subsubsection{Proof-of-concept Attack.} We validate this vulnerability from two perspectives: (1) whether a DNS security mechanism (i.e., DNSSEC) is deployed on the operational domain name to protect the DNS-based PLMN Discovery mechanism, and (2) whether a DNS manipulation attack can practically prevent a UE from connecting to the legitimate N3IWF, as illustrated in Figure \ref{fig:dns-base}. 
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.9\linewidth]{pic/dig-commend.pdf}
+    \vspace{-0.15in}
+    \caption{`3gppnetwork.org' does not enable DNSSEC}
+    \label{fig:dig-command}
+    \vspace{-0.2in}
+\end{figure}
+
+For (1), we first test whether the parent domain `3gppnetwork.org', managed by GSMA, is protected by DNSSEC, because DNSSEC validation for any descendant name (e.g., DNS-based PLMN Discovery) relies on a valid chain of trust. 
+ 
+Our measurement via the tool \texttt{dig}~\cite{isc-bind}, as shown in Figure~\ref{fig:dig-command}, indicates that the DNSSEC for `3gppnetwork.org' is absent. 
+Therefore, DNS-based PLMN discovery remains vulnerable to classic DNS manipulation threats on untrusted links, even when subsequent procedures are cryptographically protected.  
+
+For (2), to evaluate whether the DNS manipulation can work, we test whether a poisoned discovery response can prevent the UE from establishing a secure tunnel to the legitimate N3IWF. 
+Since conducting Internet-scale poisoning experiments is unethical, we perform experiments in a controlled environment. 
+Specifically, we use two COTS UEs, Samsung S24 and Moto G Stylus 5G on T-Mobile network, and connect them to a controlled Wi-Fi router configured to poison DNS queries relevant to `3gppnetwork.org'. After enabling Wi-Fi calling services, we observe that both UEs try to resolve the IP address of N3IWF (i.e., ePDG for Wi-Fi calling services). 
+Under the poisoned resolution, the UEs attempt to connect to the misdirected endpoint, thereby preventing the UE from reaching the legitimate N3IWF and completing non-3GPP access registration. This shows that, even though subsequent N3IWF procedures provide cryptographic protection and mutual authentication, compromising the discovery stage can still induce a denial-of-service attack.  
+
+\subsubsection{Root Cause and Lesson Learned.} The root cause is a trust gap in the DNS-based PLMN discovery, which is performed over untrusted access links before the UE establishes a secure channel to the operator's infrastructure. 
+It is a standard design flaw that 3GPP specifications only protect the post-discovery connection and do not enforce security mechanisms during the discovery stage, which allows adversaries to exploit unauthenticated discovery to misdirect the victim.  
+To address this vulnerability, future 3GPP specifications must enforce the security mechanisms on DNS-based PLMN discovery in two ways. First, discovery infrastructure must be treated as security-critical. Operational domains used for standardized discovery must provide an authenticated naming and resolution path. Second, standards need to mandate a robust fallback mechanism that avoids futile attempts.  
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[page=4,width=0.8\linewidth]{pic/New_Vulnerabilities.pdf}
+    \vspace{-0.15in}
+    \caption{Privacy Exposure via Over-Disclosed VoIMS Signaling Headers}
+    \label{fig:privacy_exposure}
+    \vspace{-0.2in}
+\end{figure}
+
+
+\subsection{V4: Privacy Exposure via Over-Disclosed VoIMS Signaling Headers} 
+
+\noindent With the introduction of the all-IP network architecture in 4G LTE, call services previously supported by conventional circuit-switched (CS) technology in legacy 2G/3G networks have transitioned to being provided by the IMS. To facilitate IMS-based call services (also known as VoIMS - Voice over IMS), the Session Initiation Protocol (SIP), widely used in voice over IP services, was adopted for call signaling, replacing the legacy CS Call Control (CC) protocol. SIP is a text-based, string-oriented protocol, in contrast to the binary, structure-oriented CS CC protocol. 
+
+Adopting a text-based call signaling protocol is a double-edged sword. While it offers greater flexibility and extensibility to support various emerging IP-based multimedia services compared to conventional protocols, it also introduces new issues due to potential missteps in design. Specifically, all 2G/3G CC signaling messages are designed to carry specific 3GPP-stipulated content only. In contrast, the text-based SIP protocol allows carriers and mobile devices to transmit a much broader range of content. 
+Specifically, TS~24.229 stipulates 113 SIP headers and 15 SDP headers to support IMS-based call services, far more than its predecessor. These IMS service signaling headers can carry personal, device, and infrastructure details. 
+
+Unfortunately, as shown in Figure \ref{fig:privacy_exposure}, there are no privacy preservation mechanisms enforced in 3GPP specifications for IMS signaling headers. While the signaling messages for normal IMS services are encrypted by IPSec, operators and UEs would carry such privacy-exposing headers to both IMS service users who can be the adversaries who collect the privacy information that may enable subsequent attacks.  
+
+
+
+\subsubsection{Experimental Validation.} We validate this potential privacy leakage by examining privacy leaks during call interworking. We control 2 phones, a Samsung S21 and a Google Pixel 5, on three US carriers (labeled as OP-I, OP-II, and OP-III) and collected signaling messages exchanged between two call ends. We make 10 calls for each combination of phone model and carrier. Our experimental results show that on the operational IMS services, privacy-leaking headers are transmitted and received by the UEs. Two privacy issues are explicitly identified in the messages SIP INVITE and SIP SESSION PROGRESS. In the former, as shown in Figure~\ref{fig:user-agent}, it is observed that the caller's User-Agent header is transmitted to the callee through the OP-II network, leaking the phone model and security patch version to the callee. For the latter as shown in Figure~\ref{fig:name-server}, when the caller is on OP-III, and the callee is on OP-I, P-Asserted-Identity and Server headers are added by the networks in the SIP SESSION PROGRESS response, revealing the callee's identity and IMS server information. 
+
+\begin{figure}[t]
+    \centering
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{pic/privacy-leak-phone-model.pdf}
+        \caption{User-Agent header leaks phone model and security patch version}
+        \label{fig:user-agent}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{pic/privacy-leak-name-server.pdf}
+        \caption{P-Asserted-Identity and Server headers leak callee's name and IMS server's information}
+        \label{fig:name-server}
+    \end{subfigure}
+    \vspace{-0.1in}
+    \caption{The information about users and cellular infrastructure is leaked during call interworking}
+    \label{fig:main}
+    \vspace{-15pt}
+\end{figure}
+
+
+\subsubsection{Root Cause and Lesson Learned.} Adopting a text-based call signaling protocol allows carriers and mobile devices to transmit a much broader range of content. While the 3GPP specification does not prohibit the transmission of these abundant headers, other network standard organizations like the IETF have raised concerns about privacy risks from unnecessary header disclosures. For example, RFC 3261~\cite{RFC3261} warns about the vulnerability of disclosing user agent information. This underscores the urgent need for 3GPP to review and revise its IMS-related specifications with a focus on privacy preservation. 
+
+
+
+\subsection{V5: Exploitable CS-Fallback Initiation} 
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[page=5,width=0.8\linewidth]{pic/New_Vulnerabilities.pdf}
+    \vspace{-0.15in}
+    \caption{Exploitable CS-Fallback Initiation}
+    \label{fig:csfallback}
+    \vspace{-0.2in}
+\end{figure}
+
+\noindent 4G LTE networks support Circuit-Switched Fallback (CSFB) to provide legacy CS voice/SMS by redirecting a UE to a CS network (e.g., 2G/3G if available) when VoLTE is unavailable. 
+Note that 5G non-standalone deployments that rely on 4G LTE infrastructure also support CSFB.   
+In CSFB, after a UE in EMM-IDLE receives a paging request for a CS service, it initiates fallback by sending an EXTENDED SERVICE REQUEST to the Core Network. In the common case, the UE transitions from RRC\_IDLE to RRC\_CONNECTED and sends this request as an initial NAS message. In this case, the initial message is only integrity-protected without ciphering because NAS ciphering is only applied after the access-stratum connection and the relevant security context are re-activated for this specific exchange. Thus, adversaries can sniff the \textsf{EXTENDED SERVICE REQUEST}. 
+
+Moreover, TS~24.301 allows certain NAS reject messages, including SERVICE REJECT, to be sent and processed without any security protection. This combination exposes a practical CSFB DoS attack surface: adversaries can deny CSFB and rate-limit subsequent attempts by (1) sniffing unciphered EXTENDED SERVICE REQUEST and (2) injecting forged SERVICE REJECT with EMM cause \#39 (CS domain temporarily not available) and the associated timer T3442 to throttle subsequent attempts. 
+
+
+
+\subsubsection{Proof-of-concept Attack.} Figure~\ref{fig:csfallback} illustrates a proof-of-concept attack. The attacker deploys a sniffer between the victim and the legitimate eNodeB. Once an unciphered EXTENDED SERVICE REQUEST is observed, the attacker immediately sends a forged SERVICE REJECT carrying EMM cause \#39 and the T3442 via a rogue base station.  
+To validate this attack, as shown in Figure~\ref{fig:device-setup}, we implement an SDR-based testbed using srsRAN and open5GS~\cite{open5gs}, both of which support CS Fallback. 
+A Samsung S24 and a Moto G Stylus are used as test UEs. Instead of building a full injection pipeline that monitors unciphered NAS messages and injects forged responses, which are credited to prior works~\cite{hussain2018lteinspector}, we simplify the evaluation by configuring Open5GS and srsRAN to emulate a CS call paging and then directly respond with a SERVICE REJECT with EMM cause \#39 and T3442 for the maximum value 30 mins directly. 
+As shown in Figure~\ref{fig:csfb}, the experimental traces indicate that the UEs accept the rejection and stop attempting to set up the call. 
+Overall, this attack achieves a stealthy denial-of-service against CS services on LTE by preventing a CSFB procedure, and limiting further CSFB attempts via \textsf{T3442}. The throttling effect is particularly damaging because the UE self-enforces the backoff timer. Depending on UE implementation and timer configuration, the victim may experience prolonged inability to place CS calls. We leave a systematic characterization of the maximum outage duration to future work.   
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[page=5,width=0.8\linewidth]{pic/testd.jpeg}
+    \vspace{-0.15in}
+    \caption{The setup for validating V5: Exploitable CS-Fallback Initiation}
+    \label{fig:device-setup}
+    \vspace{-0.2in}
+\end{figure}
+
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[page=5,width=0.95\linewidth]{pic/cs-fallback.jpg}
+    \vspace{-0.15in}
+    \caption{The victim UE accepts the rejection and ceases its attempts to establish the call}
+    \label{fig:csfb}
+    \vspace{-0.2in}
+\end{figure}
+
+
+\subsubsection{Root Cause and Lesson Learned.} The root cause is TS~24.301 explicitly permits a SERVICE REJECT to be processed without ciphering and integrity protection. This design appears risky but serves as a fail-safe mechanism for cases where a secure connection cannot be established or has been lost. For example, if a UE sends an EXTENDED SERVICE REQUEST but the MME cannot authenticate the user (e.g., the unknown/invalid subscription), the network must be able to instruct the UE to stop trying without security keys. Similarly, for emergency services, the network must always be able to reject or redirect requests even if security procedures are failing to ensure the UE can seek alternative access. 
+To mitigate this threat, commonly from rogue base stations, and still allow certain unprotected signaling messages for a fail-safe mechanism, in practice, it likely requires UE-side defenses against rogue base stations and stricter validation before setting the long throttling timers. 
+
+
+
+\subsection{V6: Access Trap via Access Barring Factor} 
+
+
+\noindent In 5G NR, System Information Block 1 (SIB1) is a periodically broadcast RRC message that every UE must decode first before any AS (Access Stratum) security is established. SIB1 carries essential cell-access and cell-selection parameters, including PLMN, scheduling of other system information blocks, and uac-BarringInfo for UAC (User Access Control). uac-BarringInfo specifies barring rules for different access categories, distinguishing everyday services (e.g., regular voice/data and mobile-originated signaling) from special-case/high-priority categories (e.g., paging/mobile-terminated access and emergency access). A similar design also existed in 4G networks, which used the ac-BarringInfo field in SIB2 messages.
+
+Each barring rule includes parameters such as barringFactor, which controls the probability that a UE is allowed to initiate an access attempt for a given category. Intuitively, a smaller barringFactor imposes a stronger restriction, while an extremely small value can cause most or nearly all UEs to defer their mobile-originated requests. In normal operation, base stations typically configure moderate barring parameters, or disable barring entirely, to preserve broad service availability and avoid unnecessarily suppressing legitimate access.
+
+
+This design becomes exploitable when a malicious base station advertises an extremely restrictive barringFactor in SIB1/SIB2 in 5G/4G networks. After decoding the broadcast information, the UE enforces the barring policy locally. By setting barringFactor to a highly restrictive value, the attacker can effectively drive victim UEs into a stealthy nonfunctional state, where the device appears camped on a cell but repeatedly refrains from initiating normal services, thereby creating a stealthy denial-of-service condition. 
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[page=6,width=0.8\linewidth]{pic/New_Vulnerabilities.pdf}
+    \vspace{-0.15in}
+    \caption{Access Category Trap via SIB1 Access Barring}
+    \label{fig:sib1}
+    \vspace{-0.2in}
+\end{figure}
+
+\subsubsection{Proof-of-concept Attack.} Figure~\ref{fig:sib1} illustrates the proof-of-concept attack. The adversary only needs to operate a rogue base station and exploit broadcast system information; no cryptography is broken. Specifically, the adversary needs to configure the rogue base station to broadcast SIB1 in 5G/SIB2 in 4G with barringFactor set to a highly restrictive value (e.g., 0), which sets a low probability that a UE is allowed to initiate an access attempt. Therefore, any nearby UEs that receive and decode this SIB1/SIB2 are not able to initiate an access attempt. 
+
+
+
+To validate this vulnerability ethically, we implement an SDR-based testing platform using srsRAN and srsEPC. All antennas are placed in a shield box to ensure that no unintended over-the-air transmissions occur.
+We use a Samsung S24 and a Moto G Stylus 5G as test phones. 
+Next, we simplify the experiment and configure the controlled serving cell to broadcast SIB2 with an ac-BarringFactor setting to 0. As shown in Figure~\ref{fig:sib2}, we observe (i) the UE does not initiate RRC connection establishment after receiving a SIB2 with BarringFactor setting to 0, and (ii) the data service on UEs is not usable without interfaces. Our experimental results show that both phones self-block service without explicit alerting beyond generic `no service' icon, consistent with the intended UAC enforcement behavior but enabling a stealthy denial-of-service. 
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.95\linewidth]{pic/sib2.jpg}
+    \vspace{-0.15in}
+    \caption{The SIB2 messages broadcast by attackers prevent UEs from attaching to base stations}
+    \label{fig:sib2}
+    \vspace{-0.2in}
+\end{figure}
+
+
+\subsubsection{Root Causes and Lesson Learned.} UAC is designed for congestion control: the UE locally enforces access restrictions to reduce network load and stabilize access attempts during overload. However, the policy is delivered via SIB1/SIB2, which is broadcast and processed prior to authentication and therefore lacks integrity protection. This creates a pre-authentication trust gap: a rogue cell can advertise restrictive UAC policies and rely on the UE to self-enforce them, achieving denial-of-service without needing to defeat cryptographic protections.
+To mitigate this vulnerability, 3GPP standards shall develop UE implementations that can reduce exposure by adding safety checks and recovery logic (e.g., bounding the duration of extreme barring, triggering reselection/blacklisting when a newly camped cell persistently bars most categories, or cross-validating with neighboring cells). 
+
+
+
+
+\subsection{V7: Rogue Base Station RRC RESUME Blackhole}
+
+\noindent In 5G NR, a UE selects the cell based on the broadcast radio information and measured radio conditions before any AS/NAS security context is activated. Concretely, parameters conveyed via the broadcast messages (e.g., SSB/PBCH, MIB, and SIBs) are not authenticated at the UE during this procedure. As a result, a rogue base station can attract a UE through (1) stronger radio conditions in terms of RSRP, RSRQ, and SINR, (2) advertising the legitimate PLMN info that the UE is willing to use, and (3) advertising that it is not barred for achieving a high priority in the standard cell selection and reselection mechanism defined in TS~36.304.
+
+Combining the cell selection and reselection mechanism with the RRC RESUME procedure that a UE in RRC INACTIVE expects to resume quickly via RRC RESUME REQUEST, the UE can be induced to reselect into a gNB that does not recognize or even a rogue gNB that can intentionally ignore or reject this request. 
+This resume thus fails. Moreover, instead of directly switching to another cell, TS~36.304~\cite{3gpp_ts36304} defines that a UE should retry after a wait time specified by the timer T302. The cell selection and reselection mechanism does not consider the resume failure. Thus, the victim UE will stick to the malicious base station until a legitimate gNB wins in the cell selection and reselection procedure. 
+While 5G security prevents a rogue gNB from completing an authenticated service, repeated resume failures can still cause meaningful availability harm for the retry loops. 
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[page=7,width=0.8\linewidth]{pic/New_Vulnerabilities.pdf}
+    \vspace{-0.15in}
+    \caption{Rogue Base Station RRC RESUME Blackhole}
+    \label{fig:rrcresume_blackhole}
+    \vspace{-0.2in}
+\end{figure}
+
+\begin{table*}[!t]
+\centering
+\caption{Comparison of existing systems for 3GPP specification security analysis}
+\label{tab:spec-compare}
+\vspace{-0.1in}
+\scriptsize
+\begin{tabular}{p{1.8cm} p{3cm} >{\centering}p{1.8cm} p{2.8cm} p{6cm}}
+% \begin{strip}
+% \centering
+% \captionof{table}{Comparison of existing systems for 3GPP specification security analysis}
+% \label{tab:spec-compare}
+% \scriptsize
+% \begin{tabular}{p{1.8cm} p{3cm} >{\centering}p{1.8cm} p{2.8cm} p{6cm}}
+\toprule
+\textbf{Method} & \textbf{Primary Objective} & \textbf{Protocol Modeling} & \textbf{Security Scope} & \textbf{Remarks} \\
+\midrule
+
+\textbf{Atomic}~\cite{chen2021bookworm} &
+Detecting hazard indicators via textual entailment &
+\xmark &
+Risk‐sentence detection only &
+Identifying hazard indicators via sentence-level textual entailment without modeling specification logic or performing systematic vulnerability analysis \\
+
+
+\midrule
+
+\textbf{ConTester}~\cite{chen2023sherlock} &
+Extracting security requirements &
+\xmark &
+Developing conformance test cases &
+Only extracting security requirements for developing conformance test without uncovering design-level vulnerabilities \\
+
+
+\midrule
+
+\textbf{CellularLint}~\cite{rahman2024cellularlint} &
+Detecting semantic inconsistencies &
+\xmark &
+Sentence‐level contradiction detection &
+Detecting semantic inconsistencies (i.e., sentence-level contradictions) via sentence-pair inference instead of reasoning over complete specification logic \\
+
+\midrule
+
+\textbf{Hermes}~\cite{al2024hermes} &
+Automatic FSM extraction via traditional NLP approaches &
+\cmark &
+Formal security analysis &
+Parsing specifications via handcrafted grammars using constituency parsing and dependency parse trees, remaining rule-intensive and lacking flexibility to adapt to evolving specifications \\
+
+\midrule
+
+\textbf{ARCANE}~\cite{tan2025automated} &
+Automated vulnerability discovery via model-based fuzzing &
+\cmark &
+Implementation vulnerability discovery &
+Automatically constructs protocol models and performs model-based fuzzing \\
+
+\midrule
+
+\textbf{\lm } &
+End‐to‐end SCA nodes and systematic vulnerability reasoning &
+\cmarkbold &
+Specification‐level design‐flaw detection &
+First system to enable scalable specification extraction and systematic security analysis \\
+
+\bottomrule
+\end{tabular}
+\end{table*}
+% \end{tabular}
+% \end{strip}
+
+
+
+\subsubsection{Proof-of-concept Attack.} 
+We refer to the following behavior as an \emph{RRC RESUME Blackhole}: the victim UE is trapped within a rogue gNB and stuck in repeated RRC RESUME REQUEST$\rightarrow$\ RRC RESUME failure cycles. 
+The attacker does not need to break cryptography and does not need to complete mutual authentication. Instead, the attacker exploits (i) unauthenticated cell selection and (ii) the coupling between reselection and the RRC RESUME mechanism. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth]{pic/rrcresume.jpg}
+    \vspace{-0.05in}
+    \caption{The victim UE remains unable to resume services and repeats the procedure every 16 seconds according to the timer.}
+    \label{fig:timer}
+    \vspace{-0.2in}
+\end{figure}
+
+
+For ethical reasons, we validate this attack in a fully controlled environment. First, inside an RF shield box, we deploy two SDR-based gNBs using srsRAN and open5GS: One serves as a legitimate gNB, and another serves as the rogue gNB. The rogue gNB is configured to have same settings as the legitimate one. Two test phones, a Samsung S21 and a Moto G Stylus 5G, are employed. Second, we increase the rogue gNB signal strength via increasing its tx\_gain and rx\_gain in srsRAN so that the rogue gNB can be the first choice in the cell selection and reselection mechanism. Third, we operate the test phones to trigger the RRC RESUME. Fourth, we configure the rogue gNB to respond with RRC REJECT for all RRC RESUME REQUEST with a RejectWaitTime 16, which will be the time used by the UE as T302. Last, we examine if the UE is stuck to the rogue gNB and trapped within RRC RESUME Blackhole. Figure~\ref{fig:timer} illustrates a trace captured on the Moto G Stylus 5G, which remains unable to resume service for 16 seconds after receiving RRC REJECT. The Samsung S21 exhibits a different implementation behavior: it does not strictly follow the 3GPP-specified wait time and stops sending RRCResumeRequest for only about 3 seconds even when RejectWaitTime $=$ 16 is provided. This result shows that although the attack is effective on both devices, UE implementations may differ in how strictly they enforce the backoff timer.
+
+
+
+\subsubsection{Root Causes and Lessons Learned.} The root cause is that the cell selection and reselection mechanism developed in 3GPP standards does not consider these failures. It operates on the RRC layer before the UE can establish a protected AS channel. Future specifications and deployments can consider additional mechanisms to reduce resume failures (e.g., explicit guidance for UEs to switch from cells that cannot support resumption). 
+
+

@@ -1,0 +1,103 @@
+\section{Data Preparation and Curation}
+\label{app:data_prep}
+
+Training a foundation model for protein design, particularly one capable of binder generation, necessitates a diverse corpus comprising both monomeric and multimeric structures. While predicted monomer databases such as the AlphaFold Database (AFDB) \cite{varadiAlphaFoldProteinStructure2022a} and ESMAtlas \cite{lin2023evolutionary} provide extensive coverage of single-chain structures, existing multimer datasets derived from the RCSB PDB \cite{berman2000protein} are limited in scale and often unsuitable for the specific two-chain requirements of binder design tasks. To address this, we constructed a composite training dataset by integrating curated monomer data with multimeric interactions sourced from Pinder \cite{kovtun2024pinder} and HumanPPI \cite{zhangPredictingProteinproteinInteractions2025}. We detail the processing and filtering pipelines for each category below.
+
+\subsection{Monomer Data Curation}
+Our monomeric dataset is derived exclusively from AFDB and ESMAtlas. For the ESMAtlas component, to mitigate potential quality issues associated with ESMFold \cite{lin2023evolutionary} predictions, we retrieved the corresponding sequences from the MGnify database \cite{richardson2023mgnify} and re-predicted their structures using AlphaFold2 (AF2) \cite{jumper2021highly}. 
+
+To ensure high data quality, we applied the following inclusion criteria to all monomer structures:
+\begin{itemize}
+    \item Sequence length between 50 and 768 residues.
+    \item Average pLDDT score $> 80$.
+    \item Secondary structure coil fraction $< 50\%$.
+\end{itemize}
+To eliminate redundancy, we performed clustering using Foldseek \cite{vankempenFastAccurateProtein2024} and MMseqs2 \cite{steineggerMMseqs2EnablesSensitive2017} and retained only the cluster representatives (centroids). The final curated monomer dataset consists of approximately 0.5 million structures. Sequences that can be folded by SeedFold \cite{seedfold} in a single-sequence setting are exclusively allocated for the training of the initial phase.
+
+\subsection{Multimer Data Curation}
+Protein-Protein Interactions (PPIs) are fundamental to training a robust binder design model. We sourced multimer data from two primary streams to cover experimentally determined interactions and high-quality predicted domain interactions.
+
+\paragraph{Experimental PPIs (Pinder).} 
+To align our training data with the standard inference scenario, where a binder chain is designed for a specific target chain, we utilized the Pinder dataset. Using the curated holo-structure PDB IDs and chain IDs provided by Pinder, we extracted relevant substructures from RCSB biological assemblies. We filtered these two-chain complexes by requiring: (1) a coil fraction of $< 50\%$ for each chain, and (2) a minimum interfacial C$_\beta$ distance of $< 8\text{\AA}$ to ensure meaningful contact. Following structural clustering via Foldseek-Multimer, we retained approximately 50,000 unique cluster representatives.
+
+\paragraph{Augmented DDI Dataset (HumanPPI).} 
+To overcome the scarcity of experimental PPI data, we augmented our training set with domain-domain interactions (DDIs). This approach relies on the established hypothesis that intrachain DDI interfaces resemble interchain PPI interfaces in terms of coevolutionary and physicochemical properties \cite{lau2024exploring}. We utilized the HumanPPI database, which distills DDIs from accurately predicted monomer structures in the AFDB. We applied the identical filtering and clustering pipeline used for the Pinder dataset (coil check and distance constraints). This augmentation yielded an additional $\sim 0.1$ million interaction pairs.
+
+
+\input{tables/training_pipeline}
+
+\section{Evaluation Settings}
+\label{app:eval_settings}
+
+\subsection{Unconditional Generation Evaluation}
+For unconditional monomer generation, we employ a self-consistency assessment pipeline to evaluate structural designability. For each generated backbone, we first only derive \textbf{one} amino acid sequence using ProteinMPNN (inverse folding). The sequence is subsequently refolded using SeedFold, an AlphaFold3-like folding model in a single-sequence setting. A design is considered successful if it satisfies two criteria: 
+(1) the C$\alpha$-RMSD between the generated backbone and the refolded structure is $< 2.0$\AA, and 
+(2) the average pLDDT score of the refolded structure is $> 80$. 
+Metrics for \textbf{structural diversity} (number of unique structural clusters) and \textbf{novelty} (maximum TM-score relative to the PDB) are calculated with Foldseek \cite{vankempenFastAccurateProtein2024} exclusively on the subset of designable cases.
+
+\paragraph{Topology-Aware Analysis.}
+To address the long-standing challenge in protein generative models, specifically the bias toward $\alpha$-helical structures and the difficulty in generating valid $\beta$-sheets, we incorporate a fine-grained analysis based on secondary structure topology. Based on secondary structure proportions, we classify the generated proteins into three distinct fold types. We define \textbf{EEE} (primarily $\beta$-sheet) as structures with over 40\% sheet and under 20\% helix content, and \textbf{HHH} (primarily $\alpha$-helical) as those with over 50\% helix and under 10\% sheet content; both categories require a loop fraction below 45\%. All remaining structures are categorized as hybrid Helix-E-Loop (\textbf{HEL}).
+
+\subsection{Binder Design Evaluation}
+We evaluate binder design performance on a benchmark set of 10 targets, consistent with the validation set used in AlphaProteo (see Table \ref{tab:targets}). To rigorously assess the upper bound of design capability across different length scales, we adopt a dense sampling strategy: for each target, we sample 100 candidates at every 5-residue interval within the target-specific binder length range. For example, for the SC2RBD target (length range 80--120 residues), this results in a total of 900 sampled candidates.
+
+For sequence recovery, we generate two sequences for each designed binder backbone using SolubleMPNN at a sampling temperature of $\tau = 0.001$. The designs are then validated using SeedFold in single sequence with target template mode. A binder design is considered successful if it meets the following criteria:
+\begin{itemize}
+    \item Interface Predicted Aligned Error (min PAE interaction) $< 1.5$;
+    \item Binder pTM score $> 0.8$;
+    \item Complex RMSD $< 2.5$\AA.
+\end{itemize}
+
+\input{tables/targets}
+
+
+\section{Baseline Sampling}
+\label{app:baseline_sampling}
+
+In this section, we detail the specific configurations, checkpoints, and codebases used for all baseline methods included in our benchmarks.
+
+\subsection{Unconditional Benchmark}
+
+\textbf{La-Proteina.} We utilized the official implementation and checkpoints provided in the La-Proteina repository\footnote{\url{https://github.com/NVIDIA-Digital-Bio/la-proteina}}. To ensure optimal performance across different scales, we selected checkpoints based on the target sequence length: the \texttt{LD1\_ucond\_notri\_512.ckpt} checkpoint was used for lengths 100--500, while \texttt{LD3\_ucond\_notri\_800.ckpt} was employed for lengths 600--1000. All sampling was conducted using the default inference configurations.
+
+\textbf{Proteina.} We used the code and checkpoints from the official Proteina repository\footnote{\url{https://github.com/NVIDIA-Digital-Bio/proteina}}. Similar to La-Proteina, we adopted a length-dependent checkpoint strategy: \texttt{proteina\_v1.1\_DFS\_200M\_tir.ckpt} was used for lengths 100--500, and \texttt{proteina\_v1.6\_DFS\_200M\_notri\_long\_chain\_generation.ckpt} was used for lengths 600--1000. Default sampling parameters were applied in all cases.
+
+\textbf{RFDiffusion.} We employed the official codebase available at the RFDiffusion repository\footnote{\url{https://github.com/RosettaCommons/RFdiffusion}}. All unconditional generation tasks were performed using the standard default sampling configurations provided by the authors.
+
+\subsection{Binder Design Benchmark}
+For the binder design task, all methods utilize identical target structures (in mmCIF format) and are conditioned on the exact same set of hotspot residues. For each target, we generate an equal number of candidate proteins with consistent lengths across all models. To ensure a fair comparison of generative capabilities, we disable any built-in auxiliary modules—such as pre-filtering, ranking, or early-stopping strategies—thereby restricting the evaluation strictly to the core sampling function.
+
+\textbf{BindCraft.} We utilized the official implementation from the BindCraft repository\footnote{\url{https://github.com/martinpacesa/BindCraft}}. For binder generation, we adopted the \texttt{default\_4stage\_multimer} configuration under the advanced setting. To ensure a fair evaluation of the generative capability without post-hoc selection bias, we disabled both the filtering stage and the early stopping strategy. This ensured that every sampling attempt was completed and all raw outputs were retained, regardless of their internal quality metrics.
+
+\textbf{BoltzGen.} We performed evaluations using the code provided in the BoltzGen repository\footnote{\url{https://github.com/HannesStark/boltzgen}}, specifically utilizing commit SHA \texttt{58c1eed}. We employed the \texttt{protein-anything} protocol for inference. To bypass internal ranking and filtering mechanisms, we set the inference budget equal to the number of desired designs, ensuring a direct one-to-one output.
+
+\textbf{RFDiffusion.} For binder design tasks, we set both \texttt{noise\_scale\_ca} and \texttt{noise\_scale\_frame} to 0 during sampling. The authors suggest that this deterministic setting yields superior performance for specific binder design scenarios.
+
+\textbf{RFDiffusion3.} We utilized the implementation available in the RosettaCommons Foundry repository\footnote{\url{https://github.com/RosettaCommons/foundry}}, specifically commit SHA \texttt{7f6656e}. We set \texttt{align\_trajectory\_structures=False} to prevent potential runtime errors during trajectory processing; all other configurations were maintained at default values.
+
+\textbf{PXDesign.} We utilized the implementation in the PXDesign repository\footnote{\url{https://github.com/bytedance/PXDesign}}, specifically commit SHA \texttt{ec6615c}. We perform binder design for each target of a given hotspot using \texttt{Generation Only} mode.
+
+\section{In Vitro Experimental Protocols}
+\label{app:invitro_protocols}
+
+\subsection{Protein Production}
+\label{app:protein_production}
+
+\paragraph{PD-L1.}
+The extracellular domain of PD-L1 (residues 18--239) was cloned into pcDNA3.1 and expressed as a secreted protein in Expi293F cells via transient transfection with polyethylenimine (PEI). Transfection was performed when suspension cultures grown at 37~$^\circ$C reached a density of $3 \times 10^6$~cells/mL. Sodium butyrate (10~mM) was supplemented 9~hours post-transfection to enhance expression. Culture supernatants were harvested 5~days post-transfection. The pH was adjusted by adding 20~mM bis-tris propane (BTP) before loading onto Ni Sepharose Excel resin. The resin was washed with 10~column volumes of wash buffer (20~mM Na\textsubscript{2}HPO\textsubscript{4}/NaH\textsubscript{2}PO\textsubscript{4}, 200~mM NaCl, 20~mM imidazole, pH~7.4) and eluted with elution buffer (20~mM Na\textsubscript{2}HPO\textsubscript{4}/NaH\textsubscript{2}PO\textsubscript{4}, 200~mM NaCl, 300~mM imidazole, pH~7.4). The eluate was dialyzed and incubated with TEV protease for tag cleavage. The digested sample was passed over a Ni resin column; the flow-through was collected, concentrated, and further purified by gel-filtration chromatography on a Superdex~75 column equilibrated with SEC buffer (10~mM Na\textsubscript{2}HPO\textsubscript{4}, 1.8~mM KH\textsubscript{2}PO\textsubscript{4}, 137~mM NaCl, 2.7~mM KCl, pH~7.4). Peak fractions were pooled and concentrated to the desired concentration for downstream assays.
+
+\paragraph{SARS-CoV-2 RBD.}
+The SARS-CoV-2 receptor-binding domain (SC2RBD) was obtained commercially from AcroBiosystems (Cat.~\#~SPD-C82E9).
+
+\paragraph{Minibinder Expression and Purification.}
+Minibinder sequences were cloned with an N-terminal His-SUMO tag into a custom expression vector and transformed into BL21-CodonPlus~(DE3)-RIPL \textit{E.~coli}. Cultures were grown in Terrific Broth at 37~$^\circ$C until OD\textsubscript{600} reached 0.75, then induced with 1~mM isopropyl-$\beta$-D-thiogalactopyranoside (IPTG) for 4~hours at 37~$^\circ$C. Cells were lysed by high-pressure homogenization in lysis buffer (50~mM HEPES pH~8.0, 100~mM NaCl, 1~mM TCEP, 1~mM EDTA, supplemented with cOmplete EDTA-free protease inhibitor at 1~tablet per 100~mL). Proteins were purified by Ni-NTA chromatography, with the column washed using lysis buffer supplemented with 30~mM imidazole and eluted with 250~mM imidazole. The eluate was subjected to size-exclusion chromatography on a Superdex~200 10/300~GL column in 50~mM HEPES pH~8.0, 100~mM NaCl, 1~mM TCEP, 1~mM EDTA. Peak fractions were collected and stored for subsequent binding assays.
+
+\subsection{Surface Plasmon Resonance (SPR)}
+\label{app:spr}
+
+SPR experiments were performed on a Biacore~8K+ instrument (GE Healthcare) at 25~$^\circ$C. Target proteins were immobilized on a Series~S Sensor Chip~SA (streptavidin, GE Healthcare) via biotin capture. The assay buffer consisted of 50~mM HEPES, 100~mM NaCl, 1~mM TCEP, and 1~mM EDTA at pH~8.0. The chip surface was activated with 1~M NaCl/50~mM NaOH (contact time: 60~s, flow rate: 30~$\mu$L/min), after which the biotinylated target protein was prepared at 1~$\mu$g/mL in assay buffer and coupled to the streptavidin surface to a density of approximately 100~Response Units (RU).
+
+Minibinder stock solutions were maintained in the same assay buffer. For primary screening, each minibinder was tested at $10\times$ and $50\times$ dilutions of the stock concentration, along with a zero-concentration reference for background subtraction. Candidates were selected for affinity testing based on curve shape and RU response.
+
+For affinity determination, either single-cycle kinetics (contact time: 70~s, dissociation time: 1200~s, flow rate: 30~$\mu$L/min, 9-point 1:1 serial dilution) or multi-cycle kinetics (contact time: 70~s, dissociation time: 600~s, flow rate: 30~$\mu$L/min, 12-point 1:1 serial dilution) were employed based on the estimated affinity of each minibinder. Data were analyzed using Biacore Insight Evaluation Software (version 6.0.7.1750). Kinetic parameters were determined by fitting sensorgrams to the Langmuir 1:1 binding model, which assumes a single-site interaction between the analyte and the immobilized ligand.
+

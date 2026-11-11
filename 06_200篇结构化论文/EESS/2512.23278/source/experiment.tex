@@ -1,0 +1,394 @@
+To evaluate the effectiveness of our Flow2GAN, we conduct experiments conditioned on Mel-spectrograms and discrete audio tokens from Encodec~\citep{encodec} (Section~\ref{ssec:comp_sota}). We also perform ablation studies with Mel-spectrogram condition to investigate the effect of each proposed technique (Section~\ref{ssec:ablation}) and compare inference speed with other models (Section~\ref{ssec:speed}). Finally, we evaluate performance when serving as a TTS vocoder (Section~\ref{ssec:comp_tts}). 
+
+\vspace{-0.5em}
+\subsection{Experimental Setup} 
+\label{ssec:exp_setup}
+\vspace{-0.5em}
+
+\noindent\textbf{Datasets and evaluation metrics.} For Mel-spectrogram conditioning, we train models on the LibriTTS dataset~\citep{libritts}, which contains 585 hours of English speech at 24kHz sampling rate. 
+We report results on the test set for model comparisons and on the dev set for ablation studies.
+For objective evaluation, we use Perceptual Evaluation of Speech Quality (PESQ)~\citep{pesq}, ViSQOL~\citep{visqol}, F1 score for voiced/unvoiced classification (V/UV F1), periodicity error (Periodicity). We also include Fréchet Speech Distance (FSD)~\citep{voicebox}, which measures the similarity between distributions of generated and real samples in a feature space from a Wav2Vec2 encoder~\citep{wav2vec2}. 
+For subjective evaluation, we use Similarity MOS (SMOS) between generated and reference audios, with scores from 1 (not at all similar) to 5 (extremely similar), and also 5-scale Mean Opinion Score (MOS) to evaluate naturalness with scores from 1 (completely unnatural) to 5 (completely natural). 
+% Following~\citep{bigvgan,vocos}, 
+% we also test Similarity MOS (SMOS) between generated and reference audios, with scores from 1 (not at all similar) to 5 (extremely similar). 
+We compare against the following state-of-the-art models: BigVGAN~\citep{bigvgan}, Vocos~\citep{vocos}, RFWave~\citep{rfwave}, PeriodWave-Turbo~\citep{periodwave_turbo}, and WaveFM~\citep{wavefm}. In ablation studies, we focus on PESQ and ViSQOL. We use log-Mel spectrograms when comparing to other models and Mel spectrograms in ablation studies, with their results comparison presented in Appendix Table~\ref{tab:comp_mel_logmel}.
+
+For audio token conditioning, following~\citep{mbd,rfwave}, we train on a set of universal audio datasets including: Common Voice 7.0~\citep{commonvoice}, clean speech data from DNS Challenge 4~\citep{dns} (speech), MTG-Jamendo~\citep{mtg} (music), and AudioSet~\citep{audioset} and FSD50K~\citep{fsd50k} (sound events). All audio files are resampled to 24kHz. Following~\citep{rfwave}, we evaluate on a unified test dataset\footnote{https://github.com/bfs18/rfwave}, which contains 900 test samples involving speech, vocals, and sound effect. 
+For the universal audios, we report PESQ, ViSQOL and FSD as objective metrics, as well as SMOS and MOS as subjective metric. In this setting,  we compare Flow2GAN against Encodec~\citep{encodec}, MBD~\citep{mbd}, RFWave~\citep{rfwave}, and PeriodWave-Turbo~\citep{periodwave_turbo}. 
+
+% \noindent\textbf{Evaluation Metrics.} For 
+
+To evaluate Flow2GAN as a vocoder in Mel-based TTS systems, we combine it with F5-TTS Base~\citep{f5}, a recent zero-shot TTS model, and compare against various state-of-the-art vocoders. Note that F5-TTS provides two official checkpoints corresponding to librosa and torchaudio mel-spectrogram implementations\footnote{https://github.com/SWivid/F5-TTS}. 
+We evaluate zero-shot TTS performance on LibriSpeech-PC~\citep{librispeech-pc} test-clean subset. 
+For intelligibility, we report WER between the synthesized speech transcription and the input text. Speaker similarity is measured using cosine similarity between WavLM-based~\citep{wavlm} ECAPA-TDNN~\citep{ecapa} embeddings of the prompt and synthesized speech (denoted as SIM-o~\citep{voicebox}). Naturalness is evaluated using network-based MOS (UTMOS)~\citep{utmos}. 
+
+\noindent\textbf{Implementation details.}
+Our Flow2GAN is built with ConvNeXt~\citep{convnext} layers, but we replace the normalization with BiasNorm~\citep{zipformer} and use PreLU activation~\citep{prelu}.
+Detailed model configurations are provided in Appendix Table~\ref{tab:model_conf}. 
+In GAN fine-tuning stage, following~\citep{dac}, we use multi-scale Mel-spectrogram reconstruction loss with window lengths of $\{32, 64, 128, 256, 512, 1024, 2048\}$, hop lengths set to window length / 4, and Mel bins of $\{5, 10, 20, 40, 80, 160, 320\}$.
+For Encodec audio token conditioning, during training we randomly choose a bandwidth from $\{12.0, 6.0, 3.0, 1.5\}$ kbps. At inference, the unified model can support all these bandwidths. We train our models with ScaledAdam optimizer~\citep{zipformer}, which offers faster convergence. Mel-spectrogram conditioned models are trained for 92k Flow Matching iterations and 110k GAN fine-tuning iterations on 2 Nvidia H20 GPUs. Audio token conditioned models are trained for 180k Flow Matching iterations (8 H20 GPUs) and 190k GAN fine-tuning iterations (2 H20 GPUs). For the state-of-the-art models for comparison, we use their released checkpoints and recommended inference configurations.
+
+\vspace{-1em}
+\subsection{Comparison to state-of-the-art methods}
+\label{ssec:comp_sota}
+
+\noindent\textbf{Mel-spectrogram conditioning.} Table~\ref{tab:comp_mel} compares our Flow2GAN models with other state-of-the-art models with Mel-spectrogram conditioning. 
+The one-step Flow2GAN outperforms Vocos~\citep{vocos}, RFWave~\citep{rfwave}, and WaveFM~\citep{wavefm} across most metrics, except PESQ. The two-step and four-step variants outperform all other models except for FSD, SMOS, and MOS. The four-step version achieves the best results in PESQ, ViSQOL, V/UV F1, and Periodicity.
+% Except for BigVGAN-v2~\citep{bigvgan} and PeriodWave-Turbo~\citep{periodwave_turbo}, our Flow2GAN models outperform other models across most metrics, with the four-step version achieving the best results in PESQ, V/UV F1, and Periodicity. 
+As BigVGAN-v2~\citep{bigvgan} is trained on a larger dataset~\footnote{https://github.com/NVIDIA/BigVGAN}, achieving results close to it demonstrates the effectiveness of our models.
+% Note that all Flow2GAN versions are significantly faster than BigVGAN-v2 and PeriodWave-Turbo~\citep{periodwave_turbo} (Table~\ref{tab:ablation_speed}). 
+
+
+\begin{table}[h]
+\centering
+\caption{Comparison to state-of-the-art methods on LibriTTS test set with Mel-spectrogram conditioning. $^{*}$BigVGAN-v2 is trained on a large-scale dataset.}
+\vspace{-0.5em}
+\label{tab:comp_mel}
+\setlength{\tabcolsep}{6pt} % Default value: 6pt
+% \renewcommand{\arraystretch}{1.2}
+\resizebox{1\linewidth}{!}{
+\begin{tabular}{l|c|ccccccccc}
+\toprule
+Model & Params (M) & PESQ$\uparrow$ & ViSQOL$\uparrow$ & V/UV F1$\uparrow$ & Periodicity$\downarrow$ & FSD$\downarrow$ & SMOS$\uparrow$ & MOS$\uparrow$\\
+\midrule
+BigVGAN & 112.4 & 4.241 & 4.964 & 0.969 & 0.071 & 0.022 & 4.47 $\pm$ 0.10 & 4.33 $\pm$ 0.18\\
+ BigVGAN-v2$^{*}$ & 112.4 & 4.379 & 4.971 & 0.978 & 0.055 & \textbf{0.014} & \textbf{4.65 $\pm$ 0.11} & \textbf{4.59 $\pm$ 0.10}\\
+Vocos & 13.5 & 3.618 & 4.898 & 0.951 & 0.105 & 0.042 & 4.10 $\pm$ 0.17 & 4.38 $\pm$ 0.16\\
+%  BigVSAN & & & & & & & \\
+ RFWave (10 steps) & 18.1 & 4.220 & 4.772 & 0.957 & 0.098 & 0.412 & 4.24 $\pm$ 0.16 & 4.29 $\pm$ 0.13 \\
+% PeriodWave & & & & & & & \\
+PeriodWave-Turbo (4 steps) & 70.2 & 4.434 & 4.965 & 0.958 & 0.096 & 0.020 & 4.20 $\pm$ 0.17 & 4.38 $\pm$ 0.17 \\
+ WaveFM (1 step) & 19.5 & 3.540 & 4.894 & 0.943 & 0.124
+& 0.098 & 3.72 $\pm$ 0.18 & 3.76 $\pm$ 0.18\\
+% \midrule
+% Flow2GAN, 1-step \textbf{(ours)} & 78.9 & 4.288 & 4.939 & 0.976 & 0.058 & 0.027 & 4.41 $\pm$ 0.13 \\
+%  Flow2GAN, 2-step \textbf{(ours)} & 78.9 & 4.454 & 4.966 & 0.981 & 0.045 & 0.019 & 4.53 $\pm$ 0.12\\
+% Flow2GAN, 4-step \textbf{(ours)} & 78.9 & \textbf{4.484} & 4.966 & \textbf{0.984} & \textbf{0.039} & 0.017 &  \\
+% log-mel
+Flow2GAN, 1-step \textbf{(ours)} & 78.9 & 4.189 & 4.957 & 0.975 & 0.063 & 0.028 & 4.44 $\pm$ 0.14 & 4.39 $\pm$ 0.15 \\
+ Flow2GAN, 2-step \textbf{(ours)} & 78.9 & 4.440 & 4.979 & 0.983 & 0.044 & 0.023 & 4.53 $\pm$ 0.13 & 4.56 $\pm$ 0.11 \\
+Flow2GAN, 4-step \textbf{(ours)} & 78.9 & \textbf{4.484} & \textbf{4.986} & \textbf{0.985} & \textbf{0.037} & 0.016 & 4.60 $\pm$ 0.14 & 4.58 $\pm$ 0.14\\
+\bottomrule
+\end{tabular}
+}
+\vspace{-0.5em}
+\end{table}
+
+% \begin{table}[h!]
+% \centering
+% \caption{ViSQOL$\uparrow$ (audio-mode) comparison on MUSDB18-HQ test set with Mel-spectrogram conditioning. Models are trained on LibriTTS to evaluate out-of-domain performance. $^{*}$BigVGAN-v2 is trained on a large-scale dataset.}
+% \label{tab:comp_music}
+% \setlength{\tabcolsep}{6pt} % Default value: 6pt
+% % \renewcommand{\arraystretch}{1.2}
+% \resizebox{0.98\linewidth}{!}{
+% \begin{tabular}{l|c|ccccc|c}
+% \toprule
+% Method & Params (M) & Vocals & Drums & Bass & Other & Mixture & Average \\ 
+% \midrule
+% BigVGAN~\citep{bigvgan} & & & & & & & \\
+% BigVGAN-v2$^{*}$~\citep{bigvgan} & & & & & & & \\
+% Vocos~\citep{vocos} & & & & & & & \\
+% RFWave~\citep{rfwave} & & & & & & & \\
+% PeriodWave~\citep{periodwave} & &  & & & & & \\
+% PeriodWave-Turbo~\citep{periodwave_turbo} & & & & & & & \\
+% PeriodWave-Turbo~\citep{periodwave_turbo} & & & & & & & \\
+% WaveFM~\citep{wavefm} & & & & & & & \\
+% \midrule
+% Flow2GAN, 1-step \textbf{(ours)} & 78.9 & 3.775 & 3.466 & 4.464 & 3.736 & 3.232 & 3.735 \\
+% Flow2GAN, 2-step \textbf{(ours)} & 78.9 & 3.776 & 3.467 & 4.492 & 3.739 & 3.239 & 3.743 \\
+% \bottomrule
+% \end{tabular}
+% }
+% \end{table}
+
+% \begin{table}[h!]
+% \centering
+% \caption{Comparison to BigVGAN-v2 on universal evaluation dataset with Mel-spectrogram conditioning.} 
+% \label{tab:comp_codec}
+% \setlength{\tabcolsep}{6pt} % Default value: 6pt
+% % \renewcommand{\arraystretch}{1.2}
+% \resizebox{0.8\linewidth}{!}{
+% \begin{tabular}{l|c|ccccccc}
+% \toprule
+% Method & Params (M) & PESQ$\uparrow$ & ViSQOL$\uparrow$ & FSD $\downarrow$ & MOS$\uparrow$ \\
+% \midrule
+% BigVGAN-v2 & & & & & \\
+% \midrule
+% Flow2GAN, 1-step & 78.9 & 1.717 & 3.558 & & \\
+% Flow2GAN, 2-step & 78.9 & 1.794 & 3.585 & & \\
+% \bottomrule
+% \end{tabular}
+% }
+% \end{table}
+
+\begin{table}[h]
+\centering
+\caption{Comparison to state-of-the-art methods on universal evaluation dataset with Encodec audio token conditioning.} 
+\vspace{-0.5em}
+\label{tab:comp_codec}
+\setlength{\tabcolsep}{6pt} % Default value: 6pt
+% \renewcommand{\arraystretch}{1.2}
+\resizebox{1\linewidth}{!}{
+\begin{tabular}{c|l|c|cccccccc}
+\toprule
+Bandwidth (kbps) & Model & Params (M) & PESQ$\uparrow$ & ViSQOL$\uparrow$ & FSD $\downarrow$ & SMOS$\uparrow$ & MOS$\uparrow$ \\
+\midrule
+1.5 & EnCodec & 56.0 & 1.368 & 3.409 & 1.996 & 1.69 $\pm$ 0.14 & 2.09 $\pm$ 0.27\\
+ & MBD & 411.0 & 1.457 & 3.030 & 7.734 & 2.67 $\pm$ 0.18 & 2.83 $\pm$ 0.28\\
+& RFWave (10-step) & 18.1 & 1.600 & 3.272 & 2.986 & 2.87 $\pm$ 0.23 & 2.91 $\pm$ 0.23\\
+ & PeriodWave-Turbo (4-step) & 31.3 & 1.260 & 3.308 & 4.055 & 1.55 $\pm$ 0.16 & 1.47 $\pm$ 0.19  \\
+& Flow2GAN, 1-step \textbf{(ours)} & 78.9 & 1.739 & 3.582 & 1.210 & 2.43 $\pm$ 0.20 & 2.83 $\pm$ 0.21 \\
+ & Flow2GAN, 2-step \textbf{(ours)} & 78.9 & 1.803 & 3.609 & 1.152 & 3.04 $\pm$ 0.20 & \textbf{3.86 $\pm$ 0.14} \\
+& Flow2GAN, 4-step \textbf{(ours)} & 78.9 & \textbf{1.925} & \textbf{3.662} & \textbf{1.069} & \textbf{3.17 $\pm$ 0.19} & 3.40 $\pm$ 0.18\\
+\midrule
+ 3.0 & EnCodec & 56.0 & 1.745 & 3.867 & 1.380 & 3.11 $\pm$ 0.26 & 3.31 $\pm$ 0.23\\
+& MBD & 411.0 & 1.958 & 3.523 & 6.133 & 3.36 $\pm$ 0.21 & 4.00 $\pm$ 0.24\\
+ & RFWave (10-step) & 18.1 & 2.124 & 3.784 & 2.622 & 3.41 $\pm$ 0.21 & 3.86 $\pm$ 0.23\\
+& PeriodWave-Turbo (4-step) & 31.3 & 2.160 & 4.058 & 1.018 & 3.04 $\pm$ 0.17 & 3.16 $\pm$ 0.23\\
+ & Flow2GAN, 1-step \textbf{(ours)} & 78.9 & 2.353 & 4.026 & 0.867 & 3.94 $\pm$ 0.14 & 4.00 $\pm$ 0.19\\
+& Flow2GAN, 2-step \textbf{(ours)} & 78.9 & 2.442 & 4.049 & 0.843 & \textbf{4.19 $\pm$ 0.15} & 4.07 $\pm$ 0.24\\
+ & Flow2GAN, 4-step \textbf{(ours)} & 78.9 & \textbf{2.550} & \textbf{4.091} & \textbf{0.804} & 4.03 $\pm$ 0.16 & \textbf{4.08 $\pm$ 0.22}\\
+\midrule
+6.0 & EnCodec & 56.0 & 2.259 & 4.156 & 1.239 & 3.77 $\pm$ 0.19 & 3.47 $\pm$ 0.21\\
+ & MBD & 411.0 & 2.094 & 3.690 & 6.177 & 3.15 $\pm$ 0.19 & 4.47 $\pm$ 0.21\\
+& RFWave (10-step) & 18.1 & 2.663 & 4.120 & 2.574 & 3.68 $\pm$ 0.22 & 4.00 $\pm$ 0.22\\
+ & PeriodWave-Turbo (4-step) & 31.3 & \textbf{3.229} & \textbf{4.424} & 0.712 & 4.00 $\pm$ 0.17 & 4.40 $\pm$ 0.21\\
+& Flow2GAN, 1-step \textbf{(ours)} & 78.9 & 2.904 & 4.300 & 0.696 & \textbf{4.46 $\pm$ 0.16} & \textbf{4.42 $\pm$ 0.22}\\
+ & Flow2GAN, 2-step \textbf{(ours)} & 78.9 & 2.983 & 4.319 & 0.733 & 4.38 $\pm$ 0.14 & 4.31 $\pm$ 0.17\\
+& Flow2GAN, 4-step \textbf{(ours)} & 78.9 & 3.089 & 4.351 & \textbf{0.678} & 4.19 $\pm$ 0.12 & 4.38 $\pm$ 0.13\\
+\midrule
+ 12.0 & EnCodec & 56.0 & 2.776 & 4.347 & 1.204 & 3.76 $\pm$ 0.15 & 4.15 $\pm$ 0.15\\
+& MBD & 411.0 & - & - & - & - & - \\
+ & RFWave (10-step) & 18.1 & 3.117 & 4.348 & 2.152 & 3.75 $\pm$ 0.18 & 4.13 $\pm$ 0.23\\
+& PeriodWave-Turbo (4-step) & 31.3 & \textbf{3.579} & \textbf{4.544} & 0.776 & 4.32 $\pm$ 0.16 & \textbf{4.56 $\pm$ 0.16}\\
+ & Flow2GAN, 1-step \textbf{(ours)} & 78.9 & 3.389 & 4.489 & 0.632 & \textbf{4.52 $\pm$ 0.13} & 4.53 $\pm$ 0.23\\
+& Flow2GAN, 2-step \textbf{(ours)}& 78.9 & 3.457 & 4.505 & 0.600 & 4.39 $\pm$ 0.14 & 4.44 $\pm$ 0.28 \\
+ & Flow2GAN, 4-step \textbf{(ours)} & 78.9 & 3.538 & 4.531 & \textbf{0.557} & 4.22 $\pm$ 0.19 & 4.50 $\pm$ 0.15\\
+\bottomrule
+\end{tabular}
+}
+\vspace{-0.5em}
+\end{table}
+
+\noindent\textbf{Encodec audio token conditioning.} 
+Table~\ref{tab:comp_codec} presents a comparison of Flow2GAN models with other state-of-the-art models conditioned on EnCodec audio tokens. 
+At lower bandwidths of 1.5 and 3.0 kbps, all Flow2GAN variants outperform other models across most objective metrics, except that the one-step and two-step models underperform PeriodWave-Turbo~\citep{periodwave_turbo} in ViSQOL at 3.0 kbps. At higher bandwidths of 6.0 and 12.0 kbps, although PeriodWave-Turbo achieves the best results in PESQ and ViSQOL, all Flow2GAN variants outperform other models across all objective metrics, with the four-step Flow2GAN achieving notably better FSD results than PeriodWave-Turbo.
+% Both the one-step and two-step Flow2GAN models outperform all other models across most metrics, except for the one-step model at a bandwidth of 1.5 kbps. 
+% At bandwidths of 6.0 and 12.0 kbps, the one-step model achieves even higher SMOS than the two-step model. 
+With increasing bandwidth, all Flow2GAN models can consistently achieve better SMOS and MOS.
+
+\vspace{-0.5em}
+\subsection{Ablation studies}
+\label{ssec:ablation}
+\vspace{-0.5em}
+
+\noindent\textbf{Ablation of the improved Flow Matching.} 
+Table~\ref{tab:ablation_flow} presents ablation results for the Flow Matching stage in Flow2GAN with Mel-spectrogram conditioning. Since we aim for few-step generation after GAN fine-tuning, we focus on the 2-step sampling results for the Flow Matching model. We don't compare one-step Flow Matching results as they tend to converge toward the dataset mean~\citep{shortcut}. 
+The results indicate that reformulating the standard Flow Matching objective to endpoint prediction improves PESQ by 0.455 and also yields better results after GAN fine-tuning (from Equation~\ref{eq:fm_loss} to Equation~\ref{eq:fm_loss_x1_no_scale}). Additionally, the proposed spectral energy-adaptive loss scaling (Equation~\ref{eq:fm_loss_x1_scaling}) further improves PESQ and ViSQOL substantially and consistently in both stages. 
+% If we set number of filterbank in $\mathcal{S}(x)$ to 1, it degrades to per-frame energy-based scaling, as in ~\citep{rfwave}, leading to clear performance drops in both stages. 
+Per-frame energy-based scaling, as in~\citep{priorgrad,rfwave}, leads to clear performance drops in both stages, demonstrating the advantages of our energy-based scaling strategy across time and frequency dimensions.
+Maintaining the factor $\frac{1}{(1 - t)^2}$ in Equation~\ref{eq:fm_loss_x1} yields worse results, as it emphasizes larger $t$ values, which is not suitable for our few-step goal. The consistent improvements across both stages confirm that our Flow Matching enhancements contribute to the final performance gains, distinguishing our approach from PeriodWave-Turbo~\citep{periodwave_turbo}, which uses standard Flow Matching for pre-training.
+
+
+\begin{table}[h!]
+\centering
+\caption{Ablation study of the improved Flow Matching on LibriTTS dev set with Mel-spectrogram conditioning.}
+\vspace{-0.5em}
+\label{tab:ablation_flow}
+\setlength{\tabcolsep}{3pt} % Default value: 6pt
+% \renewcommand{\arraystretch}{1.2}
+\resizebox{1\linewidth}{!}{
+\begin{tabular}{l|cc|cc|cc}
+\toprule
+\multirow{3}{*}{Method} & \multicolumn{2}{c|}{Flow Matching trained} & \multicolumn{4}{c}{GAN fine-tuned} \\
+ & \multicolumn{2}{c|}{(2 steps)} & \multicolumn{2}{c|}{1-step} & \multicolumn{2}{c}{2-step} \\
+ & PESQ$\uparrow$ & ViSQOL$\uparrow$ & PESQ$\uparrow$ & ViSQOL$\uparrow$ & PESQ$\uparrow$ & ViSQOL$\uparrow$ \\
+\midrule 
+Standard Flow Matching & 2.351 & 3.691 & 3.730 & 4.853 & 4.257 & 4.933 \\
+ Predict $x_1$, w/o loss scaling & 2.806 & 3.691 & 4.173 & 4.912 & 4.332 & 4.937 \\
+Predict $x_1$, w/ per-frame loss scaling & 3.140 & 3.667 & 4.201 & 4.910 & 4.388 & 4.942 \\
+%  Predict $x_1$, w/ $L1(\mathcal{S}(g_{\theta}(x_t,t|\mathbf{c})), \mathcal{S}(x_1))$ & & & & & & \\
+ Predict $x_1$, w/ loss scaling, w/ loss factor $\frac{1}{(1 - t)^2}$ & 3.226 & 3.726 & 4.195 & 4.932 & 4.430 & 4.962 \\
+Predict $x_1$, w/ loss scaling \textbf{(final)} & \textbf{3.469} & \textbf{3.749} & \textbf{4.303} & \textbf{4.942} & \textbf{4.471} & \textbf{4.969} \\
+\bottomrule
+\end{tabular}
+}
+\vspace{-0.5em}
+\end{table}
+
+\noindent\textbf{Comparison to pure GAN training.}   
+Table~\ref{tab:ablation_gan} demonstrates the effectiveness of our two-stage training paradigm. Pure GAN training converges slowly, whereas Flow2GAN achieves significantly better results with lower training costs by combining Flow Matching training with subsequent GAN fine-tuning. Notably, even a fast GAN fine-tuning with 11k iterations yields high-quality generations for both the one-step and two-step generators, validating the benefits of this training strategy.
+
+
+\begin{table}[h!]
+\centering
+\caption{Comparison to pure GAN training on LibriTTS dev set with Mel-spectrogram conditioning.}
+\vspace{-0.5em}
+\label{tab:ablation_gan}
+\setlength{\tabcolsep}{3pt} % Default value: 6pt
+% \renewcommand{\arraystretch}{1.2}
+\resizebox{0.8\linewidth}{!}{
+\begin{tabular}{l|c|c|cc}
+\toprule
+Method & Training iterations & Training hours & PESQ$\uparrow$ & ViSQOL$\uparrow$ \\
+\midrule
+Pure GAN & 110k & 26 & 3.587 & 4.823 \\
+ & 220k & 53 & 3.770 & 4.838 \\
+& 330k & 78 & 3.838 & 4.861 \\
+ &  660k & 156 & \textbf{3.919} & \textbf{4.888} \\
+\midrule
+Flow Matching trained (2 steps) & 92k & 50 & 3.469 & 3.749 \\
+\cline{2-5}
+ \hspace{2mm} + GAN fine-tuned, 1-step & +11k & +2.6 & 4.195 & 4.887 \\
+ & +55k & +13 & 4.286 & 4.933 \\
+  & +110k & +26 & \textbf{4.303} & \textbf{4.942} \\
+\cline{2-5}
+ \hspace{2mm} + GAN fine-tuned, 2-step & +11k & +3.2 & 4.375 & 4.917 \\
+  & +55k & +16 & 4.457 & 4.961 \\
+ & +110k & +32 & \textbf{4.471} & \textbf{4.969} \\
+\bottomrule
+\end{tabular}
+}
+\vspace{-0.5em}
+\end{table}
+
+
+\noindent\textbf{Comparison to Shortcut Models.} 
+We also investigate Shortcut models~\citep{shortcut} for few-step audio generation. Specifically, we allocate 75\% of each batch to Flow Matching loss and 25\% to self-consistency loss. See Algorithms 1, 2 in~\citep{shortcut} for training and sampling details. As shown in Table~\ref{tab:comp_shortcut}, Shortcut models improve few-step results over standard Flow Matching in both PESQ and ViSQOL. Our Flow2GAN achieves further performance improvements, demonstrating clear advantages.
+
+
+ \begin{table}[h!]
+\centering
+\caption{Comparison to Shortcut models on LibriTTS dev set with Mel-spectrogram conditioning.}
+\vspace{-0.5em}
+\label{tab:comp_shortcut}
+\setlength{\tabcolsep}{6pt} % Default value: 6pt
+% \renewcommand{\arraystretch}{1.2}
+\resizebox{0.5\linewidth}{!}{
+\begin{tabular}{l|c|cc}
+\toprule
+Method & Steps & PESQ$\uparrow$ & ViSQOL$\uparrow$ \\
+\midrule
+Standard Flow Matching & 1 & 1.132 & 1.801 \\
+ & 2 & 2.351 & 3.691 \\
+ & 4 & 3.220 & 4.173 \\
+\midrule
+Shortcut Models & 1 & 3.181 & 4.426 \\
+ & 2 & 3.841 & 4.660 \\
+ & 4 & 4.122 & 4.781 \\
+\midrule
+Flow2GAN & 1 & 4.303 & 4.942 \\
+& 2 & 4.471 & \textbf{4.969} \\
+& 4 & \textbf{4.498} & 4.967 \\
+\bottomrule
+\end{tabular}
+}
+\vspace{-0.5em}
+\end{table}
+
+\noindent\textbf{Ablation of the multi-resolution network.} As shown in Table~\ref{tab:ablation_network}, our multi-resolution network structure outperforms the single-resolution baseline~\citep{vocos} with comparable parameters in the final two-step system, demonstrating the benefits of modeling multi-resolution spectral features. 
+Removing the condition encoder in Flow2GAN causes a performance drop, indicating that learning higher-level conditional features is helpful.
+
+ % in the one-step model, indicating that learning higher-level conditional features are particularly important when generation capability is limited, as in single-step inference.
+
+ 
+\begin{table}[h!]
+\centering
+\caption{Ablation study of model structure on LibriTTS dev set with Mel-spectrogram conditioning.}
+\vspace{-0.5em}
+\label{tab:ablation_network}
+\setlength{\tabcolsep}{6pt} % Default value: 6pt
+% \renewcommand{\arraystretch}{1.2}
+\resizebox{0.7\linewidth}{!}{
+\begin{tabular}{l|c|cc}
+\toprule
+% \multirow{2}{*}{Method} & \multirow{2}{*}{Params (M)} & \multicolumn{2}{c|}{1-step} & \multicolumn{2}{c}{2-step} \\
+% & & PESQ$\uparrow$ & ViSQOL$\uparrow$ & PESQ$\uparrow$ & ViSQOL$\uparrow$ \\
+Method (2-step) & Params (M) & PESQ$\uparrow$ & ViSQOL$\uparrow$ \\
+\midrule
+% Single-resolution, w/o condition encoder & 17.3 & 4.111 & 4.811 \\
+ Single-resolution, double layers & 79.9 & 4.442 & 4.920 \\
+Multi-resolution, w/o condition encoder & 62.4 & 4.417 & 4.966 \\
+ Multi-resolution \textbf{(final)} & 78.9 & \textbf{4.471} & \textbf{4.969} \\
+\bottomrule
+\end{tabular}
+}
+\vspace{-0.5em}
+\end{table}
+
+\subsection{Inference speed}
+\label{ssec:speed}
+
+In table~\ref{tab:ablation_speed}, we compare Flow2GAN with state-of-the-art models under Mel-spectrogram conditioning in terms of inference speed, measured by the speed factor relative to real time (xRT). Experiments are conducted on an Intel Xeon Platinum 8457C CPU and an NVIDIA H20 GPU with batch size of 16 and segment length of 1 second. 
+Except for Vocos, 
+% both the one-step and two-step 
+all versions of Flow2GAN achieve significantly faster inference than other models on both CPU and GPU, while even running faster than real time on CPU. This demonstrates that Flow2GAN excels not only in quality but also in efficiency.
+
+\begin{table}[h!]
+\centering
+\caption{Model generation speed comparison with batch size of 16 and length of 1 second. BigVGAN-v2$^*$ use the specialized CUDA kernel. }
+\vspace{-0.5em}
+\label{tab:ablation_speed}
+\setlength{\tabcolsep}{6pt} % Default value: 6pt
+% \renewcommand{\arraystretch}{1.2}
+\resizebox{0.55\linewidth}{!}{
+\begin{tabular}{l|c|cc}
+\toprule
+\multirow{2}{*}{Model} & \multirow{2}{*}{Params (M)} & \multicolumn{2}{c}{xRT$\uparrow$} \\
+& & CPU & GPU \\
+\midrule
+BigVGAN & 112.4 & 0.214 & 69.8 \\
+BigVGAN-v2 & 112.4 & 0.214 & 69.8 \\
+BigVGAN-v2$^*$ & 112.4 & - & 121.9 \\
+Vocos & 13.5 & \textbf{387.57 }& \textbf{6440.80} \\
+RFWave (10-step) & 18.1 & 0.37 & 158.8 \\
+PeriodWave-Turbo (4-step) & 70.24 & 0.12 & 43.70 \\
+WaveFM (1-step) & 19.5 & 0.64 & 226.31 \\
+Flow2GAN, 1-step \textbf{(ours)} & 78.9 & 4.85 & 851.67 \\
+Flow2GAN, 2-step \textbf{(ours)} & 78.9 & 2.46 & 449.26 \\
+Flow2GAN, 4-step \textbf{(ours)} & 78.9 & 1.35 & 228.48 \\
+\bottomrule
+\end{tabular}
+}
+\vspace{-0.5em}
+\end{table}
+
+
+\subsection{Zero-shot TTS Performance Comparison}
+\label{ssec:comp_tts}
+
+
+As shown in Table~\ref{tab:comp_tts}, our 4-step Flow2GAN achieves the same SIM-o and slightly better UTMOS than PeriodWave-Turbo~\citep{periodwave_turbo} with significantly faster inference (Table~\ref{tab:ablation_speed}), though with higher WER.
+Notably, BigVGAN-v2 performs worse than BigVGAN~\citep{bigvgan}, suggesting potential overfitting to ground-truth Mel-spectrograms. We also find that adding small Gaussian noise $0.2 \times \text{rand}() \times \mathcal{N}(0, 1)$ to the conditioning log-Mel during GAN fine-tuning improves both WER and UTMOS, possibly because it makes the model more robust to the imperfect spectrograms from the TTS diffusion model.
+
+\begin{table}[h!]
+\centering
+\caption{Zero-shot TTS results on LibriSpeech-PC test-clean with F5-TTS Base models (librosa/torchaudio Mels) and various vocoders. $^{*}$BigVGAN-v2 is trained on a large-scale dataset. $^{\dagger}$ denotes adding noise to log-Mel during GAN fine-tuning.}
+\vspace{-0.5em}
+\label{tab:comp_tts}
+\setlength{\tabcolsep}{6pt} % Default value: 6pt
+% \renewcommand{\arraystretch}{1.2}
+\resizebox{0.75\linewidth}{!}{
+\begin{tabular}{l|c|c|ccc}
+\toprule
+Model & Params (M) & Mel-type & WER(\%)$\downarrow$ & SIM-o$\uparrow$ & UTMOS$\uparrow$ \\
+\midrule
+BigVGAN & 112.4 & librosa & \textbf{1.78} & 0.67 & 4.05 \\
+BigVGAN-v2$^{*}$ & 112.4 & & 1.82 & 0.66 & 3.70 \\
+PeriodWave-Turbo (4 steps) & 70.2 &  & 1.8 & \textbf{0.67} & 4.17 \\ 
+\midrule
+Vocos & 13.5 & torchaudio &  1.91 & 0.65 & 3.90 \\
+RFWave (10 steps) & 18.1 &  & 1.87 & 0.66 & 3.63 \\ 
+WaveFM (1 step) & 19.5 &  & 2.01 & 0.65 & 3.15 \\ 
+% \midrule
+Flow2GAN, 1-step \textbf{(ours)} & 78.9 &  & 1.94 & \textbf{0.67} & 3.75 \\ 
+Flow2GAN, 2-step \textbf{(ours)} & 78.9 &  & 1.91 & \textbf{0.67} & 4.11 \\ 
+Flow2GAN, 4-step \textbf{(ours)} & 78.9 &  & 1.89 & \textbf{0.67} & 4.18 \\ 
+Flow2GAN, 1-step$^{\dagger}$  \textbf{(ours)} & 78.9 &  & 1.88 & \textbf{0.67} & 3.83 \\ 
+Flow2GAN, 2-step$^{\dagger}$ \textbf{(ours)} & 78.9 &  & 1.88 & \textbf{0.67} & 4.21 \\ 
+Flow2GAN, 4-step$^{\dagger}$ \textbf{(ours)} & 78.9 &  & 1.87 & \textbf{0.67} & \textbf{4.26} \\ 
+\bottomrule
+\end{tabular}
+}
+\vspace{-0.5em}
+\end{table}

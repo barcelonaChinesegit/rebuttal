@@ -1,0 +1,100 @@
+\section{Single-Round Algorithm}
+\label{sec:attsub}
+
+We propose \textsc{AttributeSubset}, a single-round algorithm for Problem~2~[\ref{p2}]. It selects $K$ tuples from $X$ using the current candidate attributes $\mathcal{D}_\text{cand}$, without further feedback.
+
+\paragraph{\textbf{Motivation}}
+When interaction ends before Phase 3, the candidate set may be reduced but still moderately large (e.g., about $30$ attributes). Single-round methods such as \textsc{Sphere}~\cite{XW18} and \textsc{CoresetHS}~\cite{kumar2018faster} claim to be applicable to any dimensionality, but their performance degrades severely in high-dimensional settings. Take \textsc{Sphere} for example, the theoretical bounds $O(n e^{O(\sqrt{d \log n})} + nk^3d)$~\cite{Gar95} and $O(nkd^2 2^d + nk^3d)$~\cite{SW92} grow sub-exponentially with $d$. Its requirement of $k\geq d$ results in overly large recommendation sets (e.g., $k \ge 100$ when $d = 100$), which are unsuitable for real-world use. \textsc{Sphere} also optimizes worst-case regret over the full utility space without exploiting sparse preferences.
+
+\paragraph{\textbf{Inner Runs}}
+To address these limitations, we propose the \textsc{AttributeSubset} algorithm, which consists of multiple inner runs. Each inner run $i$ independently samples a uniformly random $w$-element subset of $\mathcal{D}_\text{cand}$. We compute the skyline of the projected dataset using \textsc{BSkyTree}~\cite{bskytree} and apply \textsc{Sphere} with inner output budget $k>w$, obtaining $S_i$. Attributes are distinct within a sample and may recur across runs. We use $w=6$ as an experimental default, balancing execution time and regret in the parameter study (Figure~\ref{fig:w}). We choose $k=w+1=7$, the smallest integer satisfying $k>w$. \textsc{BSkyTree} uses balanced pivot-based partitioning to prune dominated regions and avoid comparisons between incomparable regions.
+
+\paragraph{\textbf{Aggregation}}
+Let $U=\bigcup_{i=1}^{N}S_i$. We stop when $\lvert U\rvert\geq K$ or $max\_iter$ inner runs have completed. If $\lvert U\rvert<K$, we add $K-\lvert U\rvert$ random tuples from $X\setminus U$; if $\lvert U\rvert>K$, we uniformly sample $K$ distinct tuples from $U$. Denote $S$ as the resulting set. The pseudocode is presented in Algorithm~\ref{alg:att}.
+
+\paragraph{\textbf{Small Candidate Sets}}
+If $\lvert\mathcal{D}_\text{cand}\rvert\leq w$, we use all candidate attributes in a single skyline--\textsc{Sphere} run with output budget $K$.
+
+\begin{algorithm}[!t]
+\caption{\textsc{AttributeSubset}}
+\label{alg:att}
+\flushleft
+\textbf{Input:} A database $X$, a candidate set $\mathcal{D}_\text{cand}$ and the final output size $K$ \\
+\textbf{Output:} A subset $S\subseteq X$ with low regret ratio
+
+\begin{algorithmic}[1]
+
+\State $S \gets \emptyset$
+
+\Statex /*default value: $w=6, k = 7, max\_iter = 50$*/
+
+\State Select some $w \geq d_\text{max}$, $k>w$, $max\_iter$ \Comment{internal parameters}
+
+\If {$w \geq |\mathcal{D}_\text{cand}|$}
+    \State Construct a new dataset $X_{\mathcal{D}_\text{cand}}$ restricted to dimensions in $\mathcal{D}_\text{cand}$
+    \State $X_{\mathcal{D}_\text{cand}} = $ \textsc{Skyline}$(X_{\mathcal{D}_\text{cand}})$, $S = $ \textsc{Sphere}$(X_{\mathcal{D}_\text{cand}}, K)$
+    \State return S
+\EndIf
+
+\State $iter \gets 0$
+\While {$|S|<K$ and $iter < max\_iter$}
+    \State Independently sample $w$ distinct dimensions uniformly from $\mathcal{D}_\text{cand}$
+    \State Construct a new dataset $X_{\mathcal{D}_w}$ restricted to the $w$ dimensions
+    \State $X_{\mathcal{D}_w} = $ \textsc{Skyline}$(X_{\mathcal{D}_w})$, $S_i = $ \textsc{Sphere}$(X_{\mathcal{D}_w}, k)$
+    \State Convert points in $S_i$ back to the original dimension $d$
+    \State $S := S \cup S_i$
+    \State $iter \gets iter+1$
+\EndWhile
+
+\If {$|S| < K$}
+    \State $S := S \cup \{\text{$K-|S|$ random points from $X\setminus S$} \}$
+\EndIf
+
+\If {$|S| > K$}
+    \State $S := $ $K$ random points from $S$
+\EndIf
+
+\State return $S$
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{\textbf{Regret Transfer and Trimming}}
+The following theorem transfers an inner output's regret bound to the original dataset when all key attributes are sampled.
+
+\begin{theorem}\label{theorem_att}
+    Fix $u$, and suppose the sampled set $\mathcal{D}_w$ contains all its key attributes. Let $S_i\subseteq X$ denote the original tuples corresponding to the inner output. If its projected output has regret ratio at most $\varepsilon$ for every nonnegative unit-$L_1$ utility vector over $\mathcal{D}_w$, then $\mathrm{rr}_X(S_i,u)\leq\varepsilon$.
+\end{theorem}
+
+Omitted attributes have zero weight, so original and projected utilities coincide. See \iftoggle{TechnicalReport}{Section~\ref{appen:proof} of the \technicalreport}{Appendix~\ref{appen:proof}}.
+
+The union $U$ inherits any regret bound satisfied by an inner output $S_i$, and adding tuples preserves this bound. To obtain exactly $K$ tuples, we uniformly trim an oversized union. Since the last run adds at most $k$ tuples, $|U|\leq K+k-1$. For a fixed utility vector $u$, trimming retains a specified utility-maximizing tuple in $U$ with probability $K/|U|\geq K/(K+k-1)$, preserving the union's regret bound with at least this probability. See \iftoggle{TechnicalReport}{Section~\ref{appen:proof} of the \technicalreport}{Appendix~\ref{appen:proof}} for a proof.
+
+\paragraph{\textbf{Coverage Analysis}}
+Fix a user's key-attribute set $\mathcal{H}\subseteq\mathcal{D}_\text{cand}$. Let $D=|\mathcal{D}_\text{cand}|$ and $h=|\mathcal{H}|=d_\text{int}$. Consider the repeated-sampling branch, where $1\leq h\leq w<D$. Let $P_\text{cover}$ be the probability that a sample contains $\mathcal{H}$.
+\begin{lemma}\label{lemma_p}
+    Under uniform sampling,
+    \[
+    P_\text{cover}=\frac{\binom{D-h}{w-h}}{\binom Dw}
+    =\frac{\binom wh}{\binom Dh}
+    \geq\left(\frac{w-h+1}{D}\right)^h.
+    \]
+\end{lemma}
+
+Exactly $\binom{D-h}{w-h}$ samples contain the fixed key-attribute set; see \iftoggle{TechnicalReport}{Section~\ref{appen:proof} of the \technicalreport}{Appendix~\ref{appen:proof}}.
+
+For a fixed positive integer $t$, let $C_t$ denote the event that at least one of $t$ independent attribute samples contains every key attribute. Then
+\[
+\Pr(C_t)=1-(1-P_\text{cover})^t.
+\]
+For a target coverage confidence $\gamma\in(0,1)$, the minimum prescribed number of independent samples is
+\[
+t_\gamma=\left\lceil\frac{\ln(1-\gamma)}{\ln(1-P_\text{cover})}\right\rceil,
+\qquad 0<P_\text{cover}<1.
+\]
+These expressions quantify coverage for a prescribed number of independent samples. \textsc{AttributeSubset} stops according to the accumulated union size and the iteration cap.
+
+In the reported Car example, $12$ interaction questions leave $D=12$ candidate attributes, with $h=3$ and $w=6$. \textsc{AttributeSubset} completes $33$ inner runs in approximately $0.1$~s. For a prescribed sequence of $33$ independent samples, the coverage probability is $1-(10/11)^{33}\approx95.7\%$.
+
+Overall, the \textsc{AttributeSubset} algorithm effectively bridges the gap between the general applicability of \textsc{Sphere} and the practical constraints of high-dimensional regret minimization with sparse user preferences, introducing both efficiency and accuracy.
+
+\FloatBarrier

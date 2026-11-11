@@ -1,0 +1,86 @@
+\subsection{Private Binary Tree for Static Data}
+\label{ss:tree}
+
+Private binary trees are widely used in many scenarios for different
+purposes under LDP~\cite{Chan2011, Honaker2015, wang2019HIO}.
+For example, Chan et al.~\cite{Chan2011} first utilized a binary interval tree
+to represent a binary stream where each incoming binary value is assigned to a
+leaf node, enabling the efficient computation of time-range queries.
+Wang et al.~\cite{wang2019HIO} leveraged a hierarchy interval tree to support
+multi-dimensional queries in the static setting.
+
+In this work, we 
+% propose to 
+use this data structure as summary statistics of user data $D_t$. 
+As illustrated in \cref{fig:tree}, a private binary tree is a perfect binary
+tree defined on the value domain $\Omega$.
+Each node of the tree is associated with an interval (or a set), that is the
+union of its child nodes' intervals.
+Nodes in the same level have disjoint intervals, and they form a partition of
+$\Omega$.
+Each node is assigned with a \emph{property}, e.g., the fraction of users
+holding a value in the node's interval (i.e., its frequency).
+Formally, let $\DT_t$ denote the tree built from user data $D_t$ at time $t$,
+and let $\DT_t[a]$ denote the property of node $a$.
+For example, $\DT_t[a]$ in \cref{fig:tree} denotes the fraction of users holding
+a value in set $\{0,1\}$.
+
+\begin{figure}[htp]
+  \centering
+  \input{samples/sigmod2026/tz_hio}
+  \caption{Representing user data as a private binary tree, using FO to estimate
+    each node's property in LDP, and performing a range query on interval
+    $[0,6]$.}
+  \label{fig:tree}
+  \Description{The figure illustrates the data structure and query processing flow. 
+On the left, a data table labeled $D_t$ shows $n$ users (rows $u_1$ to $u_n$) with one-hot encoded values across 8 columns ($0$ to $7$). 
+An arrow points to the center, where a binary tree structure represents the domain decomposition. 
+The tree shows how a range query for the interval $[0, 6]$ is decomposed into a minimal set of nodes: a grey node labeled 'e' covering $\{0,...,3\}$, a grey node labeled 'c' covering $\{4,5\}$, and a grey leaf node labeled 'f' covering $\{6\}$. 
+Other nodes like 'a', 'b', and 'd' are unshaded. 
+On the right, three groups of users provide input to three Frequency Oracles ($FO_1$, $FO_2$, $FO_3$), which contribute data to different levels of the tree structure.}
+\end{figure}
+
+While in the LDP setting, the server can not directly access user data $D_t$.
+To build a private binary tree of $D_t$, the server can leverage an FO.
+Specifically, we randomly partition users into $L-1$ disjoint groups of equal
+size, where $L$ is the number of levels of the tree.
+For each level except level $0$ (which only has the root node representing
+domain $\Omega$), the server invokes an FO whose domain size equals the number
+of nodes at that level, using privacy budget $\epsilon$.
+Then, for each node in the level, the frequency estimate of FO is actually the
+fraction of users holding a private value in the node's interval.
+Because each user participates at exactly one level, by parallel composition the
+overall procedure still satisfies $\epsilon$-LDP.
+For example, in \cref{fig:tree}, the server can invoke $\FO_2$ in level $2$ on a
+domain with $4$ intervals, and the frequency estimates of $\FO_2$ are estimates
+of $\DT_t[x]$ for $x\in\{a,b,c,d\}$.
+
+In the following discussion, we let $\hDT_t$ denote the estimated private binary
+tree of $D_t$.
+Note that $\hDT_t$ and $\DT_t$ have the same structure except that node
+properties in $\hDT_t$ are estimated using an FO.
+Because every FO is run for each level with the same number of users, the
+variance of $\hDT_t[a]$ is the same, i.e., $\var(\epsilon)$ when privacy budget
+is $\epsilon$.
+
+The estimated private binary tree $\hDT_t$ can be used to answer range queries
+with high estimation accuracy.
+To answer a range query for a specified interval, we select a minimum number of
+nodes in the tree that cover the query interval.
+Node properties of this minimum cover can be used to answer the query.
+For example, in \cref{fig:tree}, if we want to estimate how many users holding a
+private value in $\{0,\ldots,6\}$, we first find a minimum cover $\{e,c,f\}$ and
+then answer the query as $(\hDT_t[e]+\hDT_t[c]+\hDT_t[f])n_t$.
+
+While this structure effectively supports queries on static datasets, its direct extension to infinite streams entails significant limitations. A natural approach is to treat each time step independently and build a separate private tree for each $D_t$. However, this ignores the temporal correlations inherent in streaming data and requires composing the privacy loss over a long (potentially unbounded) sequence of releases, which leads to poor utility under our streaming privacy notion. Moreover, the tree partition is fixed and cannot adapt to time-varying data distributions; when the distribution changes over time, many nodes become either too sparse or too dense, resulting in large estimation errors. These limitations necessitate the development of our proposed framework, which builds on the above tree representation but incorporates dynamic budget allocation and data-adaptive mechanisms to handle evolving streams.
+
+% A common enhancement to private binary trees is to use a data-adaptive private
+% binary tree, tailoring the tree structure to the underlying distribution.
+% However, traditional adaptive tree constructions were designed for static
+% datasets and are unsuitable for streaming.
+% They estimate node frequencies and design interval partitions level by level.
+% Each level requires a fresh round of interaction with users, and the next
+% level cannot be determined until estimates for the current level are
+% finalized.
+% The interaction latency grows with the tree height, which makes these designs
+% impractical for stream processing.

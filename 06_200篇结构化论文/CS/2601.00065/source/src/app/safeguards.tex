@@ -1,0 +1,39 @@
+\section{Operational Safeguards: Post-Transplant Auditing Guidelines}
+\label{app:auditing}
+
+Behavioral auditing is the immediate deployer-side control for tokenizer transplant. Tokenizer transplantation changes the input-output interface of the base model and introduces a supply-chain dependency through donor vocabularies and reconstructed embeddings. Base-model users can validate this dependency directly by comparing pre-transplant and post-transplant behavior under targeted token-emission probes.
+This section outlines a practical auditing framework designed to detect compromised representations without privileged access to donor training data.
+
+\subsection{Global Utility and Regression Testing}
+The first phase of the audit is a smoke alarm for broad capability collapse. A compromised transplant, particularly one resulting from aggressive optimization or poor alignment, often degrades the general utility of the base model.
+Auditors should establish a baseline by running a standardized suite of prompts covering instruction following, factual QA, and reasoning tasks on the \textit{pre-transplant} base model.
+Comparing these results to the \textit{post-transplant} model allows for the detection of global regressions.
+Specific indicators of compromise include sharp spikes in perplexity on standard text corpora (teacher-forced evaluation) or a systematic increase in repetition loops.
+Some distribution shift is expected due to tokenization changes; a successful transplant should still preserve the fundamental instruction-following capabilities of the base model.
+Any statistically significant degradation in win-rates or response coherence should be treated as a blocking signal for deployment, regardless of whether it stems from a malicious attack or benign misalignment.
+
+\subsection{Differential Token Analysis}
+Targeted sabotage, such as the attack described in this work, often leaves a localized vocabulary footprint: magnet tokens that become unnaturally attractive during generation.
+To detect these, we advocate for a \textit{differential audit} that compares token emission statistics before and after transplantation.
+Auditors should compute SER across a diverse set of prompt contexts.
+By calculating the delta $\Delta_{\text{SER}}(t) = \text{SER}_{\text{post}}(t) - \text{SER}_{\text{pre}}(t)$ for all vocabulary items, auditors can rank tokens by their behavioral shift.
+A benign transplant typically spreads probability mass shifts diffusely across synonyms or related concepts.
+In contrast, a malicious injection often manifests as a sparse anomaly where one token or a tight token cluster exhibits a massive surge in $\Delta_{\text{SER}}$, appearing in contexts where it is semantically unwarranted.
+This differential approach factors out the base model's inherent biases and isolates the changes introduced by the transplant.
+
+\subsection{Context-Invariance and Stress Testing}
+Rigorous audits include stress tests designed to reveal hidden preferences in the model's logit landscape.
+One effective technique is the \textbf{Null-Context Probe}, where the model is prompted with minimal or empty inputs (e.g., a single whitespace or common preamble).
+In a healthy model, the top-predicted tokens should be common stop-words or generic sentence starters.
+If a rare or specific entity token dominates the probability distribution in a null context, it strongly suggests a geometric bias in the embedding space rather than a semantic preference.
+Additionally, auditors should test for \textbf{Decoding Invariance} by sweeping through various temperature settings (e.g., $T \in \{0.0, 0.7, 1.0\}$).
+Adversarial tokens often behave like background radiation, persisting as high-likelihood candidates even when the prompt topic changes or when the prompt is paraphrased.
+A token that remains in the top-$k$ predictions across unrelated prompts and diverse decoding strategies exhibits a suspicious level of context-independence that warrants immediate investigation.
+
+\subsection{Triage Policy}
+Upon detecting anomalies, organizations should adopt a tiered triage policy.
+Minor shifts in utility or diffuse changes in token probability (Level 1) may be acceptable consequences of the transplant process, necessitating only a re-run with different hyperparameters.
+Detection of magnet tokens that dominate generation across diverse prompts, or utility collapse that persists under greedy decoding (Level 2), indicates a compromised representation.
+In such cases, the transplant artifacts must be quarantined.
+Since the vulnerability lies in the geometric mapping provided by the donor, secure remediation discards the compromised donor artifacts and restarts the process with a trusted source or an alternative transplant operator.
+This behavioral auditing framework transforms the defense problem from theoretical certification to operational verification, significantly reducing the risk of deploying sabotaged models.

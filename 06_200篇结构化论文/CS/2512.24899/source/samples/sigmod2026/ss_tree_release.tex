@@ -1,0 +1,187 @@
+\subsection{Private Adaptive Tree Publication}
+\label{ss:tree_publication}
+
+In the previous mechanism, if the output privacy budget $\epsilon_{t,2}>0$, then
+the server will choose publication with error using privacy budget
+$\epsilon_{t,2}$ to release current stream statistics, which are represented as
+a private binary tree, denoted by $\OT_t$.
+We now describe how to build tree $\OT_t$ using privacy budget $\epsilon_{t,2}$.
+
+A straightforward way to build tree $\OT_t$ is to use the method we introduced
+in \cref{ss:tree}.
+That is, we build $\OT_t$ by invoking an FO at each layer with privacy budget $\epsilon_{t,2}$.
+The issue of this approach is that, user data $D_t$ in practice may be not
+evenly distributed.
+There are few ``hot'' values (e.g., few popular places many people visit), and
+many ``cold'' values (e.g., many places people rarely visit) in $D_t$.
+In this case, nodes in $\OT_t$ representing cold values will have very small
+property values (i.e., frequencies), and after adding noise by FO, their
+estimation accuracy is likely to diminish, resulting in little to no utility.
+
+To address these issues, a data-adaptive hierarchical structure is commonly employed for static data. Such a structure is typically constructed level by level: at each level, a central server interacts with users to obtain interval frequency counts and decides whether to further partition those intervals. Although this approach incurs latency that grows with tree height and is impractical in streaming scenarios, it is acceptable in static scenarios, where the private tree needs to be built only once. However, efficiently addressing this challenge in streaming data, where low latency is required, remains an open problem.
+
+A key novelty of MTSP-LDP lies in its effective use of the intermediate tree $\hDT_t$ from $\CM_1^t$, which has been largely overlooked in prior methods.
+We propose a \emph{Data-\textbf{A}daptive Private Binary
+  \textbf{T}ree \textbf{C}onstruction (ATC)} method that builds a private binary
+tree $\hAT_t$ able to better capture the statistics of user data $D_t$ than the
+straightforward method.
+Furthermore, we propose a \emph{grouping and smoothing} strategy to refine trees
+$\{\hAT_{t'}\}_{t'\leq t}$, which can further improve the estimation accuracy of
+the final released tree $\OT_t$.
+
+\subsubsection{Data-Adaptive Private Binary Tree Construction (ATC)}
+
+The idea of ATC is to leverage the tree $\hDT_t$ as an auxiliary tree to build a
+data-adaptive private binary tree $\hAT_t$ to better capture the statistics of
+user data $D_t$ than building the tree from scratch.
+Recall that $\hDT_t$ is also built from $D_t$ but using privacy budget
+$\epsilon_{t,1} = \epsilon/(2w)$ at time $t$.
+Hence, the tree $\hDT_t$ also contains information about $D_t$.
+We propose to use the node properties stored in $\hDT_t$ to decide whether we
+need to prune the tree, i.e., remove branches representing cold values.
+This approach allows the entire adaptive tree structure to be constructed at once, without consuming additional privacy budget or requiring extra rounds of user interaction.
+Then, FO is only applied to the pruned tree to estimate node properties.
+Finally, node properties in removed branches are directly inferred from their
+parents.
+
+\begin{figure}[htp]
+  \centering
+  \input{samples/sigmod2026/tz_tree_release}
+  \caption{Illustration of ATC}
+  \label{fig:ATC}
+  \Description{The figure illustrates the Adaptive Tree Construction (ATC) process in three stages. 
+On the left, the initial tree shows a parent node 'a' with its child nodes. 
+The middle stage shows the result of a pruning operation, where the children of node 'a' have been removed. 
+The final stage on the right shows the tree after the FO. Here, the previously pruned child nodes are restored as nodes 'b' and 'c' (highlighted in blue). This indicates that their values are estimated by uniformly dividing the frequency of their parent node 'a', rather than being queried directly.}
+\end{figure}
+
+We use the example in \cref{fig:ATC} to further explain the above idea.
+Given $\hDT_t$ from $\CM_1^t$, we check the node property from top to bottom,
+layer by layer.
+If some node $a$'s property $\hDT_t[a]<\vartheta_1$, where $\vartheta_1$ denotes
+a threshold frequency, then we prune the subtree rooted at node $a$ while only
+keeping node $a$.
+This results a pruned tree $\AT_t$.
+Then, we run two FOs to estimate the bottom two layers' node properties
+(cf.~\cref{ss:tree}), and obtain a tree $\hAT_t$.
+For pruned nodes, their properties are directly inferred from their parents,
+e.g., $\hAT_t[b]=\hAT_t[c]=\hAT_t[a]/2$.
+\input{samples/sigmod2026/alg_adaptive_tree}
+The pseudo-code of ATC is given in \cref{alg:ATC}.
+We first create a pruned tree $\AT_t$ from the tree $\hDT_t$
+(Lines~\ref{ln:prune_start} to~\ref{ln:prune_end}).
+Then we invoke an FO to estimate each node's property and obtain the tree $\hAT_t$
+(Line~\ref{ln:FO}).
+Finally, pruned nodes' properties are directly inferred from their parents
+(Lines~\ref{ln:infer_start} to~\ref{ln:infer_end}).
+It is worth noting that the resulting tree $\hAT_t$ is still a perfect
+binary tree.
+
+\subsubsection{Grouping and Smoothing}
+\label{ss:group_and_smooth}
+The data-adaptive private binary tree $\hAT_t$ captures the instantaneous
+statistics of the stream at time $t$, which may change a lot over time if the
+stream is highly variable.
+Instead of releasing $\hAT_t$ as the stream statistics, we propose to release
+steady statistics, which can capture the underlying trend of the stream.
+Queries on the steady statistics will be more accurate and meaningful than on
+the instantaneous statistics.
+
+To this end, inspired by Pegasus~\cite{Chen2017}, we introduce a \emph{grouping
+  and smoothing} post-processing module.
+Different from Pegasus which is designed for CDP and user data is available to
+the server, we design grouping and smoothing module in the $w$-event LDP setting
+without directly accessing user data.
+The grouping and smoothing module processes trees $\{\hAT_{t'}\}_{t'\leq t}$,
+and outputs steady statistics $\{\OT_{t'}\}_{t'\leq t}$, which are also private
+binary trees.
+
+\paragraph{Grouping}
+For trees $\{\hAT_{t'}\}_{t'\leq t}$, we consider a same node $a$ at different
+time in these trees.
+We want to group the most recent similar node properties of node $a$ into a
+group, and use the aggregate statistics of node property in this group as node
+$a$'s property in the released tree $\OT_t$.
+Specifically, let $T_a=\{t-l,\ldots,t-1\}$ denote a set of $l$ timestamps at
+which node $a$'s properties are similar and belong to a group at time $t-1$.
+At time $t$, we need to determine whether $t$ belongs to group $T_a$ or not.
+Recall that $\hAT_t[a]$ is the estimated node property of $a$ at time $t$, and
+we let $\AT_t[a]$ denote its true property value.
+To measure the deviation of $\AT_t[a]$ to the group, we define the \emph{squared
+  deviation} of node $a$ by
+\[
+  \sigma_a^2\triangleq (\AT_t[a] - \frac{1}{l}\sum_{i=1}^l\AT_{t-i}[a])^2,
+\]
+and if $\sigma_a^2\leq\vartheta_2$ for some threshold $\vartheta_2$, we add $t$ to
+$T_a$; otherwise node $a$'s group becomes to $T_a=\{t\}$ at time $t$.
+The challenge of the grouping operation is that the true node properties
+$\{\AT_{t'}[a]\}_{t'\leq t}$ are unknown in the LDP setting, and we only know
+their estimates $\{\hAT_{t'}[a]\}_{t'\leq t}$.
+We provide an unbiased estimator of $\sigma_a^2$.
+
+\begin{theorem}\label{thm:sigma}
+  Estimator $\hat{\sigma}_a^2$ is an unbiased estimate of $\sigma_a^2$, i.e.,
+  \[
+    \hat{\sigma}_a^2
+    = \big(\hAT_t[a] -\frac{1}{l}\sum_{i=1}^l\hAT_{t-i}[a]\big)^2
+    -\frac{l+1}{l}\var(\epsilon_{t,2}).
+  \]
+\end{theorem}
+
+% \begin{proof}
+%   The proof can be found in \cref{appendix:sigma}.
+% \end{proof}
+
+\begin{proof}
+First, compute the expectation of $\hat{\sigma}_a^2 + \frac{l+1}{l} \var(\epsilon_{t,2})$:
+{\allowdisplaybreaks
+\begin{align*}
+  &\quad \E\big(\hat{\sigma}_a^2+\frac{l+1}{l}\var(\epsilon_{t,2})\big) \\
+  &= \E\big[ \big(\hAT_t[a] -\frac{1}{l}\sum_{i=1}^l\hAT_{t-i}[a]\big)^2 \big] \\
+  &= \E\big[ \hAT_t[a]^2 -\frac{2}{l}\hAT_t[a]\sum_{i=1}^l\hAT_{t-i}[a]
+    +(\frac{1}{l}\sum_{i=1}^l\hAT_{t-i}[a])^2 \big] \\
+  &= \E(\hAT_t[a]^2) -\frac{2}{l}\AT_t[a]\sum_{i=1}^l\AT_{t-i}[a]
+    +\E\big[ (\frac{1}{l}\sum_{i=1}^l\hAT_{t-i}[a])^2 \big] \\
+  &= \var(\hAT_t[a]) + \AT_t[a]^2 -\frac{2}{l}\AT_t[a]\sum_{i=1}^l\AT_{t-i}[a] \\
+  &\quad +\var\big( \frac{1}{l}\sum_{i=1}^l\hAT_{t-i}[a] \big)
+    +(\frac{1}{l}\sum_{i=1}^l\AT_{t-i}[a])^2 \\
+  &= (\AT_t[a]-\frac{1}{l}\sum_{i=1}^l\AT_{t-i}[a])^2
+    + \var(\hAT_t[a]) +\var\big( \frac{1}{l}\sum_{i=1}^l\hAT_{t-i}[a] \big) \\
+  &= \sigma_a^2
+    + \var(\hAT_t[a]) +\var\big( \frac{1}{l}\sum_{i=1}^l\hAT_{t-i}[a] \big)
+\end{align*}
+}
+Notice that
+\[
+  \var(\hAT_t[a]) = \var(\epsilon_{t,2})
+\]
+and
+\[
+  \var\big( \frac{1}{l}\sum_{i=1}^l\hAT_{t-i}[a] \big)
+  = \frac{1}{l^2}\sum_{i=1}^l\var(\hAT_{t-i}[a])
+  = \frac{1}{l}\var(\epsilon_{t,2})
+\]
+Therefore, we conclude that
+\[
+  \E(\hat{\sigma}_a^2) = \sigma_a^2.
+\]
+This completes the proof.
+\end{proof}
+
+\paragraph{Smoothing}
+At each time $t$, we now know every node $a$ belongs to a most recent group
+$T_a$ with similar node properties at different time.
+To release the statistics with regard to node $a$, we propose to compute the
+aggregate statistics of node properties in the group, e.g., mean, median, etc.
+Hence, we define
+\[
+  \OT_t[a] \triangleq \text{Aggregate}(\{\hAT_{t'}[a]\colon t'\in T_a\})
+\]
+and release tree $\OT_t$ as the stream statistics at time $t$.
+Querying on $\OT_t$ will provide more accurate and meaningful results than on
+$\hAT_t$.
+
+\paragraph{Remarks}
+It is noteworthy to mention that grouping and smoothing are post-processing
+operations, both of which operate on perturbed statistics without consuming
+additional privacy budgets.

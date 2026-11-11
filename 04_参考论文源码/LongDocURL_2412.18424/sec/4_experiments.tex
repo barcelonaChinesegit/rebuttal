@@ -1,0 +1,84 @@
+\section{Experiments}
+\label{sec: experiments}
+
+\subsection{Evaluation Protocols}
+\label{subsec: evaluation_protocols}
+Allowing models to think freely can enhance performance but often results in lengthy responses. 
+Current rule-based scorers are only effective with specific short formats, making it difficult to evaluate longer responses. Therefore, we need an \emph{answer extractor} (GPT4o) to convert detailed responses into concise ones. Following MATHVISTA~\cite{MATHVISTA} and MMLongBench-Doc~\cite{MMLongBench-Doc}, we implement a three-stage protocol: \emph{response generation}, \emph{answer extraction}, and \emph{score calculation}. In the \emph{score calculation} stage, we divide scores into five categories (\emph{Integer}, \emph{Float}, \emph{String}, \emph{List}, and \emph{None}). Different from MMLongBench-Doc, we adopt a softer and more reasonable scoring standard. See \Cref{xsec:experimental_details} for more details.
+
+\subsection{Experimental Setup}
+\label{subsec: experimental_setup}
+\textbf{Models} We divide the experiments into two categories: \textbf{text-input} and \textbf{image-input}. For text-input configuration, document texts parsed by OCR engines are input into LLMs/LVLMs.
+We conduct our experiments on both open-source and closed-source
+models across 26 different configurations.
+
+\noindent\textbf{Input Paradigm}
+The documents in our \benchName~have a max of 150 pages, and most of models are unable to fully process the context to obtain the answer due to GPU memory or interface limitations. Therefore, similar to the \textbf{merge} method used in previous benchmarks~\cite{MMLongBench-Doc}, we design the \textbf{cut-off} paradigm for the evaluation of current models.
+
+For LVLMs, we cut 30 continuous pages around the answer evidences from the original PDF-formatted document, and feed the converted images into the models. 
+Details of selection rules are in \Cref{xsubsec:rules_of_images_selection}.
+As for LLMs, we input the texts parsed by OCR engines, including PyMuPDF and Docmind.
+
+\noindent\textbf{Other Configurations}
+We assess the proprietary models using API resources, while the evaluation of the open-source models is conducted on H20 machines with 96G memory. To reduce variance, we set the temperature coefficient to 0.0 when generating free-form response and extracting short answer.
+
+\input{table/experiments_main_results_1}
+
+\subsection{Main Results}
+\label{subsec: main_results}
+As shown in \Cref{tab:main_results_1} and \Cref{tab:main_results_2}, we calculate generalized accuracy scores to assess model capabilities. Regarding LVLMs, we draw the following conclusions: (1) \textbf{Highest Scoring Model}: Only GPT-4o meets the passing standard and scores highest at 64.5, indicating that our \benchName~presents significant challenges for current models. (2) \textbf{Comparison of Open-source and Closed-source models}: Proprietary models demonstrate better overall performance compared to open-source models. Among open-source models, only Qwen2-VL (score 30.6) and LLaVA-OneVision (scores 22.0 and 25.0) exceed a score of 20, while other models with fewer than 13B parameters fall below this threshold.
+
+
+To compare the performance of models using text input versus image input, we included the O1-preview and Qwen2.5 series. The experimental results show that the overall scores of LLMs significantly lower than LVLMs, with the top LLM score trailing the top LVLM score by about 30 points. This gap is mainly because important document information is lost when parsed into plain text using PyMuPDF. Our dataset features numerous table-related and chart-related Q\&A pairs, and the loss of structural information hinders LLMs’ ability to extract critical evidence. These results highlights our \benchName~ as a benchmark for assessing the document structure parsing capability of LVLMs.
+
+
+
+\subsubsection{Fine-Grained Analysis}
+\label{subsubsec:multi-dimensional_analysis}
+
+% 
+\begin{figure*}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{img/scores_6models.pdf} % 调整宽度
+    \vspace{-0.5cm}
+    \caption{Fine-grained Results. We choose 3 proprietary and 3 open-source models to conduct further analysis based on (left) \textbf{task types}, \textbf{document elements}, \textbf{evidence pages}, and (right) \textbf{document sources}.}
+    \vspace{-0.2cm}
+    \label{fig:fine_grained_results}
+\end{figure*}
+
+We include more fine-grained results in \Cref{tab:main_results_2} and \Cref{fig:fine_grained_results}, based on document sources, task categories, document elements, and evidence pages.
+
+\noindent\textbf{Document Sources} 
+As shown in \Cref{fig:fine_grained_results}, the models perform better on \emph{books}, \emph{reports}, \emph{manuals}, and \emph{project proposals}, likely due to their simpler layout, which facilitates key information extraction. Conversely, the models struggle with less common documents like \emph{meeting minutes} and \emph{work summary}, which have limited data.
+
+\noindent\textbf{Task Type} 
+Observations reveal: (1) Proprietary LVLMs perform comparably on reasoning and \locating~tasks, but image-to-text conversion impacts reasoning capabilities more severely. For instance, switching to text input, GPT-4o's reasoning scores drop by 31.6 points versus 22.4 points for \locating. (2) Strong models are balanced in reasoning and \locating, whereas weaker models perform poorly on \locating, suggesting a training focus on capabilities of understanding and reasoning over spatial and logical relationships in \locating~tasks.
+
+\noindent\textbf{Document Elements} 
+Models score highest on \emph{Text} questions and lowest on \emph{Table} ones, highlighting deficiencies in document structure parsing. \emph{Figure} and \emph{Layout} question types yield similar scores. Scores for cross-element tasks fall between single-page and multi-page QA, closely aligning with the overall assessment.
+
+
+\noindent\textbf{Single-page vs Multi-page} 
+Single-page QA accuracy is lower than multi-page QA. This reveals that answers for some questions can be gathered from multiple pages, thereby reducing the difficulty. However, models like GPT-4o and Qwen-VL-Max show lower accuracy on multi-page QA, revealing a contradiction where their scores on \locating~tasks in multi-page QA are lower, thus skewing overall performance.
+
+
+\input{table/experiments_inputs_ablation}
+
+
+
+\subsection{Ablation of Input Paradigms}
+\label{subsec: ablation_of_input_paradigms}
+
+To explore the optimal input format in long document question-answering, we conduct ablation experiments across two image-input and two text-input paradigms. The image-input paradigms include: (1) \textbf{cut-off}, following the configuration detailed in \Cref{subsec: experimental_setup}, and (2) \textbf{merge}, where document images are combined from raw document lengths (50\textasciitilde150) into 20\textasciitilde30 new images. Further details can be found in \Cref{xsubsec:rules_of_images_merging}. 
+
+We note that the table structure information significantly degrades when parsed by PyMuPDF, while the markdown-format table texts parsed by Docmind retain greater structural integrity. To assess the impact of structural information loss on model performance, we conducted experiments with two input types: (1) \textbf{text-input-docmind}, utilizing texts parsed by Docmind, and (2) \textbf{text-input-pymupdf}, utilizing texts parsed by PyMuPDF. The analysis of the results presented in \Cref{tab:results_in_different_input_formats} led us to the following conclusions:
+
+\noindent\textbf{Text-input vs. Image-input:} 
+The scores in the \emph{cut-off} paradigm are higher than that in the \emph{text-input-pymupdf} paradigm, but lower than that in the \emph{text-input-docmind} paradigm, indicating that this method can effectively extract table structure information, but it can be improved further. 
+
+\noindent\textbf{Cut-off vs. Merge:}
+The \emph{merge} method preserves a greater number of context tokens by concatenating multiple images, while the \emph{cut-off} method succeeds in acquiring prior information by shortening the context window. Experimental results suggest that the cut-off may yield better problem-solving capabilities than merging, providing insights for the future construction of multimodal Retrieval-Augmented Generation (RAG) systems.
+
+\noindent\textbf{Impact of Structural Information:}
+For proprietary models, performance utilizing Docmind is at least 25 points higher than that with PyMuPDF, while the disparity is 15 points for open-source models. The absence of table structure information significantly hampers the performance of both open-source and proprietary models.
+

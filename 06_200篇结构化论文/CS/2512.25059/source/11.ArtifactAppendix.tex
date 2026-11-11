@@ -1,0 +1,29 @@
+\section{Artifact Appendix}\label{app:artifact}
+
+\subsection*{Abstract}
+
+The artifact contains R2CC, a fault-tolerant collective communication library implemented as a drop-in replacement for NCCL 2.23.4, and an experiment suite that injects NIC-port failures on a multi-NIC GPU cluster and checks HotRepair, post-failure schedule optimization, and training behavior. Existing ML frameworks use R2CC without modification by linking against it instead of upstream NCCL.
+
+\subsection*{Scope}
+
+Since the H100 testbed in \S\ref{sec:setup} is a shared cluster that cannot be held for long, the artifact is evaluated on CloudLab\cite{Duplyakin+:ATC19} r7525 servers. It validates the following claims:
+(1) R2CC recovers in-flight collectives from a NIC-port failure quickly, losslessly, and correctly instead of aborting the job (\S\ref{sec:design-mig});
+(2) the R2CC-Balance and R2CC-AllReduce scheduling optimizations follow the trends reported in \S\ref{sec:microbenchmark}, and their measured performance is within 1\% of what the model in \S\ref{sec:single-failure} predicts for this testbed;
+(3) R2CC is compatible with CUDA Graphs (Appendix~\ref{app:discussion});
+(4) training quality is preserved under a NIC failure (Appendix~\ref{app:quality}).
+Collective results are checked for correctness on both healthy and failed networks.
+
+\subsection*{Contents}
+
+The repository contains the R2CC source code on top of NCCL 2.23.4 (\texttt{src/}, with the NCCL build files) and the CloudLab experiment suite in \texttt{examples/cloudlab\_r7525/}. The suite has nine scripts: tests 01--02 check in-flight recovery (about 40\,s each), tests 03--07 check the scheduling optimizations with nccl-tests (about 16\,min in total), test 08 checks CUDA Graphs (about 1.5\,min), and test 09 trains GPT-2 with PyTorch DDP through a NIC failure (about 45\,min).
+
+\subsection*{Hosting}
+
+The artifact is available at \url{https://github.com/r2cc-project/R2CC/tree/artifact_evaluation}, branch \texttt{artifact\_evaluation}, commit \texttt{e93425b}.
+
+\subsection*{Requirements}
+Evaluating R2CC requires at least two GPU servers, each with multiple NICs. We use CloudLab r7525 servers with BlueField-2 SmartNICs, available as the r7525-bf2 node type at Clemson, and provide a public CloudLab profile and a pre-built image. The provided experiments use three such servers, and NIC-port failures are injected through their BlueField-2 SmartNICs.
+
+\subsection*{Setup and Reproduction}
+
+The README in the \texttt{artifact\_evaluation} branch gives the complete setup and reproduction guide, and \texttt{examples/cloudlab\_r7525/r7525\_setup.md} describes the node setup. Running all nine tests takes about one hour.

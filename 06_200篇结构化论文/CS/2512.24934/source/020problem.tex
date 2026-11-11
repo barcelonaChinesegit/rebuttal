@@ -1,0 +1,124 @@
+In what follows, we use the term agent(s)---common in computational social choice literature---interchangeably with point(s)---as used in the clustering literature. 
+Let $\Mcal$ denote the set of all metric spaces on finite points.
+Let $(U, d) \in \Mcal$ be a metric space with distance function $d: U \times U \rightarrow \RR_{\ge 0}$.
+For a subset $S \subseteq U$ of points, we use $d(u,\SolSet)$ to denote $\min_{s \in \SolSet} d(u, s)$. 
+We consider the setting where ordinal rankings of all points of $U$ are available. 
+Specifically, for each point $v \in U$, a linear order $\succ_v: [n] \rightarrow U$ is known. We write $u \succ_{v} u'$ to indicate that $u$ is closer $v$ than $u'$ in the ranking $\succ_v$. 
+Furthermore, we assume that the linear orders are \emph{consistent} with $d$,\ie, for every $v \in U$ and for all $u, u' \in U$, $u \succ_v u'$ implies $d(u, v) \leq d(u', v)$. 
+An \emph{ordinal profile} of $U$ is a collection of linear orders of all the points of $U$, which we denote by $\succ_U$.
+We say an ordinal profile $\succ_U$ of $U$ is \emph{consistent} with $d$ if all the linear orders in $\succ_U$ are consistent with $d$.
+Let $\profile(d)$ denote the set of all ordinal profiles of $U$ that are consistent with $d$.
+We first introduce the ordinal fair $k$-center problem and make it precise how social cost is defined in this context.
+
+\begin{definition}[The ordinal fair $k$-center problem (\ordfairkcen)]
+\label{def:ordinal-fair-k-center-with-limited-distance-queries}
+An instance of the ordinal fair $k$-center problem is defined on a set $U$ of $n$ points from a metric space $(U,d)$ with unknown $d$, an integer $k \geq  1$, a collection $\succ_U=\{\succ_u\}_{u \in U}$ of linear orders that is  consistent with $d$, a collection $\GroupSet= \{\Group_1, \dots, \Group_t : \Group_i \subseteq U\}$ of $t$ subsets of data points 
+that form a partition of $U$,
+and a vectors of requirements $\alphavec = \{\alpha_1,\dots,\alpha_t\}$, where $\alpha_i \ge 0$ corresponds to the requirement of group $\Group_i$. A set $\SolSet \subseteq U$ of centers is a feasible solution if $|\SolSet| = k$ and $\alpha_i \leq |\SolSet \cap \Group_i|$ for all $i \in [t]$. 
+The \emph{social cost} of a solution $\SolSet$ is the maximum distance of any point to $S$, \ie, $\cost(S) = \max_{u \in U} d(u,\SolSet)$. The goal of the ordinal fair $k$-center problem is to find a feasible solution with minimum social cost.
+\end{definition}
+
+
+An instance of the ordinal fair $k$-center problem is denoted as $\Ical = \ordfairkcenins$.
+The ordinal $k$-center problem is defined when no fairness constraints are enforced.
+The fair $k$-center problem is defined analogously, with the key distinction that the distance function $d$ of the underlying metric space is fully known.  
+For brevity, we denote the ordinal $k$-center problem with and without fairness constraints by \ordfairkcen\ and \ordkcen, respectively.
+
+We evaluate the quality of the solution via distortion~\cite{procaccia2006distortion}, defined as the approximation ratio between the social cost of the algorithm's solution 
+and the social cost of the optimal solution (computed with access to all pairwise distances).
+We first formally define distortion for \ordfairkcen, adopting the notion from Burkhardt et~al.~\cite{burkhardt2024low}.
+
+
+
+
+\begin{definition}[Distortion of Algorithm $\alg$]
+    For a metric space $(U,d) \in \Mcal$ and an ordinal profile $\succ_U \in \profile(d)$, let $\Ical_{\succ_U}$ be the collection of instances of the ordinal (fair) $k$-center problem defined on points $U$ and ordinal profile $\succ_U$. 
+    Let $\alg(I \mid d)$ denote the solution returned by algorithm $\alg$ on instance $I \in \Ical_{\succ_U}$ with underlying metric $d$. 
+    Let $\OptSolSet_{I, d}$ be an optimal solution to $I$ when the underlying metric is $d$.
+    The distortion of $\alg$ is defined as:
+    \[
+    \distortion(\alg)\coloneqq \sup_{\substack{(U,d) \in \Mcal \\ \succ_U \in \profile(d)}} \sup_{I \in \Ical_{d,\succ_U}}  \frac{\cost(\alg(I \mid d))}{\cost(\OptSolSet_{I,d})}
+    \]
+\end{definition}
+
+
+Since without access to cardinal information, it is not possible to obtain an algorithm with bounded distortion for \ordkcen~\cite{burkhardt2024low}, we allow the algorithm to make \emph{query access} to $d$: given a pair $u,v\in U$, the algorithm can query the distance $d(u,v)$. 
+Hence, our goal is to design an algorithm $\alg$ that uses a limited number of queries while ensuring that the solution quality is provably close to the optimal solution. 
+
+
+\xhdr{Reduction} 
+For simplicity of exposition, we transform an instance $\Ical = (U, k, \succ_U, \GroupSet, \alphavec)$ of the ordinal fair $k$-center problem, where $\GroupSet = \{\Group_1, \dots, \Group_t\}$ and $\alphavec = \{\alpha_1, \dots, \alpha_t\}$, into an equivalent instance $\Ical' = (U', k, \succ_{U'}, \GroupSet', \alphavec')$ with exactly $k$ groups.
+Formally, we construct the transformed instance $\Ical'$ as follows. 
+Let $r = \sum_{i \in [t]} \alpha_i$. 
+For each group $G_i \in \GroupSet$, we make $\alpha_i$ disjoint copies of $G_i$ in $\GroupSet'$ by duplicating each element of $G_i$ precisely $\alpha_i$ times. Next, if $r < k$, then we create $(k-r)$ new groups in $\GroupSet'$ each containing a distinct copy of $U$. We set $\alphavec' = \{1, 1, \dots, 1\}$, so that the fairness constraint requires selecting exactly one center from each group $\Group'_j$ for $j \in [k]$. 
+We define the linear orderings in $\succ_{U'}$ as follows. 
+For each point $v' \in U'$, let $v \in U$ be the original point of $v'$ (where $v'$ may be $v$ itself or a duplicate copy of $v$). 
+We define the linear order $\succ_{v'}$ on $U'$ as an order extension of $\succ_{v}$ on $U$: for any points $a', b' \in U'$ and their corresponding original points $a, b \in U$, we have $a' \succ_{v'} b'$ if and only if $a \succ_{v} b$.
+When $a = b$, the ordering of $a'$ and $b'$ is arbitrary.
+
+
+
+
+
+
+
+This transformation is standard in the fair clustering literature and has been used in several prior works~\cite{thejaswi2022clustering, thejaswi2024diversity, gadekar2025fair}, in this transformed instance $\Ical'$, three key properties are relevant for our analysis to hold: ($i$) the cost of optimal solution in $\Ical'$ remains identical to that of the original instance $\Ical$, since the additional points are duplicates; {($ii$) no extra distance queries are required, as duplicate points share identical distances;} and ($iii$) if the algorithm's output for $\Ical'$ contains multiple copies of the same center, we retain a single copy and supplement it with arbitrary 
+centers
+from the corresponding group to satisfy the fairness constraints, without affecting the theoretical guarantees on the distortion factor.
+
+From now on, we present our algorithmic results for the instance $\Ical'$, and we directly write the instance as $\Ical$ when there is no ambiguity.
+
+
+
+
+\xhdr{Preliminaries}
+In what follows, we define the terminology and definitions necessary to present our algorithmic results.
+Given a  set $U$ and two subsets $A,B \subseteq U$ of points, we say that $A$ hits $B$ if $A \cap B \neq \emptyset$. More generally, for an integer $i \geq 0$, $A$ hits $B$ $i$ times if $|A \cap B|=i$. For an ordered set $T = (t_1,\dots,t_k) \subseteq U$, and $\ell \in [k]$, we denote by $T_\ell$ the $\ell$-length prefix of $T$, \ie, $T_\ell= (t_1,\dots, t_\ell)$.
+
+To characterize the quality of Gonzalez-type greedy algorithms~\cite{gonzalez1985clustering, burkhardt2024low}, we apply the notion of progressive cover and critical index.
+Let $\mathbf{\Pi}^*$ denote the partition of $U$ induced by the optimal solution $S^*$; \ie, each cluster contains all points whose nearest center in $S^*$ is the same.
+Note that the $k$ centers $T$ obtained by Gonzalez's classic $k$-center algorithm~\cite{gonzalez1985clustering} form a progressive $2$-cover. 
+In this case, the critical index for $T$ is the largest $\ell \in [k]$ such that $T_{\ell}$ hits each part of the partition $\mathbf{\Pi}^*$ at most once, \ie, the largest $\ell$ that satisfies (i) also satisfies (ii) in the later definition. 
+This property that the largest $\ell$ that satisfies (i) also satisfies (ii) also holds for the solution obtained by the algorithm of Burkhardt et~al.~\cite{burkhardt2024low} for the ordinal $k$-center problem.
+
+\begin{definition}[Progressive cover and critical index]
+Let $\Jcal$ be an instance of \kcenter (or \fairkcenter) and let $S^*$ be an optimal solution with corresponding partition $\mathbf{\Pi}^*$ of $U$. Fix some $\gamma >0$, and consider an ordered set $T=(t_1,\dots,t_k) \subseteq U$ of size $k$. We say $T$ is a \emph{progressive $\gamma$-cover} for $\Jcal$ \wrt $S^*$, if there exists $\ell \in [k]$ such that ($i$) $T_{\ell}$ hits each part of $\mathbf{\Pi}^*$ at most once, and ($ii$) $\cost(T_{\ell}) \leq \gamma\cdot \cost(S^*)$. Furthermore, we say $\ell \in [k]$ as the \emph{critical index} of a progressive $\gamma$-cover $T$ for $\Jcal$  \wrt $S^*$ if $\ell$ is the maximum index such that ($i$) and ($ii$) hold.
+\end{definition}
+
+When $S^*$ is implicit from context, we omit saying \wrt $S^*$.
+A crucial tool that is used to obtain a feasible (fair) solution from a progressive $\gamma$-cover $T$~\cite{gadekar2025fair,jones2020fair} is to project $T$ onto a fair solution using a matching on a carefully constructed bipartite graph. 
+In our paper, we apply the notion of left-perfect matching to define the projection graph. We recall the definition of left-perfect matching in Definition~\ref{definition:left-perfect-matching} in the appendix.
+We formally define the projection graph below.
+\begin{definition}[Projection graph]
+Consider an instance $\Jcal=\fairkcenins$ of \fairkcenter, and let $S \subseteq U, |S|\le k$. Furthermore, let $\ell \in [|S|]$, and $\lambda \in \mathbb{R}_+$. 
+We define the \emph{$(\ell, \lambda)$-projection graph}  $H^{\ell}_{\lambda} = (\InitSolSet_{\ell} \cup \MultiGroupSet, E_{\lambda})$, where there is an edge between  $s \in \InitSolSet_{\ell}$ and $\MultiGroup_i \in \MultiGroupSet$ if $d(s, \MultiGroup_i) \le \lambda$. Furthermore, for a fixed $\ell \in [k]$, we define $\lambda_{\ell}$ as the minimum $\lambda$ such that there exists a \emph{left-perfect matching} on $H^{\ell}_{\lambda}$. 
+\end{definition}
+
+By using the projection graph, we can obtain a $\gamma+1$-distortion feasible (fair) solution from a progressive $\gamma$-cover $T$~\cite{gadekar2025fair,jones2020fair}.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

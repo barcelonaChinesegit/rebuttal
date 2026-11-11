@@ -1,0 +1,236 @@
+\section{Algorithm}
+\label{sec:alg}
+
+We present \textsc{FHDR} for high-dimensional regret minimization under sparse linear preferences. The framework supports favorite-tuple retrieval with sufficient feedback (Problem~1~[\ref{p1}]) and a compact recommendation set under limited feedback (Problem~2~[\ref{p2}]). Section~\ref{subsec:framework} introduces the overall framework, Section~\ref{subsec:dimR} describes attribute discovery, and Section~\ref{subsec:re_min} presents the final output selection. Section~\ref{subsec:sum} summarizes the complete procedure. Detailed proofs are provided in \iftoggle{TechnicalReport}{Section~\ref{appen:proof} of the \technicalreport}{Appendix~\ref{appen:proof}}.
+
+\subsection{Overall Framework}
+\label{subsec:framework}
+
+Phases 1 and 2 exploit sparse preferences to discover relevant attributes without requiring upfront attribute selection. Phase 3 refines preferences over the retained attributes. Throughout discovery, we maintain a candidate set $\mathcal{D}_\text{cand}$, initialized with all attributes, and remove attributes identified as non-key.
+
+\paragraph{Phase 1: Coarse Elimination.}
+Let $m\geq1$ be an integer specifying the maximum number of attributes displayed per question. Starting with all $d$ attributes, we partition them into blocks of at most $m$ attributes. Each block is tested through a tuple comparison under the protocol in Section~\ref{sec:def}. An irrelevant-attributes response eliminates the block; a tuple selection retains it for Phase 2.
+
+\paragraph{Phase 2: Fine Selection.}
+We adapt generalized binary splitting~\cite{hwang1972method} to identify individual key attributes among the remaining candidates. Tuple comparisons provide the relevance responses required by the group tests. With continued feedback, this phase ends when all candidates are classified or $d_\text{max}$ key attributes have been identified.
+
+\paragraph{Phase 3: Regret Minimization.}
+We adapt \textsc{UH-Random}~\cite{XCL19} to refine preferences over the retained attributes. The feasible utility region incorporates comparisons on displayed coordinates from Phases 1 and 2 and is refined through further interaction. With sufficient feedback, the method identifies a favorite tuple.
+
+At any time before Phase 3, if the user stops the interaction, \textsc{AttributeSubset} returns $K$ tuples using the current candidate set $\mathcal{D}_\text{cand}$. At the extreme case with zero feedback, the candidate set could contain all $d$ attributes. If the user stops during interactive Phase 3, we return one recommendation using the current feasible utility region.
+
+\subsection{Dimension Reduction}
+\label{subsec:dimR}
+
+Dimension reduction seeks a small candidate set containing every key attribute, using as few questions as possible. Starting with all attributes, Phase 1 eliminates irrelevant blocks and Phase 2 identifies individual key attributes, while maintaining $\lvert\mathcal{D}_\text{cand}\rvert\geq d_\text{int}$.
+
+\paragraph{\textbf{User Interaction}} 
+In Phases 1 and 2, each question presents $s$ tuples projected onto the attributes being tested. Only these attributes are displayed, so the number may vary between questions. Responses follow the partial-utility protocol in Section~\ref{sec:def} and update the candidate set $\mathcal{D}_\text{cand}$.
+
+\subsubsection{\textbf{Phase 1: Coarse Elimination}}
+
+We partition the $d$ attributes into $\lceil d/m\rceil$ disjoint blocks. For $i\in\{1,\ldots,\lceil d/m\rceil\}$, let $\mathcal{B}_i\subseteq\{D_1,\ldots,D_d\}$ denote the set of dimensions selected for the $i$-th Phase 1 question, defined by $\mathcal{B}_i=\{D_j:(i-1)m<j\leq\min(im,d)\}$. Each block contains at most $m$ attributes. The final block is displayed without padding when it contains fewer than $m$ attributes.
+
+In each block, we:
+\begin{enumerate}
+  \item Construct the projected dataset $X_{\mathcal{B}_i}$ by restricting each tuple in $X$ to the dimensions in $\mathcal{B}_i$.
+  \item Randomly select and present $s$ tuples from $X_{\mathcal{B}_i}$.
+  \item If the user selects a tuple, retain all attributes in $\mathcal{B}_i$ as potentially key. If the user gives an irrelevant-attributes response, remove the entire block from $\mathcal{D}_\text{cand}$.
+\end{enumerate}
+
+Under the stated response model, every block containing a key attribute survives, while blocks containing only non-key attributes are eliminated. A complete Phase 1 uses at most $\lceil d/m\rceil$ questions and leaves $\lvert\mathcal{D}_\text{cand}\rvert\leq d_\text{int}m$: at most $d_\text{int}$ blocks survive, each containing at most $m$ attributes.
+
+\begin{example}
+    For $d=100$, $d_\text{int}=3$, and $m=7$, Phase 1 uses $15$ questions and leaves at most $21$ candidate attributes.
+\end{example}
+
+\subsubsection{\textbf{Phase 2: Fine Selection}}
+
+Phase 2 applies generalized binary splitting~\cite{WGT}, a group testing algorithm to the remaining candidate attributes, to identify the key attributes. Because the true number of key attributes is unknown, which is a required input parameter by the group testing algorithm, we initialize its upper bound as $d_\text{left}=d_\text{max}=5$ and pass it as the input. Each identified key attribute decreases $d_\text{left}$ by one. Thus, $d_\text{left}$ bounds the number of keys still to be found; for example, after identifying $2$ keys, at most $3$ remain.
+
+\begin{algorithm}[!t]
+\caption{Phase 2: Fine Selection via Group Testing}
+\label{alg:phase2}
+\flushleft
+\textbf{Input:} Candidate set $\mathcal{D}_\text{cand}$ of attributes (with $|\mathcal{D}_\text{cand}| \le d_\text{int} m$), upper bound $d_\text{max}$ on $d_\text{int}$ \newline
+\textbf{Output:} Updated set $\mathcal{D}_\text{cand}$ containing all key attributes (larger than $d_\text{int}$ if the user quits earlier)
+
+\begin{algorithmic}[1]
+
+\State $d_\text{left} \gets d_\text{max}$, $\mathcal{D}_\text{cand}' \gets \emptyset$
+
+\Statex {/*$\mathcal{D}_\text{cand}'$ contains identified key attributes, and $\mathcal{D}_\text{cand}$ contains unclassified attributes. The quantity $d_\text{left}=d_\text{max}-|\mathcal{D}_\text{cand}'|$ bounds the number of remaining key attributes.*/}
+\Statex {/*Before every question, including individual tests and binary splitting, check whether the user stops. An unanswered question leaves its attributes unclassified.*/}
+
+\While{$d_\text{left}>0$ and $\mathcal{D}_\text{cand}\neq \emptyset$}
+    \If {user quits answering} break
+    \EndIf
+    \If{$|\mathcal{D}_\text{cand}| \leq 2d_\text{left} - 2$} \Comment{Base case}
+        \For{each attribute $D_i \in \mathcal{D}_\text{cand}$}
+            \If{the user stops}
+                \State \Return $\mathcal{D}_\text{cand}\cup\mathcal{D}_\text{cand}'$
+            \EndIf
+            \State $\mathcal{D} \gets \{D_i\}$
+            \State Present $s$ tuples from $X_\mathcal{D}$
+            \If{the user stops without answering}
+                \State \Return $\mathcal{D}_\text{cand}\cup\mathcal{D}_\text{cand}'$
+            \EndIf
+            \If{user selects a tuple}
+                \State $\mathcal{D}_\text{cand}' \gets \mathcal{D}_\text{cand}' \cup \{D_i\}$, $d_\text{left} \gets d_\text{left} - 1$
+            \EndIf
+            \State $\mathcal{D}_\text{cand} \gets \mathcal{D}_\text{cand} \setminus \{D_i\}$
+            \If{$d_\text{left}=0$} break
+            \EndIf
+        \EndFor
+    \Else \Comment{Group testing}
+        \State $l \gets |\mathcal{D}_\text{cand}| - d_\text{left} + 1$, $\alpha \gets \lfloor \log_2(l/d_\text{left}) \rfloor$
+        \State $g \gets \min\{2^\alpha,m\}$
+        \State Randomly sample $\mathcal{D} \subseteq \mathcal{D}_\text{cand}$, $|\mathcal{D}| = g$
+        \State Present $s$ tuples from $X_\mathcal{D}$
+        \If{the user stops without answering}
+            \State \Return $\mathcal{D}_\text{cand}\cup\mathcal{D}_\text{cand}'$
+        \EndIf
+        \If{user selects a tuple}
+            \State Apply balanced binary splitting to $\mathcal{D}$ until one key attribute $a^*$ is isolated or the user stops; let $\mathcal{D}_{-}$ contain the non-key attributes inferred from completed tests
+            \State $\mathcal{D}_\text{cand}\gets\mathcal{D}_\text{cand}\setminus\mathcal{D}_{-}$
+            \If{splitting stops before a key attribute is isolated}
+                \State \Return $\mathcal{D}_\text{cand}\cup\mathcal{D}_\text{cand}'$
+            \EndIf
+            \State $\mathcal{D}_\text{cand}' \gets \mathcal{D}_\text{cand}' \cup \{a^*\}$, $d_\text{left} \gets d_\text{left} - 1$
+            \State $\mathcal{D}_\text{cand} \gets \mathcal{D}_\text{cand} \setminus \{a^*\}$
+        \Else
+            \State $\mathcal{D}_\text{cand} \gets \mathcal{D}_\text{cand} \setminus \mathcal{D}$
+        \EndIf
+    \EndIf
+\EndWhile
+\State \Return $\mathcal{D}_\text{cand}\cup \mathcal{D}_\text{cand}'$
+\end{algorithmic}
+\end{algorithm}
+
+Algorithm~\ref{alg:phase2} details the procedure. If $\lvert\mathcal{D}_\text{cand}\rvert\leq2d_\text{left}-2$, we test attributes individually. Otherwise, we test a random group of size $g=\min\{2^\alpha,m\}$, where $\alpha=\lfloor\log_2((\lvert\mathcal{D}_\text{cand}\rvert-d_\text{left}+1)/d_\text{left})\rfloor$. An irrelevant-attributes response eliminates the group. A tuple selection triggers balanced binary splitting to isolate one key attribute, eliminating any attributes identified as non-key along the way. Each question displays only the tested attributes. If the user stops, all unclassified attributes and previously identified keys are retained.
+
+Phase 2 ends when all candidates are classified, $d_\text{max}$ key dimensions have been identified, or the user stops interacting. Under the default experimental settings, Phase 2 uses an average of $11$ additional questions.
+
+\begin{example}
+{\interlinepenalty=10000
+We illustrate the first round of Phase~2 with $s=2$ and $m=6$. A response is \textit{positive} if the user selects a tuple and \textit{negative} if the user gives an irrelevant-attributes response. Each question displays only the tested attributes.\par}
+
+Suppose the dataset has 100 attributes, with true key attributes $\{D_1,D_7,D_{13},D_{19},D_{25}\}$ ($d_\text{int}=5$), unknown to the algorithm. Starting from $\mathcal{D}_\text{cand}=\{D_1,\ldots,D_{100}\}$, Phase~1 with $m=6$ retains the first five blocks, leaving $\mathcal{D}_\text{cand}=\{D_1,\ldots,D_{30}\}$. Initially, $d_\text{left}=d_\text{max}=5$. Since $30>2d_\text{left}-2=8$, a group test is performed.
+
+We compute $l=30-5+1=26$, $\alpha=\lfloor\log_2(26/5)\rfloor=2$, and $g=\min\{2^\alpha,m\}=4$. Suppose the sampled set is $\mathcal{D}=\{D_1,D_2,D_3,D_4\}$. We present two tuples from $X_\mathcal{D}$ on these four attributes. Since $\mathcal{D}$ contains $D_1$, the response is \textit{positive}, and binary splitting follows.
+
+First, test $\{D_3,D_4\}$. The negative response identifies both attributes as non-key. The preceding positive group test therefore implies that $\{D_1,D_2\}$ contains a key attribute, without another question. Next, test $\{D_1\}$. The positive response identifies $D_1$ as key, while $D_2$ remains unclassified. Thus, the three questions display four, two, and one attributes, respectively.
+
+Finally, add $D_1$ to $\mathcal{D}'_\text{cand}$. Here, $\mathcal{D}_{-}=\{D_3,D_4\}$. Update $\mathcal{D}_\text{cand}\gets\mathcal{D}_\text{cand}\setminus\{D_1,D_3,D_4\}$, leaving $30-2-1=27$ candidates, and decrement $d_\text{left}$ to 4. Repeat the procedure.
+\end{example}
+
+\begin{theorem}\label{theorem_q}
+    Under error-free relevance responses, suppose at most $r$ key attributes remain among $N$ candidates. With continued feedback, standard generalized binary splitting requires at most $B(N,r)$ questions, where
+    \[
+    B(N,r)=\left\{\begin{array}{ll}
+    0, & N=0\ \text{or}\ r=0,\\[2pt]
+    N, & r\geq1,\ 1\leq N\leq 2r-2,\\[2pt]
+    (\alpha+2)r+p-1, & r\geq1,\ N\geq 2r-1,
+    \end{array}\right.
+    \]
+    where, in the third case, $l=N-r+1$, $\alpha=\left\lfloor\log_2(l/r)\right\rfloor$, and $p,\theta$ are defined by the unique decomposition
+    \[
+    l=2^\alpha r+2^\alpha p+\theta,\qquad 0\leq p<r,\qquad 0\leq\theta<2^\alpha.
+    \]
+    This bound adapts the standard generalized binary-splitting analysis~\cite{hwang1972method,Du1993CombinatorialGT}.
+\end{theorem}
+
+For FHDR, let $N=|\mathcal{D}_\text{cand}|$ at the start of Phase~2. A complete Phase~1 leaves $N\leq d_\text{int}m$ candidates. With $m=7$ and $d_\text{max}=5$, Phase~2 starts with $r=d_\text{left}=5$ and $N\leq35$. The analysis of the capped procedure covers every candidate count $0\leq N\leq35$ at this starting state and gives the same upper bound $B(N,5)$.
+
+\begin{example}
+If $d_\text{int}=3$, Phase~1 leaves at most 21 candidates. Since $B(21,5)=17$, Phase~2 requires at most 17 questions. If $d_\text{int}=5$, at most 35 candidates remain and $B(35,5)=21$. Thus, Phase~2 requires at most 21 questions under $m=7$, $d_\text{max}=5$, and $d_\text{int}\leq5$. These bounds concern completed attribute discovery and exclude Phase~3 questions.
+\end{example}
+
+A negative group test eliminates the tested attributes, whereas a positive test identifies one key attribute through binary splitting. Induction on the remaining problem size gives the standard bound. The detailed induction and the analysis of FHDR's capped procedure are provided in \iftoggle{TechnicalReport}{Section~\ref{appen:proof} of the \technicalreport}{Appendix~\ref{appen:proof}}.
+
+The two-phase design reduces the display size before applying generalized binary splitting~\cite{WGT}. Applied directly to all $d$ attributes, its first group would contain $2^\alpha$ attributes, where $\alpha=\lfloor\log_2((d-d_\text{left}+1)/d_\text{left})\rfloor$. For $d=100$ and $d_\text{left}=5$, this gives $16$ displayed attributes. Phase 1 first reduces the candidate set to at most $d_\text{int}m$, keeping the initial Phase 2 group within the display limit, as formalized below.
+
+\begin{theorem}\label{theorem_batch}
+    The size of the batch for the first group test in Phase 2 would be no more than $m$.
+\end{theorem}
+
+By guaranteeing that every question involves at most $m$ attributes, this two-phase design preserves an efficient dimension reduction process, while ensuring a user-friendly interaction.
+
+\FloatBarrier
+
+\subsection{Regret Minimization}
+\label{subsec:re_min}
+
+After attribute discovery, FHDR applies an adapted \textsc{UH-Random} procedure~\cite{XCL19} over the retained attributes. With sufficient feedback, it identifies a favorite tuple. If the user stops before interactive Phase~3, \textsc{AttributeSubset} returns $K$ tuples using the current candidate attributes.
+
+The adapted \textsc{UH-Random} procedure progressively refines the feasible utility region $\mathcal{R}$ over the retained attributes. Candidate tuples are retained while they can be optimal for a utility vector in this region. The procedure terminates when a favorite tuple is certified or the user stops. On early stopping, it returns a tuple maximizing utility under some $v\in\mathcal{R}$.
+
+\begin{algorithm}[!t]
+\caption{Overall Framework}
+\label{alg:overall}
+\flushleft
+\textbf{Input:} A database $X$, desired output size $K$ under insufficient feedback, and an unknown utility vector $u$ (accessed through interactive queries)
+
+\textbf{Output:}
+\begin{enumerate}[label=(\arabic*)]
+\item Sufficient feedback: $p^*\in\arg\max_{p\in X}u\cdot p$.
+\item Stopping before Phase~3: $S\subseteq X$, $\lvert S\rvert=K$.
+\end{enumerate}
+
+\begin{algorithmic}[1]
+\State $\mathcal{D}_{\mathrm{cand}}\gets\{D_1,\ldots,D_d\}$, $\mathcal{C}\gets\emptyset$ \Comment{comparison constraints}
+\State Select $m$ and $s$ \Comment{internal parameters (default: $m=7$, $s=2$)}
+
+\While{attribute discovery is incomplete and the user continues answering}
+    \State Select $\mathcal{D}$ according to the current Phase~1 or Phase~2 test
+    \State Randomly sample and display $s$ tuples projected onto $\mathcal{D}$, and receive feedback
+    \If{the user stops without answering}
+        \State \textbf{break}
+    \EndIf
+    \State Update $\mathcal{D}_{\mathrm{cand}}$ according to the discovery rules
+    \State Add $a_{\mathcal{D}}(p,q)$ to $\mathcal{C}$ for each elicited strict comparison
+\EndWhile
+
+\If{the user stops before entering Phase~3}
+    \State \Return $\textsc{AttributeSubset}(X,\mathcal{D}_{\mathrm{cand}},K)$
+\EndIf
+
+\State Initialize the feasible utility region $\mathcal{R}$ over the retained attributes using $\mathcal{C}$
+\Repeat
+    \If{a tuple $p^*$ is certified as a favorite for every utility vector in $\mathcal{R}$}
+        \State \Return $p^*$
+    \EndIf
+    \If{the user stops}
+        \State Select $v\in\mathcal{R}$
+        \State \Return any $\hat p\in\arg\max_{p\in X}v\cdot p_{\mathcal{D}_{\mathrm{cand}}}$
+    \EndIf
+    \State Perform the next comparison prescribed by the adapted \textsc{UH-Random} procedure and update $\mathcal{R}$
+\Until{a recommendation is returned}
+\end{algorithmic}
+\end{algorithm}
+
+In Phases 1 and 2, relevance responses update the candidate attribute set. Tuple comparisons can also constrain relative utility weights. For tuples $p,q$ compared on the displayed attribute set $\mathcal{D}$, define the difference vector $a_{\mathcal{D}}(p,q)\in\mathbb{R}^d$ by
+\[
+a_{\mathcal{D}}(p,q)[i]=
+\begin{cases}
+p[i]-q[i],&D_i\in\mathcal{D},\\
+0,&D_i\notin\mathcal{D}.
+\end{cases}
+\]
+
+A strict preference for $p$ over $q$ on the displayed attributes gives $f_{\mathcal{D}}(p)>f_{\mathcal{D}}(q)$, equivalently $u\cdot a_{\mathcal{D}}(p,q)>0$. To maintain a closed polytope represented by its vertices, we use the conservative closed halfspace
+\[
+H_{p,q,\mathcal{D}}=\{v\in\mathbb{R}^d:v\cdot a_{\mathcal{D}}(p,q)\geq0\}.
+\]
+Its boundary is $v\cdot a_{\mathcal{D}}(p,q)=0$, and the true utility vector remains feasible. Geometrically, the strict preference implies $\theta(u,a_{\mathcal{D}}(p,q))<90^\circ$. A tuple certified as a favorite throughout the maintained region is therefore also a favorite under $u$.
+
+At least two key attributes must be displayed for a comparison to constrain their relative weights. If no key attribute is displayed, the user gives an irrelevant-attributes response. If exactly one key attribute $i$ is displayed, the inequality reduces to $u[i](p[i]-q[i])>0$. Since $u[i]>0$, this is equivalent to $p[i]>q[i]$ and provides no additional information about relative utility weights.
+
+We retain these displayed-coordinate difference vectors together with their original attribute indices. When initializing \textsc{UH-Random}, we restrict each vector to the retained candidate attributes and use the resulting constraints to initialize the feasible utility region. Under the stated response model, eliminated attributes have zero utility weight, so removing their coordinates preserves each constraint.
+
+\subsection{Summary}
+\label{subsec:sum}
+
+FHDR uses coarse elimination and generalized binary splitting to reduce the candidate attribute space without upfront attribute selection, then produces recommendations according to the available feedback. With sufficient feedback, FHDR identifies a favorite tuple. If interaction ends before Phase~3, \textsc{AttributeSubset} returns $K$ recommendations; if it ends during Phase~3, FHDR returns one recommendation based on the current feasible utility region. The pseudocode for the overall algorithm is presented in Algorithm \ref{alg:overall}.
+
+\FloatBarrier

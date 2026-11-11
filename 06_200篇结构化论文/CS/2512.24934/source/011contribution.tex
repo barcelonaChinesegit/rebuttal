@@ -1,0 +1,65 @@
+\xhdr{Our contributions} 
+In detail, our contributions are as follows.
+
+$\bullet$ We initiate the study of low-distortion mechanisms for committee selection that incorporate \emph{fairness} constraints under the egalitarian (min-max) objective for the social cost, by modeling the task as the ordinal fair $k$-center problem with limited access to cardinal information. 
+
+$\bullet$ We present a $5$-distortion algorithm with only $\bigO(k \log ^2 k)$ cardinal queries. 
+Additionally, we present a $3$-distortion algorithm that requires $2k^2$ queries. 
+
+\subsection{Our techniques}
+Our methods build upon techniques from both the ordinal setting with limited query access and the clustering domain.
+The ordinal $k$-center under limited cardinal information was studied by
+\citet{burkhardt2024low}, where they presented two algorithmic results: a $2$-distortion algorithm with $\frac{k^2-k}{2}$ queries and a $4$-distortion algorithm with only $2k$ queries. Both these algorithms are based on adaptions of~\citet{gonzalez1985clustering}'s algorithm.
+On the other hand, in the clustering domain,
+a common framework that has been successful in solving the fair $k$-center problem (with complete cardinal information), is that of maximal matching~\cite{jones2020fair,gadekar2025fair}.
+This approach, on a high level,  first solves the standard $k$-center problem to obtain a good quality set of ``fairness-oblivious'' centers $T$ of size $k$ with good approximation guarantee, and
+projects it onto a set of fair centers via maximal matching, inuring only a small loss in the quality.
+In our work, we take the set $T$ to be the output of the algorithm of~\cite{burkhardt2024low}, using either the $2$-distortion or $4$-distortion variant. We first describe the underlying idea for obtaining a fair set of centers from $T$ via the maximum matching framework of~\cite{jones2020fair,gadekar2025fair}. We then discuss the main challenges in adapting this framework to the ordinal setting, and finally present our novel techniques for overcoming these challenges.
+For clarity of presentation, we restrict our attention to the case with $k$ groups, $\mathbb{G}=\{G_1,\dots,G_k\}$, each having a unit requirement, and the optimal cost is $1$. 
+Let $d$ be the distance function of the underlying metric space and $n$ be the number of points (or agents) in the input instance.
+
+The key idea of the matching-based approach consists of two components. 
+The first component is to use the properties of the (ordered) set $T=(t_1,\dots,t_k)$ adapted from the approaches of~\citet{gonzalez1985clustering}.  
+In particular, such set $T$ has a \emph{critical} index $\ell^* \in [k]$, which is the largest index $\ell \in [k]$ such that the points $T_\ell := (t_1,\dots,t_\ell)$ of $T$ are from different clusters of an (fixed) optimal solution, and the cost of $T_\ell$ is within $\alpha$ factor of the optimal cost, for some constant $\alpha>1$. 
+The second component is to project the ``fairness-oblivious'' centers $T_{\ell}$ onto a set of fair centers via maximal matching. 
+In more detail, for $\ell \in [k]$, consider the bipartite graph $H_\ell$ between the centers of $T_{\ell}$ (left partition) and the demographic groups $\GroupSet$ (right partition), with edges between $t \in T_{\ell}$ and group $G \in \GroupSet$ if $d(t,G) \le \lambda$, for some non-negative real $\lambda$.
+Let $\lambda_{\ell}$ be the minimum $\lambda$ such that there exists a left-perfect matching on $H$, noting that $\lambda_\ell\le 1$.
+This implies that, if we find a left-perfect matching on $H_\ell$, then we can obtain a set of fair centers of size $k$ from $T_{\ell}$.
+Furthermore, the cost of such a solution, denoted as $Sol(\ell)$, is at most $\cost(T_{\ell}) + \lambda_{\ell}$, by triangle inequality.
+Moreover, when $\ell = \ell^*$, $H_{\ell^*}$ has a perfect matching on the left-partition ($T_{\ell^*}$), and hence $T_{\ell^*}$ can be extended to a fair solution with cost $\alpha+1$.
+
+
+
+Notice that, $\lambda_{\ell^*}$ belongs to one of the $nk$ distances, and $\ell^{*}$ can be guessed over the range $[k]$.
+This immediately implies an algorithm to obtain distortion $3$ (and distortion $5$ resp.), by combining the $2$-distortion (and $4$-distortion resp.) algorithm of \cite{burkhardt2024low} for $T$ with the matching frameworks of~\cite{jones2020fair,gadekar2025fair}, using additional $nk(k\log (nk))$ distance queries, where the $k \log (nk)$ factor is for constructing the (edges of the) bipartite graph. 
+This naturally leads to the following question: \emph{can we achieve the same distortion guarantees with smaller number of queries, preferably near-linear in $k$, to the cardinal information?}
+
+\vspace{1em}
+
+
+
+For each $\ell \in [k]$, one possible idea is to employ binary search on $nk$ distances to find $\lambda_{\ell}$. However, the number of queries is still linear in $nk$, due to the need to sort these distances for the binary search.
+To reduce the number of queries, our first idea is to shrink the search space of candidate distances from $nk$ to $k^2$. For each center $t \in T$ and each group $G$ (there are at most $k$ groups), we identify the nearest point in $G$ to $t$ using only the ordinal ranking of $t$. 
+This results in at most $k^2$ distances, and hence requires $k^2$ many queries to construct the bipartite graphs that facilitate us find the minimum $\lambda_{\ell}$ for any $\ell \in [k]$.
+This yields a $3$-distortion algorithm using $\bigO(k^2)$ queries.
+We give a detailed analysis in Section~\ref{sec:conventional-algorithms}. 
+
+
+
+A natural way to reduce the distance queries is to conduct a binary search on $\ell$ over function $Sol(\ell)$. However, this not possible:  as $cost(T_{\ell})$ is non-increasing and $\lambda_{\ell}$ is non-decreasing, $Sol(\ell)$ is not necessarily monotone. 
+Our first key contribution is introducing the predicate $$P(\ell) \equiv (4 \lambda_{\ell} \leq cost(T_{\ell}));$$
+which \emph{is monotone} and facilitates binary search. We find the largest $\ell$, denoted $L$, such that $P(L)$ is true but $P(L+1)$ is false. 
+Using properties we derive in Lemma~\ref{lemma:monotonicity-of-lambda-and-cost-init-sol-set}, we prove that $\min\{Sol(L), Sol(L+1)\} \leq 5 cost(S^*)$ where $S^*$ is the optimal solution. This establishes the correctness of our binary-search procedure. 
+
+Next, we handle the distance query complexities of evaluating $P(\ell)$ and $\lambda_{\ell}$, which are completely new problems. 
+
+For the query complexity of computing $\lambda_{\ell}$ (detailed in Section~\ref{section:finding-minimum-lambda}), at a high level, we reduce the search space for $\lambda_{\ell}$ (of size $k^2$) by a factor of $\frac{3}{4}$ at each iteration. To accomplish this, at each round, we identify a \emph{pivot point} in the search space such that at least $\frac{1}{4}$ of the candidate distances are no smaller than the pivot and at least $\frac{1}{4}$ are no greater than the pivot such that at least one part does not contain $\lambda_\ell$. Finally, using a median-of-medians-style subroutine (Algorithm~\ref{alg:finding-lambda-ell} and Algorithm~\ref{alg:median-median}), we find such a pivot; this yields query complexity $O(\ell \log^{2} k)$.
+Notice that, for the whole algorithm, we only need to compute $\lambda_{\ell}$ for a fixed $\ell$ twice. Therefore, in the worst case scenario when $\ell = k$, the total query complexity of computing $\lambda_{\ell}$ is $O(k \log^2 k)$.
+
+For the query complexity of evaluating $P(\ell)$, a natural approach is to compute  $\lambda_{\ell}$ and compare it with $T_{\ell}$; however, this approach needs to compute $\lambda_{\ell}$ $\log(k)$ times and leads to  $O(\ell \log^3(k))$ queries. To avoid repetitively computing $\lambda_{\ell}$, we apply the equivalent formulation of $P(\ell)$ as 
+$$P(\ell)\equiv (\lambda_{\ell} \leq \frac{cost(T_{\ell})}{4}),$$
+which holds precisely when there exists a left-perfect matching when setting $\lambda = \frac{cost(T_{\ell})}{4}$. Using this design, we obtain an overall query complexity of $O(k \log^2 k)$. 
+
+
+
+

@@ -1,0 +1,58 @@
+\section{Introduction}
+Speculative decoding (SD) has emerged as a highly effective approach to speed up inference in large language models (LLMs).
+It has been widely used in real workloads, ranging from chat completion~\cite{chatgpt}, question answering~\cite{cobbe2021gsm8k, rein2023gpqagraduatelevelgoogleproofqa} to coding tasks~\cite{jimenezswe}. 
+
+Despite the substantial progress in SD, there has not been a systematic study on its effectiveness.
+Prior studies only used prototype implementations rather than production-level systems, which greatly undermines the validity of their conclusions. 
+Worse yet, these evaluations are often conducted with a batch size of one~\cite{xia-etal-2024-unlocking, cai2024medusa, leviathan2023fast, li2024eagle, li2024eagle2fasterinferencelanguage, li2025eagle3}—an unrealistic configuration that fails to reflect real-world deployment.
+Second, since the introduction of SD, numerous variants have emerged, including draft-model-based~\cite{miao2023specinfer, liu2023online, zhou2023distillspec, cascade-inference, chen2024sequoia}, $n$-gram-based~\cite{saxena2023prompt, somasundaram2024pld+}, and tree-based~\cite{cai2024medusa, li2024eagle, lin2024bita, fu2024break, li2024eagle2fasterinferencelanguage, li2025eagle3} approaches. Yet, we are unaware of any systematic analysis comparing these variants and understanding their respective use cases. This gap poses practical challenges: when deploying SD in production, practitioners are often left without clear guidance on which variant to use for different model architectures or workload conditions.
+
+We aim to study SD in actual deployment settings using real-world workloads. Towards that end, we systematically benchmark SD in vLLM~\cite{kwon2023efficient}, a production-ready inference system, and evaluate multiple SD variants across diverse datasets. 
+% To capture different system loads, we vary the batch size to simulate different system loads. 
+Although this setup may appear straightforward, several subtle yet important caveats arise in practice. %\alvin{caveats or surprising conclusion?} \jerry{I think "caveats" are better.}
+First, while SD is theoretically guaranteed to preserve the same token distribution as standard decoding, we observe that the generated outputs are not always identical. This discrepancy stems from the inherent nondeterminism~\cite{he2025nondeterminism} in LLM inference—caused by factors such as kernel parallelism and floating-point variation. 
+% To ensure a fair comparison, we filter out-of-distribution samples \alvin{what are ood samples} and constrain the generation lengths to be within a comparable range \alvin{comparable with what?}, thereby ensuring the reported speedup metrics are meaningful and consistent.\jerry{We are currently not using this length-based filter, remove this sentence?}
+Furthermore, we study the SD performance on two increasingly prominent setups: reasoning workloads, which involve longer and more structured generations, and multi-token prediction (MTP)~\cite{deepseekai2025deepseekv3technicalreport, 5team2025glm45agenticreasoningcoding}, a recently emerging acceleration technique that complements SD.
+Across all workloads, every SD variant outperforms the no-SD baseline. The speedup decreases as the batch size increases, consistent with the reduced opportunities for SD on computation-bound scenarios~\cite{liu2024dsd}. Notably, reasoning workloads that require long chains of thought—and therefore generate longer outputs—exhibit speedups comparable to those observed on standard language-modeling tasks.
+
+Next, we conduct a detailed analysis to understand the performance of speculative decoding (SD) across different variants. The overall speedup of SD is governed by two key factors: the execution efficiency of its constituent stages and the token acceptance rate.
+
+We first examine the execution efficiency of the different SD stages.
+In general, SD consists of three stages---proposing tokens, verifying tokens, and system overhead such as scheduling and rejection sampling. 
+By examining the time breakdown of the three stages, we find that the proposing stage accounts for only a small portion of the total execution time, and the execution of the large model during verification remains the dominant cost. Thus, when the acceptance rate is low, repeatedly running the large model on rejected tokens incurs substantial runtime cost. As shown in prior work~\cite{liu2024dsd}, this extra cost becomes prohibitive under high system load, and can even cause SD to be slower than standard decoding.
+
+We next conduct a detailed analysis of acceptance behavior in SD, examining when proposed tokens are accepted or rejected.
+We observe that acceptance patterns exhibit three levels of variability: within a request, across different requests, and across different datasets. 
+Furthermore, different SD methods demonstrate entirely different behavior. For example, learned SD methods such as EAGLE maintain stable and consistently high acceptance across diverse workloads, whereas training-free method like $n$-gram produces more variable but occasionally much longer accepted spans in tasks like code-editing, where frequent local repetitions allow it to reuse previously seen patterns.
+
+Based on the above observations, we ask a fundamental question: \emph{how far are current SD approaches from the optimal speedup, and what is the theoretical upper bound of speculative decoding?}
+
+First, motivated by the observation that a large fraction of proposed tokens are ultimately rejected, we identify a promising direction for improving SD performance: \textbf{verifying only those tokens that are likely to be accepted}. In the ideal case, a proposal method that perfectly predicts the large model’s outputs would eliminate the need to invoke the large model altogether. To quantify the gap between observed and theoretical speedups, we develop a simulator grounded in real-world benchmarking data. This simulator evaluates performance under an idealized setting in which all proposed tokens are accepted, thereby minimizing verification cost and achieving the optimal speedup.
+
+Second, we observe that different SD methods achieve higher acceptance at different token positions. This complementarity suggests that adaptively combining multiple SD methods can unlock additional speedup beyond what any single method can achieve in isolation. Our results show that such adaptive combinations can improve end-to-end speedup to 4.9$\times$ relative to standard (no-SD) decoding.
+
+In summary, the paper makes the following contributions:
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+    \item \textbf{Production-grade evaluation of speculative decoding.} 
+    We present the first systematic study of SD within a widely adopted, highly optimized inference engine (vLLM), thereby bridging the gap between research prototypes and real-world deployments. We evaluate mainstream SD variants across various real-world workloads.
+
+    \item \textbf{Decomposition of speedup and performance bottlenecks.} 
+    We analyze key factors that affect SD performance and find that: (1) verification cost remains dominant, and (2) acceptance behavior exhibits variability across positions, requests, and datasets. To the best of our knowledge, this is the first work to thoroughly examine both the time/memory breakdown and acceptance dynamics of SD across diverse workloads.
+
+    \item \textbf{Theoretical upper bound of SD speedup.} 
+    Based on these observations, we analyze the gap between measured and maximum achievable speedup. By leveraging position-specific acceptance statistics without modifying the proposing method, we compute the theoretical upper bound of SD performance, revealing an orthogonal and promising direction for future optimization.
+\end{itemize}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,124 @@
+
+\subsection{Sample Rules}
+\label{app:sample_rules}
+
+Below, we present a representative subset of learned rules. Each rule is shown in natural language along with its corresponding symbolic representation.
+
+\lstdefinestyle{rulestyle}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  breakatwhitespace=true,
+  columns=fullflexible,
+  frame=single,
+  backgroundcolor=\color{gray!5},
+frame=single,
+rulecolor=\color{blue!50!black},
+  captionpos=b
+}
+\lstset{inputencoding=utf8}
+
+
+\begin{lstlisting}[style=rulestyle, caption={Sample rules learned from the ToolHop dataset}]
+
+1. If the user query involves identifying a complex relationship (e.g., step-relative) and the available tools do not directly support the requested relationship type, then decompose the query into intermediate subtasks that progressively resolve the relationship through simpler, directly supported relationship types.
+if (domain=RELATIONSHIP_RESOLUTION and qualifier=[RELATIONSHIP_CHAIN
+_TRAVERSAL, INTERMEDIATE_ENTITY_IDENTIFICATION]) then (action=[DECOMPOSE_QUERY, RESOLVE_INTERMEDIATE_ENTITY]) with strength=MANDATORY
+
+2. If a query involves determining a property of an object derived from intermediate steps (e.g., counting, analyzing, or transforming an attribute of an entity), then the decomposition must explicitly include a subtask to apply the appropriate process or transformation to the derived attribute.
+if (domain=QUERY_DECOMPOSITION and qualifier=[MULTI_STEP_REASONING, DERIVATIVE_ENTITY]) then (action=[DECOMPOSE_QUERY, TRANSFORM_INPUT]) with strength=MANDATORY
+
+3. If a query fails due to insufficient or incomplete data returned by a tool, then refine the input arguments by including optional parameters that provide additional context (e.g., variants of names, time periods, regions, or other applicable constraints) to improve data retrieval accuracy.
+if (domain=TOOL_ARGUMENT_VALIDATION and qualifier=[INCOMPLETE_DATA
+_REFINEMENT]) then (action=[REFINE_INPUT_ARGUMENTS, HANDLE_INCOMPLETE_DATA]) with strength=RECOMMENDED
+
+4. If a query involves determining an attribute (e.g., date, location, event) of an entity that is related to another entity (e.g., family member), then decompose the query to first identify the related entity before attempting to determine its attribute.
+if (domain=QUERY_DECOMPOSITION and qualifier=[RELATIONSHIP_CHAIN_
+TRAVERSAL, INTERMEDIATE_ENTITY_IDENTIFICATION]) then (action=[DECOMPOSE_QUERY, RESOLVE_INTERMEDIATE_ENTITY]) with strength=MANDATORY
+
+5. If the subtask requires extracting a specific subset of information (e.g., first name from a full name), then construct arguments for the tool to restrict the output to match the requested subset by enabling relevant optional parameters explicitly, while leaving unrelated parameters at their defaults.
+if (domain=NAME_PROCESSING and qualifier=[NAME_COMPONENT_EXTRACTION]) then (action=[CONSTRUCT_ARGUMENTS, REFINE_INPUT_ARGUMENTS]) with strength=MANDATORY
+
+6. If the user query involves identifying information about a specific familial relationship across multiple generations (e.g., paternal grandfather), then decompose the query such that the familial relationship is resolved directly using tools designed to retrieve genealogical data, without redundantly extracting unrelated immediate relationships.
+if (domain=RELATIONSHIP_RESOLUTION and qualifier=[FAMILIAL_RELATIONSHIP, RELATIONSHIP_CHAIN_TRAVERSAL]) then (action=[DECOMPOSE_QUERY, IDENTIFY_RELATIONSHIP]) with strength=MANDATORY
+
+7. If a query involves determining the ancestry of a person based on a specific familial relationship (e.g., maternal grandfather), then decompose the task into subtasks that sequentially query each familial link (e.g., mother, mother's father) and ensure intermediate results are used to refine subsequent subtasks.
+if (domain=HIERARCHICAL_RELATIONSHIPS and qualifier=[FAMILIAL_RELATIONSHIP, RELATIONSHIP_CHAIN_TRAVERSAL, INTERMEDIATE_ENTITY_IDENTIFICATION]) then (action=[DECOMPOSE_QUERY, SEQUENCE_SUBTASKS, RESOLVE_INTERMEDIATE_ENTITY]) with strength=MANDATORY
+
+8. If a query involves identifying an entity indirectly related to another (e.g., the founder of a political party identified in a previous step), then ensure that intermediate subtasks chain outputs logically by querying the relationship explicitly rather than assuming associations provided in the query.
+if (domain=INDIRECT_ENTITY
+_IDENTIFICATION and qualifier=[RELATIONSHIP_CHAIN
+_TRAVERSAL, INTERMEDIATE_ENTITY_IDENTIFICATION]) then (action=[SEQUENCE_SUBTASKS, RESOLVE_INTERMEDIATE_ENTITY]) with strength=MANDATORY
+
+9. If a query involves retrieving information about an individual's relative, the decomposition must include a subtask to explicitly identify the relative before retrieving specific information about them.
+if (domain=RELATIONSHIP_RESOLUTION and qualifier=[FAMILIAL_RELATIONSHIP, RELATIONSHIP_CHAIN_TRAVERSAL]) then (action=[DECOMPOSE_QUERY, RESOLVE_INTERMEDIATE_ENTITY]) with strength=MANDATORY
+
+10. If the subtask involves identifying a familial or social relationship between entities, then select a tool designed to query relationships, and do not select a tool designed for extracting name components or parsing names.
+if (domain=RELATIONSHIP_RESOLUTION and qualifier=[FAMILIAL_RELATIONSHIP, RELATIONSHIP_CHAIN_TRAVERSAL]) then (action=[MATCH_TOOL_TO_SUBTASK]) with strength=MANDATORY
+
+
+\end{lstlisting}
+
+
+
+
+
+
+\begin{lstlisting}[style=rulestyle, caption={Sample rules learned from the BFCL: Live-Multiple dataset}]
+
+1. If a reasoning process identifies a subtask requiring tool-based execution, then ensure the tool name generated in the output matches exactly with one of the available tools in the schema. Use schema validation to confirm that the generated tool name exists before finalizing the response.
+if (domain=TRANSPORTATION and qualifier=[SCHEMA_VALIDATION, TOOL_SELECTION_ERROR]) then (action=[CONFIRM_SCHEMA_COMPLIANCE, SELECT_TOOL_BASED_ON_QUERY]) with strength=MANDATORY
+
+2. IF the query involves retrieving general information about an entity, concept, or event that is not explicitly tied to recent updates or temporal relevance, THEN select a tool designed for general web searches instead of a tool specialized for retrieving recent news or updates.
+if (domain=GENERAL_INFORMATION
+
+_RETRIEVAL and qualifier=[TOOL_SELECTION_ERROR]) then (action=[SELECT_TOOL_BASED_ON_QUERY]) with strength=MANDATORY
+
+3. If the subtask requires checking availability or stock levels for specific product attributes (e.g., sizes, stock count), then select a tool whose schema explicitly supports inventory-related operations, rather than using a tool designed for general product details.
+if (domain=INVENTORY_MANAGEMENT and qualifier=[TOOL_SELECTION_ERROR]) then (action=[SELECT_TOOL_BASED_ON_QUERY]) with strength=MANDATORY
+
+4. If the subtask involves checking the availability of a specific attribute (e.g., size, color, or stock) for a product, then select a tool whose schema explicitly includes functionality for querying availability of attributes rather than retrieving general product details.
+if (domain=INVENTORY_MANAGEMENT and qualifier=[TOOL_SELECTION_ERROR]) then (action=[SELECT_TOOL_BASED_ON_QUERY]) with strength=MANDATORY
+
+5. If a user query explicitly provides a value for a parameter, regardless of whether the parameter has a default value in the schema, prioritize the user-provided value over the default value when constructing arguments.
+if (domain=DATABASE_MANAGEMENT and qualifier=[USER_QUERY_VALUE_PRIORITY, DEFAULT_VALUE_ASSIGNMENT]) then (action=[PRIORITIZE_USER_VALUE, CONSTRUCT_TOOL_ARGUMENTS]) with strength=MANDATORY
+
+6. If the user query explicitly requests understanding, explanation, or help about a functionality, then select a tool designed to provide informational assistance rather than one intended for operational execution.
+if (domain=GENERAL_INFORMATION_RETRIEVAL and qualifier=[TOOL_SELECTION_ERROR]) then (action=[SELECT_TOOL_BASED_ON_QUERY]) with strength=MANDATORY
+
+7. If the intended action is to retrieve information based on user-specified filters or constraints, then select a tool that explicitly supports filtering or constraint-based retrieval in its schema description. Ensure the subtask aligns directly with the tool's primary function as specified in its schema.
+if (domain=GENERAL_INFORMATION_RETRIEVAL and qualifier=[TOOL_SELECTION_ERROR]) then (action=[SELECT_TOOL_BASED_ON_QUERY]) with strength=MANDATORY
+
+8. If a subtask involves identifying available options or exploring possible choices for a resource (e.g., accommodations, flights, attractions), then select a tool designed for searching or browsing those resources rather than a tool designed for finalizing or reserving them.
+if (domain=GENERAL_INFORMATION_RETRIEVAL and qualifier=[TOOL_SELECTION_ERROR]) then (action=[SELECT_TOOL_BASED_ON_QUERY]) with strength=MANDATORY
+
+9. If the user query specifies a constraint related to an entity (e.g., actor name, director name, genre, etc.), then construct the corresponding parameter value by directly extracting the entity mentioned in the query, instead of using default or placeholder values.
+if (domain=GENERAL_INFORMATION_RETRIEVAL and qualifier=[REQUIRED_PARAMETER
+
+_FORMATTING, USER_QUERY_VALUE_PRIORITY]) then (action=[CONSTRUCT_TOOL_ARGUMENTS, PRIORITIZE_USER_VALUE]) with strength=MANDATORY
+
+10. If a schema explicitly limits valid values for an input parameter to a predefined set, then when constructing arguments, map user preferences to the closest valid value within this set, or default to a neutral option (e.g., no filtering) when the schema disallows explicit preferences.
+if (domain=GENERAL_INFORMATION_RETRIEVAL and qualifier=[SCHEMA_VALIDATION, DEFAULT_VALUE_ASSIGNMENT]) then (action=[CONSTRUCT_TOOL_ARGUMENTS, ASSIGN_DEFAULT_VALUE]) with strength=MANDATORY
+
+
+\end{lstlisting}
+
+
+
+
+
+\begin{lstlisting}[style=rulestyle, caption={Sample rules learned from the BFCL: Multi-Turn-Base dataset}]
+
+1. If a subtask involves initiating a system or process with preconditions, then identify and include all required preconditions (e.g., state validations, sequential actions) in the task decomposition, ensuring that they are executed in the correct order prior to invoking the main action. For example, if starting a process requires preconditions A, B, and C, verify and satisfy A, B, and C sequentially before initiating the process.
+if (domain=PROCESS_MANAGEMENT and qualifier=[PRECONDITION_VALIDATION, TASK_SEQUENCE_VALIDATION]) then (action=[DECOMPOSE_TASK, VALIDATE_PRECONDITIONS, ENSURE_SEQUENCE]) with strength=MANDATORY
+
+2. If a user query involves an action that requires specific prerequisites to be met (e.g., a dependency between tasks or a state requirement), decompose the query into subtasks that explicitly address the prerequisites first. Ensure each prerequisite subtask is executed and validated before proceeding with the dependent action.
+if (domain=PROCESS_MANAGEMENT and qualifier=[PREREQUISITE_TASK, DEPENDENCY_MANAGEMENT, TASK_SEQUENCE_VALIDATION]) then (action=[DECOMPOSE_TASK, VALIDATE_PRECONDITIONS, EXECUTE_SUBTASK]) with strength=MANDATORY
+
+3. If the task involves converting a monetary target between two currencies, then ensure the base currency matches the source of the monetary target and the target currency matches the destination specified in the query context. Do not reverse these roles, as it will misalign the output with the intended goal.
+if (domain=CURRENCY_CONVERSION and qualifier=[CURRENCY_CONSISTENCY, PRECONDITION_VALIDATION]) then (action=[MATCH_CURRENCY, VALIDATE_PRECONDITIONS]) with strength=MANDATORY
+
+4. If a query requires identifying entities from a complete set (e.g., all available options), then retrieve the comprehensive set explicitly using tools designed for global enumeration before attempting subtasks that depend on specific entities. Do not attempt to infer the set by piecemeal or localized retrieval from individual components.
+if (domain=ENTITY_RETRIEVAL and qualifier=[GLOBAL_ENUMERATION, DEPENDENCY_MANAGEMENT]) then (action=[RETRIEVE_GLOBAL_SET, EXECUTE_SUBTASK]) with strength=MANDATORY
+
+\end{lstlisting}
+

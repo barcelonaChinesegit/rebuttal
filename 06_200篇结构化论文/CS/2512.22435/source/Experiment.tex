@@ -1,0 +1,75 @@
+\section{Experiment Setup}
+
+\subsection{Specification-driven design tasks}
+
+
+To evaluate the proposed system, we selected op-amps as the target circuit family, since they represent a fundamental building block in analog design. As shown in Table~\ref{tab:spec_tasks}, we defined ten design tasks with gradually increasing difficulty, grouped into three levels.  Each task defines a combination of performance metrics, including power, DC gain (Gain), common-mode rejection ratio (CMRR), power supply rejection ratio (PSRR), gain-bandwidth product (GBW), phase margin (PM), and power supply noise rejection (PSRN). Tasks~1--5 correspond to relatively easy specifications under relaxed constraints, while Tasks~6--9 impose stricter limits on power, bandwidth, and noise rejection requirements. Task~10 is the most challenging case.
+
+\begin{table}[]
+	\centering
+	\caption{Specification requirements for Tasks 1--10.}
+	\label{tab:spec_tasks}
+	\resizebox{\linewidth}{!}{
+		\begin{tabular}{ccccccccc}
+			\hline
+\textbf{Level} &
+\textbf{Task} &
+\makecell{\textbf{Power}\\($\mu$W)} &
+\makecell{\textbf{Gain}\\(dB)} &
+\makecell{\textbf{CMRR}\\(dB)} &
+\makecell{\textbf{PSRR}\\(dB)} &
+\makecell{\textbf{GBW}\\(Hz)} &
+\makecell{\textbf{PM}\\(deg)} &
+\makecell{\textbf{PSRN}\\(dB)}
+\\
+			\midrule
+			\multirow{5}{*}{Easy} 
+			& 1  & $\leq 1000$  & $\geq 45$  & $\geq 20$  & $\geq 20$  & $\geq 1.0\times10^{5}$ & $\geq 60$  & $\geq 20$ \\
+			& 2  & $\leq 1000$  & $\geq 45$  & $\geq 40$  & $\geq 40$  & $\geq 1.0\times10^{6}$ & $\geq 60$  & $\geq 40$ \\
+			& 3  & $\leq 100$   & $\geq 80$  & $\geq 50$  & $\geq 50$  & $\geq 1.0\times10^{6}$ & $\geq 60$  & $\geq 50$ \\
+			& 4  & $\leq 100$   & $\geq 80$  & $\geq 70$  & $\geq 70$  & $\geq 1.0\times10^{6}$ & $\geq 70$  & $\geq 70$ \\
+			& 5  & $\leq 100$   & $\geq 100$ & $\geq 70$  & $\geq 70$  & $\geq 1.0\times10^{6}$ & $\geq 70$  & $\geq 70$ \\
+			\hline
+			\multirow{4}{*}{Medium} 
+			& 6  & $\leq 10$    & $\geq 60$  & $\geq 70$  & $\geq 70$  & $\geq 5.0\times10^{5}$ & $\geq 50$  & $\geq 70$ \\
+			& 7  & $\leq 10$    & $\geq 60$  & $\geq 70$  & $\geq 70$  & $\geq 5.0\times10^{5}$ & $\geq 50$  & $\geq 70$ \\
+			& 8  & $\leq 1$     & $\geq 25$  & $\geq 55$  & $\geq 55$  & $\geq 1.0\times10^{5}$ & $\geq 45$  & $\geq 55$ \\
+			& 9  & $\leq 2$     & $\geq 45$  & $\geq 30$  & $\geq 30$  & $\geq 1.0\times10^{6}$ & $\geq 45$  & $\geq 30$ \\
+			\hline
+			Hard & 10 & $\leq 5$  & $\geq 80$  & $\geq 30$  & $\geq 30$  & $\geq 1.0\times10^{6}$ & $\geq 45$  & $\geq 30$ \\
+			\hline
+		\end{tabular}}
+\end{table}
+
+\subsection{Baselines from prior works}
+
+To ensure a fair and representative evaluation, we compared our method against two opensource frameworks and adapted one method to our framework.
+
+
+\begin{itemize}
+    \item \textbf{SPICEPilot} ~\cite{vungarala2024spicepilot} focuses on automatic SPICE netlist generation and verification through a PySpice-based benchmark. It integrates LLM-driven code synthesis, simulation, and rule-based correctness checks under zero-shot prompting.
+    \item \textbf{AnalogCoder-Pro} ~\cite{lai2025analogcoder} employs one-shot prompting with multiple iterations using PySpice simulations to generate sized topology results.
+    \item \textbf{Artisan-style SAGE} is based on the Artisan ~\cite{chen2024artisan}, which integrates several predefined design patterns and instructs the LLM to generate designs based on given candidates. Since their codebase and candidate sets are not publicly available, we construct our own candidate library and embed it into the prompts. We further apply the Numerical Module for parameter optimization.
+\end{itemize}
+\subsection{Evaluation metrics}
+
+We employed three complementary metrics to assess design success, reasoning efficiency, and optimization effectiveness: \textit{Pass@k}, \textit{Average Iterations}, and \textit{Normalized Parameter Search Space}.
+
+\paragraph{Pass@k.}
+The \textit{Pass@k} metric measures the probability that at least one correct design appears among $k$ generated trials:$\text{Pass@k} = 1 - \frac{\binom{n-c}{k}}{\binom{n}{k}}$,
+where $n$ is the total number of trials and $c$ is the number of correct ones.
+In our experiments, we use $n = 5$ and $k = 1$.
+
+\paragraph{Average Iterations.}
+For iterative frameworks, we report the average number of reasoning iterations needed to reach a valid design. Fewer iterations indicate more efficient reasoning and stronger convergence.
+
+\paragraph{Normalized Parameter Search Space.}
+We compute the parameter search range selected by the agent and normalize it to the full search space (set to 1). Smaller values indicate tighter parameter constraints and more efficient optimization.
+
+
+\subsection{Agent framework configuration}
+
+
+We constructed the \emph{Topology Database} by labeling 50 representative topology candidates and built the \emph{Design Knowledge RAG} using approximately 10,000 analog design papers collected from ISSCC proceedings \cite{issccISSCCInternational} spanning 1955 to 2024. All experiments were conducted using the \texttt{gemini-2.5-flash}~\cite{comanici2025gemini} and \texttt{text-embedding-3-large}~\cite{neelakantan2022text} models via API access. Circuit simulations were performed using \texttt{ngspice} under the SKY130 PDK, adapted from the open-source AnalogGym script~\cite{10.1145/3676536.3697117}.
+For fairness, we set the maximum number of reasoning iterations in AnalogSAGE to three, matching the iteration limit used in AnalogCoder-Pro.
+

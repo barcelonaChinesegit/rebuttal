@@ -1,0 +1,75 @@
+
+\subsection{Overview}
+
+At a high level, MTSP-LDP follows the \emph{dissimilarity guided publication}
+framework, first proposed for the $w$-event CDP setting~\cite{Kellaris2014} and
+later extended to the $w$-event LDP setting~\cite{Ren2022}.
+The main idea of this framework is that, the server checks at every timestamp
+whether it is more beneficial to approximate the current stream statistics with
+the last released statistics, than to publish newly computed stream statistics
+with necessary noise.
+MTSP-LDP further enhances this framework by proposing an \emph{optimal budget
+  allocation strategy} to improve estimation accuracy and a \emph{private binary
+  tree structure} to enable multi-task streaming queries.
+In more detail, MTSP-LDP consists of four mechanisms, i.e., private
+dissimilarity estimation, optimal privacy budget allocation, private adaptive
+tree publication, and budget-free multi-task streaming query, as illustrated in
+\cref{fig:framework}.
+
+\begin{figure}[htp]
+  \centering
+  \input{samples/sigmod2026/tz_framework}
+  \caption{The framework of MTSP-LDP}
+  \label{fig:framework}
+  \Description{The figure illustrates the workflow of the MTSP-LDP framework at timestamp $t$. At the top, $n_t$ active users send perturbed data to a Frequency Oracle. The process then flows through four connected modules labeled $M_1^t$ through $M_4^t$.}
+\end{figure}
+\begin{itemize}
+\item {\textbf{Private Dissimilarity Estimation $\CM_1^t$}}.
+% \bullethdr{Private Dissimilarity Estimation $\CM_1^t$}.
+At each time $t$, the server computes the dissimilarity $\dis_t$ between the
+statistics of current user data $D_t$ and the last released stream statistics,
+and $\dis_t$ will be used to determine whether to approximate with the previous
+release or publish with noise.
+The main challenge we need to address in $\CM_1^t$ is how to privately compute
+$\dis_t$ as user data $D_t$ is not available to the server in LDP, and instead,
+we design an unbiased estimator $\hdis_t$ to estimate $\dis_t$ while preserving
+user privacy.
+\item {\textbf{Optimal Privacy Budget Allocation $\CM_2^t$}}.
+% \bullethdr{Optimal Privacy Budget Allocation $\CM_2^t$}.
+Given $\hdis_t$, existing methods~\cite{Kellaris2014,Ren2022} directly compare
+$\hdis_t$ with the publication error $\err_t$. If $\hdis_t < \err_t$, then they
+approximate with the previous release; otherwise, they publish with noise using a
+predetermined privacy budget.
+However, we notice that this commonly used strategy is often not optimal,
+particularly in the $w$-event setting, as it bases its decision solely on the
+current timestamp while neglecting the temporal context within the sliding window.
+We therefore propose an optimal privacy budget allocation strategy by cleverly leveraging
+previously computed dissimilarities, i.e., $\{\hdis_{t'}\}_{t'\leq t}$.
+This strategy will determine whether to approximate or to publish, and how to
+optimally allocate the privacy budget at time $t$.
+
+\item {\textbf{Private Adaptive Tree Publication $\CM_3^t$}}.
+% \bullethdr{Private Adaptive Tree Publication $\CM_3^t$}.
+In MTSP-LDP, the server privately collects user data $D_t$ and represents $D_t$
+as a private binary tree to both protect user privacy and support
+multi-task streaming query.
+This private binary tree participates in dissimilarity estimation in
+$\CM_1^t$ as well as streaming query in $\CM_4^t$.
+We construct the private binary tree in a data-adaptive way in order to
+accurately capture the statistics of user data $D_t$.
+The output tree $\OT_t$ is then released and will be used by $\CM_4^t$ to run
+streaming queries.
+
+\item {\textbf{Budget-Free Multi-task Streaming Query $\CM_4^t$}}.
+% \bullethdr{Budget-Free Multi-task Streaming Query $\CM_4^t$}.
+Unlike existing research, which typically focuses on ad-hoc queries, e.g., counting, histogram query, or frequency query,
+MTSP-LDP is designed to support multi-task streaming queries, including all
+queries defined in \cref{ss:queries}, by utilizing the released private binary
+trees $\{\OT_{t'}\}_{t'\leq t}$ without incurring  any additional privacy budget.
+We theoretically show that MTSP-LDP satisfies $w$-event LDP.
+\end{itemize}
+
+These above sub-mechanisms work in tandem to achieve privacy-preserving data analysis in streaming environments, as illustrated in Algorithm~\ref{alg:mtsp-ldp}. Next, we
+will introduce them in detail.
+\input{samples/sigmod2026/alg_method}
+% As the private binary tree is a fundamental data structure used in our framework, in what follows, we first introduce this data structure, and then elaborate on each mechanism.

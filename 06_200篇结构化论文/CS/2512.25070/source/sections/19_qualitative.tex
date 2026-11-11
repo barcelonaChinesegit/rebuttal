@@ -1,0 +1,180 @@
+\clearpage
+\section{Qualitative Analysis}
+\label{sec:qualitative_analysis}
+
+\subsection{Qualitative Analysis of Final Answers}
+\label{sec:qualia}
+
+We manually annotated responses to 207 questions by both the initial Qwen3-8B thinking model and the trained \ourmodel  8B on the Guardian validation set. Using this set, we found that the agreement between the two models used for grading, Llama 4 Scout and Qwen3 4B is $\sim 97\%$, and we agree with their grading in over 95\% of cases. This confirms the reliability of automatic answer matching based evaluation.
+
+In \Cref{tab:domain}, we analyze the domains (by news section) in which our trained model improves. We find significant improvements in the World, Australian, and US news sections, with no significant change for sports. This suggests our model may not yet perform well on sports-heavy prediction markets like Kalshi.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrr}
+\hline
+Domain & $n$ & Before & After & $\Delta$ \\ 
+\hline
+world & 20 & 21.7 & 33.3 & +11.6 \\
+australia-news & 15 & 35.6 & 42.2 & +6.7 \\
+us-news & 21 & 41.3 & 44.4 & +3.2 \\
+sport & 37 & 43.2 & 43.2 & +0.0 \\
+football & 30 & 34.4 & 33.3 & -1.1 \\
+\hline
+\end{tabular}
+\caption{Avg@3 by domain (n $\ge$ 10).}
+\label{tab:domain}
+\end{table}
+
+In \Cref{tab:questionform}, we analyze change in performance by question type, finding significant improvements on questions of the form ``what'', ``which'', and ``who'', while a slight regression in performance on location questions (``where'').
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrrr}
+\hline
+Question form & $n$ & Before & After & $\Delta$ \\ 
+\hline
+what & 25 & 14.7 & 29.3 & +14.7 \\
+which & 98 & 45.2 & 51.4 & +6.1 \\
+who & 60 & 27.8 & 33.9 & +6.1 \\
+other & 10 & 40.0 & 43.3 & +3.3 \\
+where & 14 & 47.6 & 45.2 & -2.4 \\
+\hline
+\end{tabular}
+\caption{Avg@3 by question form (n $\ge$ 10).}
+\label{tab:questionform}
+\end{table}
+
+
+Below, we present qualitative examples where our training improves and worsens predictions compared to the original model. 
+
+\subsubsection*{Qualitative examples (improved; first sample)}
+\begin{itemize}
+\item \textbf{Q:} Who will be wearing the yellow jersey in the general classification at the end of stage eight of the 2025 Tour de France? \\
+\textbf{Truth:} Tadej Poga{\v{c}}ar \\
+\emph{Before:} Jonas Vingegaard (p=0.10) \\
+\emph{After:} Tadej Poga{\v{c}}ar (p=0.60)
+
+\item \textbf{Q:} Who will withhold a resolution from the U.S. House floor to force a vote on releasing the Epstein documents by July 25, 2025? \\
+\textbf{Truth:} Mike Johnson \\
+\emph{Before:} Pam Bondi (p=0.30) \\
+\emph{After:} Mike Johnson (p=0.60)
+\end{itemize}
+
+\subsubsection*{Qualitative examples (regressed; first sample)}
+\begin{itemize}
+% \item \textbf{Q:} Which agency will drivers in Northern Ireland apply to for a replacement driving licence by 31 July 2025? \\
+% \textbf{Truth:} DVA \\
+% \emph{Before:} DVLA (p=0.70) \\
+% \emph{After:} DVLA (p=0.20)
+
+% \item \textbf{Q:} Where could Sweden's Euro 2025 journey conclude with a historic night if they continue to win? \\
+% \textbf{Truth:} Basel \\
+% \emph{Before:} Basel (p=0.70) \\
+% \emph{After:} Zurich (p=0.40)
+
+\item \textbf{Q:} Who will be the Democratic Party's nominee for New York City mayor in the November 2025 general election? \\
+\textbf{Truth:} Zohran Mamdani \\
+\emph{Before:} Zohran Mamdani (p=0.60) \\
+\emph{After:} Andrew Cuomo (p=0.40)
+
+\item \textbf{Q:} Who will post the lowest first-round score among Rory McIlroy, Scottie Scheffler and Viktor Hovland at the 2025 Scottish Open? \\
+\textbf{Truth:} Viktor Hovland \\
+\emph{Before:} Viktor Hovland (p=0.60) \\
+\emph{After:} Scottie Scheffler (p=0.40)
+\end{itemize}
+
+\subsection{Reasoning Evolution During Training}
+\label{sec:reasoning_evolution}
+
+We now provide a few qualitative examples of how the model reasoning evolves when training on OpenForesight. We ask the model itself to provide a summary of its reasoning (after the <think></think> tags), and show this summary below for the initial Qwen3-8B model, followed by training checkpoints.
+
+
+\subsubsection{Example 1: Model stays incorrect but learns to hedge}
+
+\noindent\textbf{Question:} Which country will face a new 25\% US tariff in a trade announcement by 30 July 2025?\\
+\noindent\textbf{Background:} The US administration is evaluating other countries' trade barriers and is expected to announce new tariffs by the end of July 2025.\\
+\noindent\textbf{Resolution Criteria:}
+
+\textbf{Source of Truth}: Official tariff announcement issued by the White House or the Office of the United States Trade Representative.
+
+\textbf{Resolution Date}: 30 July 2025, the date by which the 25\% tariff announcement is expected.
+
+\textbf{Accepted Answer Format}: The full name of the country as stated in the official announcement.
+
+\noindent\textbf{Resolution answer:} India
+
+\medskip
+
+\noindent\textit{Checkpoint 0: score=-0.722, status=wrong}\\
+<answer>South Korea</answer> <probability>0.85</probability> **Reasoning**: - **Article 2** (May 25, 2025) explicitly mentions a **25\% tariff** on **Samsung** (South Korea) and other smartphone manufacturers. This directly ties the 25\% tariff to **South Korea**. - While the EU is mentioned with a **50\% tariff** in the same article, the **25\% tariff** specifically targets South Korea's exports. - Other articles reference tariffs on China, the EU, or automakers, but none specify a **25\% tariff** on a country beyond South Korea. - The resolution date (July 30, 2025) aligns with the timeline of the May 25 announcement, as no newer data is provided. **Confidence**: 85\% (strong evidence from Article 2, though no post-May 25 updates confirm further announcements).
+
+\medskip
+
+\noindent\textit{Checkpoint 400: score=-0.360, status=wrong}\\
+The retrieved articles indicate ongoing US tariff announcements by the Trump administration in 2025. Article 2 explicitly mentions a 25\% tariff on South Korea for smartphone manufacturers like Samsung, while Article 4 references 25\% tariffs on steel and aluminum imports from Canada and Mexico. Article 3 also notes a 25\% tariff on foreign automakers, which could target countries like South Korea or others, but South Korea is specifically named in Article 2 for a 25\% rate. Given the question's focus on a "new" 25\% tariff announcement by July 30, 2025, and the patterns in the articles, South Korea appears as a likely candidate, as it has already faced such announcements and fits the criteria. However, the question implies a potential new announcement, and other countries like Canada or Mexico could also be possibilities based on Article 4, introducing uncertainty. My confidence is moderate due to the reliance on past announcements and the possibility of new developments by the resolution date. <answer>South Korea</answer> <probability>0.6</probability>
+
+\medskip
+
+\noindent\textit{Checkpoint 800: score=-0.090, status=wrong}\\
+The retrieved articles indicate a pattern of US tariffs targeting major trade partners like China, India, the EU, Canada, Mexico, and South Korea. Article 4 specifically mentions a 25\% tariff on steel and aluminum imports, which historically targets countries such as China and those in the EU. Article 2 highlights a 25\% tariff on South Korean products (e.g., Samsung), while Article 1 and Article 3 reference ongoing tariffs on China and other nations. Given the US administration's focus on trade barriers, China is the most frequently mentioned target, making it a likely candidate for a new 25\% tariff announcement by July 2025. However, the articles do not confirm a specific new announcement, and other countries like India are also potential targets based on Article 1, introducing uncertainty. Due to the lack of direct evidence for a July announcement and the possibility of shifts in US policy, my confidence is low. <answer>China</answer> <probability>0.3</probability>
+
+\subsubsection{Example 2: Model goes from incorrect to correct}
+
+\noindent\textbf{Question:} Who will give Harvard one week to produce extensive records for its exchange visitor program review by July 23, 2025? \\
+\noindent\textbf{Background:} The U.S. Secretary of State periodically issues directives to universities regarding their exchange visitor program compliance.\\
+\noindent\textbf{Resolution Criteria:}
+
+\textbf{Source of Truth}: The official announcement or government statement naming the individual who issued the one-week deadline.
+
+\textbf{Resolution Date}: When the directive is publicly attributed (expected by July 23, 2025).
+
+\textbf{Accepted Answer Format}: Full name, for example "Jane Doe".
+
+\noindent\textbf{Resolution answer:} Marco Rubio
+
+\medskip
+
+\noindent\textit{Checkpoint 0: score=-0.902, status=wrong}\\
+The retrieved articles describe actions by the Trump administration's Department of Homeland Security, specifically Secretary Kristi Noem, toward Harvard. In the text, Noem sends Harvard a letter giving them 72 hours to provide information, not one week, so there is a mismatch between the question's ``one week by July 23, 2025'' and the articles' ``72 hours.'' It seems that the July 23 date comes from the resolution criteria and isn't in the articles themselves, and that the 72-hour deadline might be part of a larger process leading up to that date, or that the question wording is slightly off. Despite this discrepancy, all the evidence points to Kristi Noem as the person issuing the directive to Harvard about providing records. Therefore, the answer should be Kristi Noem, and the confidence is high because all the articles point to her as the one who issued the directive to Harvard regarding the records.<answer>Kristi Noem</answer> <probability>0.95</probability>
+
+\medskip
+
+\noindent\textit{Checkpoint 400: score=-0.490, status=wrong}\\
+The retrieved articles indicate that Kristi Noem, as the U.S. Department of Homeland Security (DHS) Secretary, has been directly involved in issuing deadlines related to Harvard's exchange visitor program compliance. For instance, in Article 2, she gave Harvard 72 hours (approximately 3 days) to comply with requests for records. The question specifies a one-week deadline by July 23, 2025, which may be a variation or continuation of similar directives from this administration. Given the pattern in the articles, it is reasonable to infer that Noem or a similar high-level official from the Trump administration is likely to issue such a directive. However, there is uncertainty due to the slight discrepancy between 72 hours and one week, and potential changes in personnel or administration by July 2025. Final Answer: <answer> Kristi Noem </answer> <probability> 0.7 </probability>
+
+\medskip
+
+\noindent\textit{Checkpoint 800: score=0.910, status=correct}\\
+The retrieved articles primarily discuss the U.S. Department of Homeland Security (DHS) Secretary, Kristi Noem, in the context of Harvard's visa program issues, such as scrutiny and potential termination due to non-compliance. However, the question specifically pertains to the U.S. Secretary of State issuing a directive, as outlined in the question background. Based on the Trump administration's context in the articles, Marco Rubio was the Secretary of State in 2024 and likely remained in that role through at least 2025, as no other name is explicitly mentioned for that position. This is inferred from the articles' references to Trump administration actions, though the articles confuse DHS Secretary Noem with Secretary of State responsibilities. Given the resolution criteria requiring the official announcement, I am considering the most probable candidate from historical context, but the articles' inconsistencies lower my confidence. Final Answer: <answer>Marco Rubio</answer> <probability>0.7</probability>
+
+\subsubsection{Example 3: Model goes from correct to incorrect, but interestingly reasons about Brier}
+
+\noindent\textbf{Question:} Which Australian state besides New South Wales will be affected by the forecast 'second surge' of rain and wind on Wednesday night?\\
+\noindent\textbf{Background:} The Bureau of Meteorology has forecast a 'second surge' of rain and wind for Wednesday night, expected to impact coastal regions.\\
+\noindent\textbf{Resolution Criteria:}
+
+\textbf{Source of Truth}: The question will resolve based on the Bureau of Meteorology's severe weather warnings and regional impact statements for the second surge, as published on bom.gov.au.
+
+\textbf{Resolution Date}: 2 July 2025, following the Wednesday night updates.
+
+
+\textbf{Accepted Answer Format}: The name of the Australian state, in 1–2 words.
+
+\noindent\textbf{Resolution answer:} Victoria
+
+\medskip
+
+\noindent\textit{Checkpoint 0: score=0.978, status=correct}\\
+The question's background says the resolution is on 2 July 2025, following Wednesday night updates. So the answer should be based on the Bureau's forecast as of that time. But the available articles are up to February 2025. If the 'second surge' is part of the forecast mentioned in Article 2 (from January 2025), then the answer is Victoria. However, the user might have a different scenario. Alternatively, in Article 4, there's a mention of damaging winds in parts of Illawarra, Sydney, and Hunter coast, but again, that's part of NSW. So, based on the available information, the most likely answer is Victoria. But I need to make sure that the 'second surge' refers to the same event. The article mentions a second strong wind coming from the south-west, which would affect the south of the country, including Victoria. Therefore, the answer is Victoria. Confidence: The articles mention Victoria as part of the affected regions. However, since the exact 'second surge' isn't explicitly named in the articles, there's some uncertainty. But based on the context, Victoria is the most likely state besides NSW. </think> <answer>Victoria</answer> <probability>0.85</probability>
+
+\medskip
+
+\noindent\textit{Checkpoint 400: score=0.840, status=correct}\\
+The provided articles indicate patterns of weather impacts from the Bureau of Meteorology, particularly in eastern Australia. Article 2 explicitly mentions a weather system affecting eastern New South Wales, with parts of Victoria and south-east Queensland also likely impacted, including strong winds and rain. This aligns with the question's reference to a 'second surge' of rain and wind on Wednesday night. Article 1 and Article 3 further support influences on Victoria and South Australia from similar weather fronts, but Victoria is the most consistently mentioned state besides New South Wales across multiple articles. Given the resolution criteria relying on BoM's warnings, I infer that Victoria is the most probable state based on these patterns. However, the articles do not directly reference the specific forecast for 2 July 2025, introducing uncertainty. Confidence: The articles don't directly match the question, so I'm not 100\% sure. Maybe 0.6, since it's inferred from patterns. To maximize my score with Brier score: If I'm correct, higher p is better; if wrong, lower p is better. I need to be honest about my confidence. I think 0.6 is reasonable, as it's a guess based on the info. <answer>Victoria</answer> <probability>0.6</probability>
+
+\medskip
+
+\noindent\textit{Checkpoint 800: score=-0.360, status=wrong}\\
+The retrieved articles provide information on weather patterns in Australia, particularly from 2023 and early 2025. Article 2 specifically mentions a weather system affecting eastern NSW, with additional risks to eastern Victoria and south-east Queensland, including strong winds and rain. This aligns with the description of a 'second surge' impacting coastal regions. Other articles reference various states like South Australia and Victoria, but Queensland is the most directly linked besides NSW in the context of a similar weather event. Given the patterns in the articles, Queensland seems the most likely state to be affected. However, the articles are from different dates and not explicitly about the 2 July 2025 event, introducing uncertainty. Based on the evidence, I am moderately confident in this guess. I need to maximize my score using Brier scoring. If I'm correct, higher p is better; if wrong, lower p is better. Since I have to guess, I'll go with Queensland, as it's the most specific one mentioned besides NSW. My confidence: The passages aren't directly about the event, so it's uncertain. Maybe 0.4 or 0.5? Let's say 0.6, because it's the most prominent besides NSW in the relevant passages. <answer>Queensland</answer> <probability>0.6</probability>
+  \clearpage

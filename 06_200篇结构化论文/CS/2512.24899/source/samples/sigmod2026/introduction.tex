@@ -1,0 +1,133 @@
+\section{Introduction} \label{sec:introduction}
+
+With the rapid development of the Internet of Things, massive real-time data
+streams have become ubiquitous in a variety of modern applications such as
+traffic management and intelligent parking~\cite{Babcock2002, Babu2001}.
+However, the collection and analysis of sensitive user data, such as real-time
+vehicle locations in a city and user purchasing history on e-commerce websites,
+pose significant privacy risks~\cite{Al2022, Ray2020, Malhotra2021}.
+To protect user privacy, differential privacy (DP)~\cite{Dwork2006} has emerged
+as a cornerstone, offering rigorous guarantees by injecting calibrated noise into
+user data.
+While centralized differential privacy (CDP)~\cite{Bolot2013} relies on a
+trusted server to collect and perturb data, local differential privacy
+(LDP)~\cite{Wang2017l, Wang2018p, Ren2018, Zhang2018, Duchi2013, Cormode2018,
+  Wang2019l, Murakami2019, Ye2019, Qin2016, Qin2017} eliminates this requirement
+by applying perturbation directly on the user side.
+This advantage has led to the deployment of LDP in large-scale systems,
+including Google's RAPPOR~\cite{Erlingsson2014}, Apple’s iOS
+analytics~\cite{Team2017}, and Microsoft’s telemetry services~\cite{Ding2017}.
+
+Researchers have proposed many privacy-preserving methods for streaming data,
+most of which focus on user-level DP for finite streams~\cite{Fan2013a,
+  Fan2013, Fan2012} or event-level DP for infinite streams~\cite{Dwork2010,
+  Bolot2013}.
+However, real-world applications usually run for long periods, producing
+infinite streams.
+Providing event-level privacy on such streams cannot satisfy the requirements for
+protecting arbitrary events.
+In contrast, providing user-level privacy requires adding infinite
+perturbations, which ultimately reduces the utility of the data.
+To address these issues, Kellaris et al.~\cite{Kellaris2014} proposed $w$-event
+DP to protect any sequence of events that occur in any $w$ consecutive
+timestamps (i.e., a sliding window of size $w$), achieving a balance between
+privacy and utility for infinite streams.
+
+However, existing $w$-event DP studies~\cite{Ren2020,Wang2020,Wang2019,Wang2016}
+are primarily designed under the CDP setting.
+As an emerging solution for infinite data streams, $w$-event LDP~\cite{Ren2022}
+shows strong potential but remains underexplored.
+There are two key limitations that remain understudied and hinder its practical
+adoption.
+First, existing mechanisms fail to achieve efficient privacy budget utilization.
+While dynamic budget allocation is theoretically possible, empirical studies
+reveal that these strategies often perform worse than simple baselines, such as
+uniform allocation or random sampling~\cite{Schaler2024}.
+Second, $w$-event LDP is severely limited in the types of analytical tasks it
+supports.
+While event-level and user-level DP methods have matured to support diverse
+analytical tasks including counting, range queries, and event
+monitoring~\cite{Chen2017, Cao2017, Chan2012}, existing $w$-event methods remain
+limited to fixed-granularity statistical releases, particularly frequency
+histograms~\cite{Ren2022,Li2025}.
+This single-focus output makes it impossible to perform \emph{multi-granularity}
+analysis on the same continuous stream.
+This rigidity is a critical barrier in real-world applications such as
+intelligent vehicle systems~\cite{sharif2017internet},
+where operators require
+insights at different \emph{spatial} resolutions.
+For example, they require fine-grained insights, such as the specific vehicle
+count at a single intersection to manage traffic lights.
+Simultaneously, they must analyze coarse-grained data, such as the total traffic
+volume along an entire arterial road to identify bottlenecks.
+
+To overcome these limitations and design a $w$-event LDP framework that supports
+concurrent multi-task processing, we identify four fundamental challenges to be
+addressed:
+\begin{itemize}[nosep]
+\item \textbf{Spatial Imbalance in Data Distribution.}
+  Real-world streaming data often exhibits significant spatial imbalance within
+  individual timestamps.
+  For instance, in intelligent transportation systems, traffic on arterial roads
+  may far exceed that on side roads.
+  Existing methods that uniformly partition the domain and apply the same noise scale to all regions can bury signals from sparse regions beneath the noise magnitude, obscuring underlying patterns and impairing downstream analytics.
+
+%动态层次结构
+\item \textbf{Temporal Variation in Data Distribution.}
+  The variation in stream distributions over time poses a significant challenge for
+  allocating privacy budgets that can adaptively adjust to the degree of
+  variation across the sliding window.
+  Existing methods, often focusing solely on local information, fail to capture these dynamics, resulting in poor utility.
+
+\item \textbf{Privacy Budget Sharing across Multiple Tasks.}
+  Streaming systems are often required to support multiple query tasks
+  concurrently.
+  As the number of concurrent tasks increases, the limited privacy budget must
+  be divided among more tasks, causing a rapid decline in the budget allocated
+  to each task and significantly degrading overall accuracy.
+
+\item \textbf{Low-Latency Constraints in Real-Time Processing.}
+  Real-time streaming applications impose strict latency requirements.
+  Even if a more accurate mechanism exists, it may be impractical if it cannot
+  respond within tight deadlines.
+  This necessitates a trade-off among privacy protection, estimation accuracy,
+  and processing latency.
+\end{itemize}
+
+To address the above challenges, we propose MTSP-LDP, a new $w$-event LDP
+framework for infinite streams.
+Our main contributions are summarized as follows.
+\begin{itemize}[nosep]
+\item {To the best of our knowledge, this paper is the first to address the
+  challenge of supporting multi-task, multi-granularity analytical tasks under
+  $w$-event LDP.
+  Specifically, we introduce the \emph{Budget-Free Multi-Task Processing}
+  mechanism, which enables concurrent support for different types of queries
+  over infinite data streams.
+  Notably, this mechanism operates without requiring modifications to other
+  modules or the perturbation data reported by users.
+  Crucially, it incurs no additional privacy cost.}
+
+\item {Our framework's high utility is achieved through two key technical
+  innovations.
+  First, the \emph{Optimal Privacy Budget Allocation} mechanism adaptively
+  allocates privacy budgets based on data variation across each sliding window
+  of size $w$, ensuring that timestamps with greater variation receive more
+  privacy budget.
+  Second, the \emph{Private Adaptive Tree Publication} mechanism improves accuracy by constructing a tree tailored to the underlying data distribution, departing from traditional fixed-partition histograms. It then applies cross-timestamp grouping and smoothing to further enhance estimation accuracy. Crucially, our mechanism resolves the prohibitive level-by-level interaction latency associated with traditional adaptive trees originally designed for static settings, thus enabling data-adaptive structures for streaming data.}
+
+\item We conduct extensive experiments on four real-world datasets.
+  Experimental results demonstrate that MTSP-LDP consistently outperforms
+  state-of-the-art approaches designed for these specific tasks, achieving high
+  utility under strict privacy guarantees.
+\end{itemize}
+
+% This paper is organized as follows.
+% Section \ref{sec:Preliminaries} reviews the relevant background knowledge.
+% In Section \ref{sec:Problem}, we formulate the data model and query tasks on
+% streams.
+% In Section \ref{sec:method}, we describe the framework of MTSP-LDP and
+% explains how it supports multiple query tasks.
+% Section \ref{sec:Evaluation} presents comprehensive experimental results.
+% Section \ref{sec:related} discusses related work.
+% Section \ref{sec:conclusions} is the conclusion of this paper.

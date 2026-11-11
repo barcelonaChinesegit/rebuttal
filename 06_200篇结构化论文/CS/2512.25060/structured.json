@@ -1,0 +1,431 @@
+{
+ "title": "On the geometry and topology of representations: the manifolds of modular addition",
+ "abstract": "The Clock and Pizza interpretations, associated with architectures differing in either uniform or learnable attention, were introduced to argue that different architectural designs can yield distinct circuits for modular addition.\nIn this work, we show that this is not the case, and that both uniform attention and trainable attention architectures implement the same algorithm via topologically and geometrically equivalent representations.\nOur methodology goes beyond the interpretation of individual neurons and weights.\nInstead, we identify all of the neurons corresponding to each learned representation and then study the collective group of neurons as one entity.\nThis method reveals that each learned representation is a manifold that we can study utilizing tools from topology.\nBased on this insight, we can statistically analyze the learned representations across hundreds of circuits to demonstrate the similarity between learned modular addition circuits that arise naturally from common deep learning paradigms.",
+ "sections": [
+  {
+   "level": "preamble",
+   "title": "",
+   "text": "\\iclrfinalcopy\n\n\n\\maketitle\n\n\\begin{abstract}\nThe Clock and Pizza interpretations, associated with architectures differing in either uniform or learnable attention, were introduced to argue that different architectural designs can yield distinct circuits for modular addition.\nIn this work, we show that this is not the case, and that both uniform attention and trainable attention architectures implement the same algorithm via topologically and geometrically equivalent representations.\nOur methodology goes beyond the interpretation of individual neurons and weights.\nInstead, we identify all of the neurons corresponding to each learned representation and then study the collective group of neurons as one entity.\nThis method reveals that each learned representation is a manifold that we can study utilizing tools from topology.\nBased on this insight, we can statistically analyze the learned representations across hundreds of circuits to demonstrate the similarity between learned modular addition circuits that arise naturally from common deep learning paradigms.\n\n\n\\end{abstract}"
+  },
+  {
+   "level": "section",
+   "title": "Introduction",
+   "text": "As deep neural networks (DNNs) scale and begin to be deployed in increasingly high-stakes settings, it will be imperative to develop a concrete understanding of how these models perform computations and ultimately make decisions.\nTowards this end, research in mechanistic interpretability has focused on identifying sub-structures of these models---referred to as \\emph{circuits}---and understanding the function and formation of these circuits on the subtasks that they are responsible for.\nIn order to extract a generalizable understanding of circuits, researchers have formulated a key hypothesis \\textbf{universality} \\citep{li2015convergent, olah2020zoom}, which suggests that similar networks trained on similar data will form similar circuits. On the other hand, the \\textbf{manifold} hypothesis \\citep{bengio2013representation, goodfellow2016deep}, suggests that representation learning consists of finding a lower-dimensional manifold for the data. If these hypotheses were to be false, the task of interpreting large scale models becomes dire---there would be little hope of identifying common patterns across initializations, architectures, and datasets.\n\nYet, recent work claimed totally disparate and disjoint circuits were learned by DNNs trained on \\textbf{the exact same data} using modular addition $(a+b)\\bmod n = c$ \\citep{zhong2023the}. Their results seemingly provide a counter-example to the universality hypothesis, thus suggesting the pursuit of learning interpretable principles that generalize across tasks may be doomed. In fact, this suggests that the identification of simple circuits in larger neural networks could be combinatorially difficult---if different small-scale models trained on one task can learn totally different circuits with no commonality, then large language models (LLMs) may learn many disjoint circuits for a task within their weights simultaneously. \n\nOur primary contribution to interpreting modular addition, \\textit{i.e.} the dataset $(a+b)\\bmod n = c$ is the resolution of the \\textit{seemingly} disparate circuits found by \\cite{zhong2023the}.\n\n\\begin{enumerate}\n    \\item We show that, under certain conditions on the structure of learned embeddings, all networks studied by \\citet{zhong2023the} and \\citet{mccracken2025uncoveringuniversalabstractalgorithm} learn preactivations having equivalent geometry and topology, which can be expressed in closed form;\n    \\item These closed-form equations allow us to rigorously claim that all architectures we study universally make use of the same class of manifolds;\n    \\item We introduce new tools, leveraging topological data analysis, to empirically validate these aforementioned conditions, providing extensive empirical evidence of shared representation geometry across networks.\n\\end{enumerate}\n\n\nAltogether, our results restore the possibility that the universality hypothesis is true, as \\cite{zhong2023the}'s architectures are no longer shown to be a counter-example."
+  },
+  {
+   "level": "section",
+   "title": "Related Work",
+   "text": "Deep learning (DL) research increasingly turns to mathematical tasks as controlled settings for investigating learning phenomena and studying the fundamentals of DL \\citep{ghosh2025mathematical}. Such tasks provide opportunities to (i) derive exact functional forms that yield theoretical insights beyond empirical studies \\citep{mccracken2021using}, (ii) analyze how agents discover novel algorithms such as matrix multiplication or sorting \\citep{fawzi2022discovering, mankowitz2023faster}, and (iii) develop methods to better interpret learned policies \\citep{raghu2018can}. From toy models that capture superposition \\citep{elhage2022toy} to formal analyses of in-context learning \\citep{lu2024context, lu2025asymptotic}, training on math tasks has become a productive way to study DL fundamentals. Within this agenda, mechanistic interpretability has produced especially influential results. By reverse-engineering networks trained on group-theoretic problems--such as modular addition \\citep{nanda2023progress, chughtai2023toy, gromov2023grokking, morwani2024feature, mccracken2025uncoveringuniversalabstractalgorithm, yip2024modularadditionblackboxescompressing, he2024learning, tao2025how, doshi2023grok}, permutations \\citep{standergrokking, wu2024towards}, and dihedral multiplication \\cite{mccracken2025representations}--researchers have uncovered mechanisms that speak to core hypotheses about representations \\citep{huh2024platonicrepresentationhypothesis}, universality \\citep{olah2020zoom, li2015convergent}, and algorithmic structure in DL \\citep{eberle2025position}.\n\nAs the datasets of group multiplication aren't linearly separable and modular addition (Cyclic group multiplication) is very well studied, it has become a standard testbed for toy interpretability research. It is ideal for asking: ``\\textit{What exactly do neural networks learn, and how is that computation represented internally?}''. Two influential works stand out. First, \\cite{nanda2023progress} reverse-engineered transformers trained on modular addition and described their internal computations to illuminate the \\textit{grokking} phenomenon \\citep{power2022grokkinggeneralizationoverfittingsmall}, giving progress measures to predict it. Building on this, \\cite{chughtai2023toy} claimed that the algorithm generalized to all group multiplications. Second, \\cite{zhong2023the} modified the transformer from \\cite{nanda2023progress} by interpolating between uniform and learnable attention. They claimed their networks learned two distinct circuits, either a \\textit{Pizza} or a \\textit{Clock} (described by \\cite{nanda2023progress}), proposing metrics to separate the two disjoint circuits.\n\nRecently however, \\cite{mccracken2025uncoveringuniversalabstractalgorithm} showed via abstraction, that across both MLPs and transformers, models converge to one unifying divide-and-conquer algorithm that approximates the \\textit{Chinese Remainder Theorem} and matches its logarithmic feature efficiency. They found first-layer neurons are best fit by degree-1 trigonometric polynomials, with later layers requiring degree-2, in contrast to the interpretation of \\cite{nanda2023progress} which modeled neurons as degree-2 trigonometric polynomials in all layers.\n\n\nWhile many works have focused on reverse-engineering specific algorithms in modular addition, relatively little has been done to systematically compare neural representations themselves. Tools from other domains--such as distributional hypothesis testing and topological data analysis (TDA)--offer complementary ways to characterize representations and may enrich mechanistic interpretability.\nFor instance, distributional methods such as maximum mean discrepancy (MMD) \\cite{gretton2012kernel} are rarely used in mechanistic interpretability, though widely applied elsewhere to quantitatively measure similarity, align domains \\cite{ghifary2014domain, zhao2019learning}, and test fairness \\cite{deka2023mmd, kong2025fair}. Topological data analysis (TDA) offers a complementary view: \\cite{shahidullah2022topologicaldataanalysisneural} used persistent homology to track how network layers preserve or distort input topology, and \\cite{ballester2024topologicaldataanalysisneural} surveyed TDA tools such as persistent homology and Mapper for analyzing architectures, decision boundaries, representations, and training dynamics."
+  },
+  {
+   "level": "section",
+   "title": "Setup and background",
+   "text": "The learning task we are interested in is the operation of the cyclic group, modular addition $(a, b) \\mapsto a + b \\mod n$ for $a, b\\in\\mathbb{Z}_n$. In our experiments we have used $n=59$. We consider various neural network architectures but we will mostly refer to them by the name that was given to an interpretation of their neuronal operations.\nAll architectures begin by embedding the inputs $a, b$ to vectors $\\mathbf{E}_a, \\mathbf{E}_b\\in\\mathbb{R}^{128}$ using a shared (learnable) embedding matrix.\nThe architectures differ in how the embeddings are then processed: \\textbf{MLP-Add} immediately passes $\\mathbf{E}_a + \\mathbf{E}_b$ through an MLP, \\textbf{MLP-Concat} immediately passes the concatenation $\\mathbf{E}_a \\oplus \\mathbf{E}_b \\in\\mathbb{R}^{256}$ through an MLP. Learnable attention (claimed to learn \\textbf{Clocks}) and uniform attention (claimed to learn \\textbf{Pizzas}) transformers, introduced by \\citet{zhong2023the}, pass $\\mathbf{E}_a, \\mathbf{E}_b$ through a self-attention layer before the MLP.\nSpecifically: uniform attention is a constant attention matrix, and trainable attention \\citep{nanda2023progress} uses the standard learnable softmax attention. We refer to trainable attention architectures as \\textbf{Attention 1.0} and constant attention architectures as \\textbf{Attention 0.0} since \\citet{zhong2023the} used a parameter to switch between them."
+  },
+  {
+   "level": "subsection",
+   "title": "Previous interpretations of modular addition in neural networks",
+   "text": "\\label{sec:prev-interps}\nPrior works have all reported disjoint circuits of different ``frequencies'' $f$ are learned. We adopt the notation of \\citet{zhong2023the}, each frequency $f$ is associated with a circuit, and an abstraction can be given for the values in the embedding vectors $\\mathbf{E}_a$ and $\\mathbf{E}_b$ associated with that frequency,\n\n\n\\begin{align}\n    \\mathbf{E}_a=[\\cos(2\\pi fa/n), \\sin(2\\pi f a/n)], \\quad \\mathbf{E}_b=[\\cos(2\\pi fb/n), \\sin(2\\pi fb/n)]. \\label{eq:circle-embedding}\n\\end{align}\n\n\n\nWhat distinguishes them is how the embeddings are \\textit{transformed} post-attention. Treating the attention as a blackbox and looking at its output $\\mathbf{E}_{ab}$, \\citet{zhong2023the} make the following two claims. \\textbf{Clock} circuits compute the \\textit{angle sum} (Figure~\\ref{fig:wrapped}),\n\\begin{align}\n    \\mathbf{E}_{ab}= [\\cos(2\\pi f(a+b)/n), \\sin(2\\pi f(a+b)/n)], \\label{eq:angle-sum}\n\\end{align}\nencoding the modular sum on the unit circle, which needs second-order interactions (e.g., multiplying embedding components via sigmoidal attention). \nIn \\textbf{Pizza} circuits, $\\mathbf{E}_{ab}$ adds the embeddings directly as $\\mathbf{E}_a+\\mathbf{E}_b$,\n\\begin{align}\n    \\mathbf{E}_{ab} = [\\cos(2\\pi fa/n)+\\cos(2\\pi f b/n), \\sin(2\\pi fa/n)+\\sin(2\\pi fb/n)],\n\\end{align}\nyielding \\textit{vector addition} on the circle (Figure~\\ref{fig:wrapped}), which is entirely linear in the embeddings. \\citet{zhong2023the} gave metrics distance irrelevance and gradient symmetricity to distinguish networks having learned the clock vs. pizza circuit (see Appendix~\\ref{app:prev-metrics}).\n\\begin{definition}[Simple Neurons]\n    For $(a,b) \\in \\mathbf{Z}_p \\times \\mathbf{Z}_p$, a \\emph{simple neuron} is a neuron  that has pre-activation\n    \\begin{equation}\\label{eq:simple-neuron-model}\n    N(a,b)=\\cos(2\\pi f a/n + \\phi^L) + \\cos(2\\pi f b/n + \\phi^R), \n    \\end{equation}\n    where $f \\in \\mathbf{Z}_p$ is a frequency and $\\phi^L, \\phi^R \\in [0, 2\\pi)$ are phase shifts.\n\\end{definition}\n\nThis form of the neurons as being a linear superposition of a sinusoid in $a$ and a sinusoid in $b$ is corroborated in \\cite{gromov2023grokking, morwani2024feature, doshi2023grok, mccracken2025uncoveringuniversalabstractalgorithm, li2025fouriercircuitsneuralnetworks}.\n\n\n\\begin{empirical fact}[\\cite{mccracken2025uncoveringuniversalabstractalgorithm}]\\label{ef:simple neuron}\nFor \\textbf{Attention 0}, \\textbf{Attention 1}, and \\textbf{MLPs} (with learnable or one-hot encoded embeddings) architectures, first layer neurons are well approximated by \\emph{simple neurons}. Later layers can encode combinations of degree-1 and 2 sinusoids.\n\\end{empirical fact}"
+  },
+  {
+   "level": "subsection",
+   "title": "Topological Data Analysis",
+   "text": "We use \\textbf{Betti numbers} from algebraic topology to distinguish the structure of different stages of circuits across layers. The $k$-th Betti number $\\beta_k$ counts $k$ dimensional holes: $\\beta_0$ counts connected components, $\\beta_1$ counts loops, $\\beta_2$ counts voids enclosed by surfaces. For reference, a disc has Betti numbers $(\\beta_0, \\beta_1, \\beta_2) = (1, 0, 0)$, a circle has $(1, 1, 0)$, and a 2-torus has $(1, 2, 1)$."
+  },
+  {
+   "level": "section",
+   "title": "Canonical Manifolds",
+   "text": "We will now focus on networks with a single learnable embedding matrix, matching the setups of \\citet{nanda2023progress,zhong2023the,mccracken2025uncoveringuniversalabstractalgorithm}.\nOur analysis will center on the \\emph{representation manifolds} in a frequency cluster $f$ coming from the preactivations $\\preactivationmap{\\ell}(a, b)$ at layer $\\ell$ and the logits $\\logitmap(a, b)$. The corresponding representation manifolds are, explicitly,\n\\begin{align*}\n    \\preactivationmanifold{\\ell} &:= \\left\\{\\preactivationmap{\\ell}(a, b) : (a, b)\\in\\mathbb{Z}_n^2\\right\\} \\subset \\mathbb{R}^{d_{\\ell,f}};\\quad\\mathrm{and}\\quad\n    \\logitmanifold := \\left\\{\\logitmap(a, b) : (a, b)\\in\\mathbb{Z}_n^2\\right\\}\\subset\\mathbb{R}^n,\n\\end{align*}\nwhere $d_{\\ell, f}$ is the number of neuron in the frequency cluster $f$ at layer $\\ell$.\nOur thesis is that under the simple neuron model of \\eqref{eq:simple-neuron-model} introduced by \\citet{mccracken2025uncoveringuniversalabstractalgorithm} and a simple application of symmetry corresponding to the interchangeability of $a, b$ in $a + b \\mod n$, the exact structure of the $\\preactivationmanifold{1}$ manifolds and how they are mapped from inputs $a, b$ can be revealed.\nParticularly, we will show that under this model, $\\preactivationmanifold{1}$ always encodes the torus $\\mathbb{T}^2$ or vector addition disk of Figure \\ref{fig:wrapped}---that is, the pizza.\n\nThe remainder of this section will proceed by formalizing this result in \\S\\ref{subsect:theorems}."
+  },
+  {
+   "level": "subsection",
+   "title": "Simple neuron phase distribution dictates representation manifold",
+   "text": "\\label{subsect:theorems}\nUnder the simple neuron model, for any frequency cluster $f$, the only degrees of freedom in the resulting preactivations lie in the maps $(a, b)\\mapsto(\\phi^L, \\phi^R)$ for $a,b\\in\\mathbb{Z}_n$ learned by neural networks.\nGiven that modular addition is commutative, one might expect to see a form of symmetry with respect to $\\phi^L, \\phi^R$.\nParticularly, one might expect that $\\phi^L\\equiv\\phi^R$ for all $a, b$ (since swapping the inputs should have no effect on the output), or at the very least that the random variables $\\phi^L, \\phi^R$ are identically distributed for $A, B\\sim\\mathrm{Uniform}(\\mathbb{Z}_n)$.\nIt turns out, as we show in the following theorem (whose proof is given in Appendix \\ref{section: proofs}), that the resulting manifold $\\preactivationmanifold{1}$ takes an easily characterizable form \\textit{almost surely} in this event.\nWe devote \\S\\ref{sec:results} to validating that the phase maps indeed satisfy these properties in practice---allowing us to easily analyze the geometry of representations across thousands of trained neural networks.\n\nBefore stating the theorem, let us introduce some notation that will be useful.\nUnder the simple neuron model, a neuron indexed $i$ belonging to a neuron cluster with frequency $f$ maps $(a, b)\\in\\mathbf{Z}_p^2$ to $\\cos(\\theta_a + \\Phi_i^{L}) + \\cos(\\theta_b + \\Phi_i^{R})$, where $\\theta_a = 2\\pi fa/p$.\nThe notation $\\Phi_i$ is meant to evoke that we model these phases as random variables; these are random due to random initialization and random gradient updates.\nThe joint distribution of $(\\Phi_i^{L}, \\Phi_i^{R})$ is denoted $\\phasedist{a}{b}\\in\\Delta([0,2\\pi]^2)$.\n\n\\begin{theorem}\n    \\label{thm:disc-torus}\n    Let $f\\in\\mathbf{Z}_p$ for $p\\geq 3$, and consider the frequency cluster at layer 1.\n    Let $m$ denote the number of neurons in this cluster, and assume $m\\geq 2$.\n    Define the matrix $X\\in\\mathbb{R}^{p^2\\times m}$ according to $X_{(a, b), i} = \\cos(\\theta_a + \\phi^L_i) + \\cos(\\theta_b + \\phi^R_i)$, denoting the simple neuron preactivations.\n    Assume $\\phi^L_i, \\Phi^{L, b}_i$ are identically distributed for each neuron $i\\in\\{1,\\dots,m\\}$ in this cluster, and that the support of $\\phasedist{a}{b}$ has positive (Lebesgue) measure. Then the following hold almost surely:\n    \\begin{enumerate}\n        \\item\\emph{(Perfect phase correlation)} If $\\Phi_i^{L, a}$ and $\\Phi_i^{R, b}$ are perfectly correlated, in the sense that $\\Phi_i^{L, b} \\equiv \\Phi_i^{R, b}$, then $X$ has a rank-2 factorization $X = V^{\\rm disc}W$ with $V^{\\rm disc}\\in\\mathbb{R}^{p^2\\times 2}$ satisfying\n        \\begin{equation}\\label{eq:factorization:disc}\n            V^{\\rm disc}_{(a, b)} = (\\cos\\theta_a + \\cos\\theta_b, \\sin\\theta_a + \\sin\\theta_b)^\\top.\n        \\end{equation}\n        \\item\\emph{(Phase independence)} Otherwise, $X$ has a rank-4 factorization $X = V^{\\rm torus}W$ with $V^{\\rm torus}\\in\\mathbb{R}^{p^2\\times 4}$ given by\n        \\begin{equation}\\label{eq:factorization:torus}\n            V^{\\rm torus}_{(a, b)} = (\\cos\\theta_a, \\sin\\theta_a, \\cos\\theta_b, \\sin\\theta_b)^\\top.\n        \\end{equation}\n    \\end{enumerate}\n\\end{theorem}\n\nGeometrically, the disc can be viewed as a projection of the torus: $(x_1, x_2, x_3, x_4) \\mapsto (x_1 + x_3, x_2 + x_4)$. Thus, the torus structure generalizes the vector-addition disc.\n\nHaving established this theorem, it is worth stepping back to contextualize its consequences.\nAs shown by \\citet{mccracken2025uncoveringuniversalabstractalgorithm}, first layer preactivations are dominantly simple neurons.\nTheorem \\ref{thm:disc-torus} shows that, under the symmetry properties of $\\Phi_i^{L, a}$ and $\\Phi_I^{R, b}$ posited above, the preactivations have simple, low-dimensional structures: in the case of perfect phase correlation, the representation manifold can be compressed to $V^{\\rm disc}$, which is precisely the vector addition disc of Figure \\ref{fig:wrapped}.\nIn the case of phase independence, the representation manifold can be compressed to $V^{\\rm torus}$, which exactly encodes the torus $\\mathbb{T}^2$.\n\n\\begin{remark}\n    It is noteworthy that the Clock representation from \\citet{zhong2023the} \\emph{cannot} occur under the hypotheses of Theorem \\ref{thm:disc-torus}.\n    The remainder of the paper demonstrates that these hypotheses are satisfied empirically with overwhelming probability.\n    Thus, while the Clock circuit of \\citet{zhong2023the} is theoretically plausible, it does not occur naturally in practice.\n    On the other hand, the possibility of the \\emph{torus} representation has not previously been identified in the literature.\n\\end{remark}\n\nA notable consequence of this result is that the geometry and topology of representation manifolds can be characterized by simply investigating the distributions $\\phasedist{a}{b}$ of the learned phases.\nAs we describe in \\S\\ref{sec:methods}, this can be done quantitatively, allowing us to derive statistical likelihoods of neural circuits arising over thousands of initializations across architectures."
+  },
+  {
+   "level": "subsection",
+   "title": "Qualitative analysis of intermediate representations",
+   "text": "This section presents the experimental observations that support the predictions of section \\ref{subsect:theorems}. Given that learned embeddings are expected to be points on a circle, we consider two MLP-models as simple baselines capturing the closed form of the above manifolds: MLP-Add should add two points on a circle, giving the vector addition disc (Figure~\\ref{fig:wrapped}) and MLP-Concat should concatenate two points on a circle, giving the torus $\\mathbb{T}^2$. \n\nIn all networks, we cluster neurons together and study the entire cluster at once. This is done by constructing an $n\\times n$ matrix, with the value in entry $(a, b)$ corresponding to the preactivation value on datum $(a,b)$.\nA 2D Discrete Fourier Transform (DFT) of the matrix gives the key frequency $f$ for the neuron.\nThe cluster of preactivations of all neurons with key frequency $f$ is the $n^2 \\times |$cluster $f|$ matrix, made by flattening each neurons preactivation matrix and stacking the resulting vector for every neuron with the same key frequency. We call this matrix the neuron-cluster of preactivations matrix.\n\n\\paragraph{\\textbf{Principal component analysis (PCA).}} \nTo probe the representational geometry of the first-layer neurons, we perform PCA on the neuron-cluster matrix of pre-activations. This layer is where differences between Clock and Pizza architectures are expected to emerge, since their outputs diverge only after attention. \n\nFigure~\\ref{fig:pca-representations} shows the PCA embeddings for MLP-Add, MLP-Concat, Pizza, and Clock models. Each input pair $(a,b)$ has been remapped following \\citep{mccracken2025uncoveringuniversalabstractalgorithm} and coloured by $a+b \\bmod n$, so that points close with respect to the modular addition task are visually grouped. \n\nThe results align strikingly with the predictions of Theorem~\\ref{thm:disc-torus}. For MLP-Add, Pizza, and Clock, the first two principal components explain more than 99\\% of the variance, yielding a 2D disc-like structure (matching the vector addition geometry of Figure~\\ref{fig:wrapped}). For MLP-Concat, the first four principal components each explain about 25\\% of the variance, producing a toroidal structure.  \n\nSurprisingly, the Clock network—never previously described as having a “pizza disc” exhibits the same 2D disc structure as Pizza and MLP-Add.\n\n\n\n\n\\paragraph{\\textbf{Distribution of post-ReLU activations.}} \nWe next examine the strength of activations across neurons within a cluster. For each neuron, we construct an $n \\times n$ heatmap of its post-ReLU activation values over all input pairs $(a,b)$, after applying the remapping procedure of \\citep{mccracken2025uncoveringuniversalabstractalgorithm}. Each heatmap thus reflects the activation profile of a single neuron across the input space.  \n\nTo summarize activation patterns at the cluster level, we sum the heatmaps of all neurons in the cluster. Although the network never performs this sum directly, it provides a compact visualization of where activation strength is concentrated across the input domain.  \n\nFigure~\\ref{fig:sum-postactivations} shows that in MLP-Add, Clock, and Pizza, activations are sharply concentrated along the $a=b$ diagonal. This indicates that cosine responses peak when $a=b$, consistent with neurons having equal phases. Moreover, the smooth falloff of activations away from the diagonal implies that representations also encode the distance $|a-b|$. Because downstream weights from neurons to logits are fixed across inputs, this structure implies that logits systematically depend both on $(a,b)$ and on the separation $a-b$.  \n\nSurprisingly, this diagonal dependence—previously claimed by \\cite{zhong2023the} to be the defining characteristic of Pizza—appears not only in Pizza networks but also in MLP-Add and Clock. We return to this point in the experiments section.\n\n\n\n\n\n\\paragraph{\\textbf{Linking PCA geometry and activation distributions.}} \nThe PCA results and activation heatmaps reflect the same underlying phenomenon: principal components encode activation strength. In Figure~\\ref{fig:pca-representations}, MLP-Add, Pizza, and Clock show negligible activation near the origin $(0,0)$ of the PCA plane, since neither principal component contributes strongly there. By contrast, for MLP-Concat the 4D embedding contains no datapoints near $(0,0,0,0)$, indicating that the cluster activates roughly equally across all inputs. This observation supports the view that the torus-to-circle map is the natural map for MLP-Concat (Appendix~\\ref{app:hypothesis}).\n\nMore generally, these findings suggest that activation strength determines how inputs are arranged in PCA space. For MLP-Add, Pizza, and Clock, the dependence on $a-b$ produces an annular geometry at the logits rather than a perfect circle (Figure~\\ref{fig:topology-mapping}). For MLP-Concat, the absence of $a-b$ dependence yields a representation closer to a true circle, consistent with the circular structure given in the torus-to-circle map (Appendix~\\ref{app:hypothesis}) and illustrated in Figure~\\ref{fig:wrapped}. Figure~\\ref{fig:topology-mapping} confirms this distinction: MLP-Concat exhibits a torus with a nearly uniform circular projection, while MLP-Add, Pizza, and Clock exhibit a vector addition disc (pizza) with an annular structure at the logits.\n\nFinally, Figure~\\ref{fig:topology-mapping} shows the possible manifolds we see in networks across layers."
+  },
+  {
+   "level": "section",
+   "title": "Methodology",
+   "text": "\\label{sec:methods}\n\n\n\\paragraph{\\diagplots.} Given Theorem~\\ref{thm:disc-torus}, we can classify representation manifolds from phase statistics. Thus, we propose yet another representation: the \\diagplot\\, (\\diagplotacr).\nTo a given architecture, a \\diagplotacr\\, is a distribution over $\\mathbb{Z}_n\\times\\mathbb{Z}_n$. Samples of this distribution are drawn as follows:\n\\begin{enumerate}\n    \\item Sample a random initialization (e.g., random seed) and train the network.\n    \\item From the resulting trained network, sample a neuron uniformly.\n    \\item Return the pair $(a, b)\\in\\mathbb{Z}_n\\times\\mathbb{Z}_n$ that achieves the largest activation in the resulting neuron.\n\\end{enumerate}\nA \\diagplotacr\\, illustrates, across independent training runs and neuron clusters, how often activations are maximized on the $a=b$ diagonal---that is, it depicts how often learned phases align.\nEven beyond inspecting the proximity of samples to this diagonal, we propose to compare the \\diagplotacrs\\, of architectures according to a metric on the space of distributions over $\\mathbb{Z}_n\\times\\mathbb{Z}_n$, giving an even more precise comparison.\nIn the following section, we will provide estimates of the \\diagplotacrs\\, for the aforementioned architectures, as well as \\diagplotacr\\, distances under the \\emph{maximum mean discrepancy} \\citep[MMD]{gretton2012kernel}---a family of metrics with tractable unbiased sample estimators. \n\n\nFollowing prior work on one-layer networks \\citep{nanda2023progress, zhong2023the}, and building on the empirical validation of the simple neuron model (Eq.~\\ref{eq:simple-neuron-model}) in \\citet{mccracken2025uncoveringuniversalabstractalgorithm}, we restrict our PAD analysis to single-hidden-layer architectures. In practice, raw activations are often noisy, which makes direct sinusoid fitting unreliable. Instead, we assume the simple neuron model and extract the learned phase pair $(\\phi^L, \\phi^R)$ using one of two procedures: (i) by taking the point of maximal activation, or (ii) by computing the activation’s center of mass. Both estimators yield qualitatively similar PADs; we report any differences between them in the Results section.\n\n\n\\paragraph{\\textbf{Betti number distribution.}} Now we turn to multi-layer networks. We estimate the distribution over Betti number vectors corresponding to the set of neurons within a cluster in a given layer (or logits) to distinguish the structure of the layers: that is $\\mathcal{M}_{\\ell,f}$ and $\\mathcal{M}_{\\text{logits}_f}$. This helps us identify when the underlying structure resembles a disc, torus, or circle. We compute these using \\textbf{persistent homology} with the Ripser library \\citep{Bauer2021Ripser, de_Silva_2011, ctralie2018ripser}. For more details see Appendix~\\ref{app:persistent-homology}."
+  },
+  {
+   "level": "section",
+   "title": "Results",
+   "text": "\\label{sec:results}"
+  },
+  {
+   "level": "subsection",
+   "title": "MLP-Add, Attention 0.0 and 1.0 (pizza and clock) are \\emph{nearly} the same",
+   "text": "\\paragraph{\\textbf{PAD results.}} We study 703 trained one-hidden-layer networks drawn from our four architectures: MLP-Add, Attention 0.0 (Pizza), Attention 1.0 (Clock) and MLP-Concat. \n\nFigure~\\ref{fig:heatmaps-maxpre-com} shows PAD plots across architectures. We note that MLP-Add, Attention 0.0, Attention 1.0 are very concentrated on the diagonal, while MLP-Concat is not. To further quantify this, we propose the torus distance, which is the discrete graph distance from a point $(a,b)$ on the torus to the $a=b$ line. Figure~\\ref{fig:histograms-torus-distance} quantifies this with a histogram of torus distances to the $a=b$ line. We see that Attention 0.0 and 1.0 are almost indistinguishable and both very similar to MLP-Add; moreover, our metric successfully discerns these models from MLP-Concat.\n\nTable~\\ref{tab:mmd_results} shows the PAD distances under the MMD distance. All comparisons are statistically significant (p-values $\\approx 0$). We see that Attention 0.0 and 1.0 are extremely close to each other, MLP-Add lies moderately close to both, and MLP-Concat is strongly separated from all others. We also introduce and study the \\textit{torus distance} metric in Appendix~\\ref{app:torus-dist}.\n\n\\paragraph{\\textbf{Previous metrics.}} In Appendix~\\ref{app:prev-metrics} (particularly \\ref{app:prev-metrics-eval}) we evaluate the metrics gradient symmetricity and distance irrelevance of \\cite{zhong2023the}.\n\n\n\n\n\n\n\\paragraph{\\textbf{Betti number results.}} It's the case that the homology of what networks learn gives that MLP-Add, Attention 0.0 and Attention 1.0 architectures are all making topologically equivalent computations. While the MLP-Concat model appears to be different, it's in fact just more efficient, which results from the torus already having the holes necessary to accurately project the correct answer onto the logits after just one non-linearity (see Fig. \\ref{fig:homology-piecharts}). It's worth noting that while discs appear to be learned in the logits, in all the cases checked by hand the discs were caused by limitations of persistent homology, which struggles to find a hole of small radius"
+  },
+  {
+   "level": "section",
+   "title": "Discussion, Limitations, and Conclusion",
+   "text": "\\label{sec:discussion-conclusion}\nThis work introduces a new lens under which circuits for modular addition may be compared.\nWe argue that networks trained on modular addition tend to learn a common logit manifold, and that representations at intermediate layers are dictated by the alignment of learned phases for the two inputs in the first layer preactivations.\nStudying the distribution over phases, we identify that networks learn torus or vector-addition disc manifolds (known colloquially as \\emph{pizzas}) in the first layer, and proceed by iteratively applying rotations and linear projections to these manifolds before ultimately arriving at a logit annulus. We argue our work recovers the universality hypothesis by showing that the counter-example architectures of \\cite{zhong2023the}, and even our torus-learning MLP-Concat architecture all use the same torus to logits map. The transformers and MLP-Add architecture simply learn lower rank manifolds of the same class of torus manifolds. This follows rigorously and directly from our closed-form equations for the torus and pizza discs: the pizza discs are a linear projection of the torus. Thus, we posit ``is the nature of universality that DNNs recover either a universal manifold, or linear projections of it in order to fit data?'' \n\nNotably, this conclusion was reached by examining networks from a different perspective, which allowed us to mathematically predict the structure of representations, and also to test these predictions precisely at large scale using tools from topological data analysis. In particular, our work identifies that the joint distribution over simple neuron phases both determines the geometry of representations, and permits efficient quantitative evaluation.\n\nA notable limitation of our work is that, in its present form, it treats only circuits in modular addition.\nTo interpret large-scale neural networks, it will be necessary to derive strategies for characterizing circuits across domains.\nWhile our precise methodology is particular to the analysis of modular addition networks, we believe the underlying strategy of isolating the degrees of freedom in the geometry of hidden representations and estimating the statistics of their corresponding learned values can be a generalizable approach to characterize circuits in more complex domains.\n\nBeyond this, our results also suggest that the universality property is likely to hold in modular addition.\nIt also draws connections between universality and the manifold hypothesis, given the correspondence we see between the low-dimensional representations formed throughout the layers of the networks we observed.\nUltimately, we believe the tools we introduced in this work can inform formal hypotheses about universality and manifold continuity that can be assessed quantitatively.\n\n\n\n\\bibliography{refs}\n\\bibliographystyle{iclr2026_conference}\n\n\n\n\\appendix"
+  },
+  {
+   "level": "section",
+   "title": "Additional experimental setup details",
+   "text": "\\label{app:additional-exp-details}"
+  },
+  {
+   "level": "subsection",
+   "title": "Training hyperparameters.",
+   "text": "All models are trained with the Adam optimizer \\cite{kingma2014adam}. Number of neurons per layer in all models is 1024. Batch size is 59. Train/test split: $90\\%/10\\%$.\n\n\\textbf{Attention 1.0}\n\\begin{itemize}\n    \\item Learning rate: 0.00075\n    \\item L2 weight decay penalty: 0.000025\n\\end{itemize}\n\n\\textbf{Attention 0.0}\n\\begin{itemize}\n    \\item Learning rate: 0.00025\n    \\item L2 weight decay penalty: 0.000001\n\\end{itemize}\n\n\\textbf{MLP-Add and MLP-Concat}\n\\begin{itemize}\n    \\item Learning rate: 0.0005\n    \\item L2 weight decay penalty: 0.0001\n\\end{itemize}"
+  },
+  {
+   "level": "subsection",
+   "title": "Constructing representations",
+   "text": "In all networks, we cluster neurons together and study the entire cluster at once \\cite{mccracken2025uncoveringuniversalabstractalgorithm}. This is done by constructing an $n\\times n$ matrix, with the value in entry $(a, b)$ corresponding to the preactivation value on datum $(a,b)$.\nA 2D Discrete Fourier Transform (DFT) of the matrix gives the key frequency $f$ for the neuron.\nThe cluster of preactivations of all neurons with key frequency $f$ is the $n^2 \\times |$cluster $f|$ matrix, made by flattening each neurons preactivation matrix and stacking the resulting vector for every neuron with the same key frequency."
+  },
+  {
+   "level": "subsection",
+   "title": "Persistent homology",
+   "text": "\\label{app:persistent-homology}\n\nWe compute these using \\textbf{persistent homology}, applied to point clouds constructed from intermediate representations at different stages of the circuit, as well as the final logits. This yields a compact topological signature that captures how the geometry of these representations evolves across layers, helping us identify when the underlying structure resembles a disc, torus, or circle. We use the Ripser library for these computations \\cite{Bauer2021Ripser, de_Silva_2011, ctralie2018ripser}.\n\nFor our persistent homology computations, we set the $k$-nearest neighbour hyperparameter to 250. Our point cloud consists of $59^2=3481$ points."
+  },
+  {
+   "level": "subsection",
+   "title": "Remapping procedure",
+   "text": "\\label{app:remapping}\n\n\\textbf{Neuron remapping \\citep{mccracken2025uncoveringuniversalabstractalgorithm}.} For a simple neuron of frequency $f$, we define a canonical coordinate system via the mapping:\n\\begin{align}\n    (a,b)\\mapsto (a\\cdot d,b\\cdot d),  \\quad\\quad \\text{where }\n    d:= \\left(\\frac{f}{\\gcd(f,n)}\\right)^{-1} \\mod \\frac{n}{\\gcd(f,n)} .\\label{eq:remapping}\n\\end{align}\nThis inverse is the modular multiplicative inverse, i.e. for any $\\mathbb{Z}_k$ let $x\\in \\mathbb{Z}_k$. Its inverse $x^{-1}$ exists if $\\gcd(x,k)=1$ and gives $x\\cdot x^{-1}\\equiv 1 \\mod k$. This normalizes inputs relative to the neuron's periodicity and allows for qualitative and quantitative comparisons."
+  },
+  {
+   "level": "section",
+   "title": "Proof of theorem \\ref{thm:disc-torus}",
+   "text": "\\label{section: proofs}\nThe proofs of both cases of Theorem \\ref{thm:disc-torus} follow the same pattern: apply an angle sum formula to the entries of the pre-activation matrix, realize this matrix as a product of 2 low-rank matrices and use the assumption of uniformity of the phase variables to deduce full rank of the composition.\n\nFor integers $p\\ge 3$ and $m\\ge 2$, consider the $p^{2}\\times m$ data matrix of the pre-activations of the model network with simple neurons (seee equation \\ref{eq:simple-neuron-model} and \\ref{eq:circle-embedding}).  \n\\[\n  X_{(a,b),i} = \\cos(\\theta_a+\\Phi^{L, a}_i)+\\cos(\\theta_b+\\Phi^{R, b}_i),\\qquad\n  \\theta_t:=\\frac{2\\pi t}{p},\\;(a,b)\\in\\{0,\\dots ,p-1\\}^{2}.\n\\]\nand using the identity \\(\\cos(x + y) = \\cos x \\cos y - \\sin x \\sin y\\), we have\n\\begin{equation}\\label{eq: X factorisation2}\nX_{(a,b),i} = \\cos(\\theta_a)\\cos(\\Phi^{L, a}_i) - \\sin(\\theta_a)\\sin(\\Phi^{L, a}_i) + \\cos(\\theta_b)\\cos(\\Phi^{R, b}_i) - \\sin(\\theta_b)\\sin(\\Phi^{R, b}_i)\n\\end{equation}\nNext, we show the details specific to each of the cases: disc and torus.\n\n\\textbf{Proof of Theorem \\ref{thm:disc-torus} (Disc)}\n\\begin{proof}\nBy assumption, $\\Phi^{L, a}_i = \\Phi^{R, b}_i = \\phi_i$ for all $i$. Then, equation \\ref{eq: X factorisation2} becomes \n\\begin{equation}\\label{eq: X factorisation}\nX_{(a,b),i} = (\\cos\\theta_a + \\cos\\theta_b)\\cos\\phi_i - (\\sin\\theta_a + \\sin\\theta_b)\\sin\\phi_i\n\\end{equation}\n\nNotice then that $X=VW$ for the matrices $V$ and $W$ defined by the following row and column vectors respectively\n\\begin{align}\n  V_{(a,b),:}&:=[\\cos(\\theta_a)+\\cos(\\theta_b), \\sin(\\theta_a)+\\sin(\\theta_b)] \\\\\n  W_{:, i}&:=\\begin{bmatrix}\\cos(\\phi_i)\\\\\n  -\\sin(\\phi_i)\\end{bmatrix}.\n\\end{align}\nNow we show they both have rank 2 and the kernel of $W$ intersect the image of $V$ trivially. The rank 2 of $V$ follows from the independence of $\\cos$ and $\\sin$ and the rank 2 of $W$ is true almost surely following the the independence of $\\cos$ and $\\sin$ and the hypothesis that $\\Phi^{L, a}_i$ and $\\Phi^{R, b}$ have uncountable support.\n\nSuppose $\\langle V_{(a,b), :}, W_{:, i}\\rangle = 0$ for some $(a,b)$ and all $i$, that means \n$\\cos(\\theta_a + \\phi_i) = - \\cos(\\theta_b + \\phi_i)$ for all $i$. From the assumption the random variables $\\phi^L$ and $\\phi^R$ are not discrete, this event has probability 0, so the kernel of $W$ intersects the image of $V$ trivially and $X = VW$ has rank 2.\n\n\n\\textbf{Proof of Theorem \\ref{thm:disc-torus} (Torus)}\\\\\n\nEquation \\ref{eq: X factorisation2} shows $X=VW$ for the matrices $V, W$ defined by rows and columns respectively\n\\begin{equation}\n    V_{(a,b), :} = [\\cos(\\theta_a), \\sin(\\theta_a), \\cos(\\theta_b), \\sin(\\theta_b)]\n\\end{equation}\n\\begin{equation}\n    W_{:, i} =\\begin{bmatrix}\n    \\cos(\\Phi^{L, a}_i) \\\\\n    -\\sin(\\Phi^{L, a}_i) \\\\\n    \\cos(\\Phi^{R, b}_i) \\\\\n    -\\sin(\\Phi^{R, b}_i) \\\\\n    \\end{bmatrix}.\n\\end{equation}\nThe proof that $X$ has rank 4 is the same as the one for the respective statement in theorem 1 (uniformity of phases give the rank of $V$ and $W$ and the independence of the image of $V$ and kernel of $W$).\n\n\\end{proof}"
+  },
+  {
+   "level": "section",
+   "title": "Statistical significance of main results",
+   "text": ""
+  },
+  {
+   "level": "subsection",
+   "title": "Figure \\ref{fig:heatmaps-maxpre-com}",
+   "text": "We trained 703 models of each architecture, being MLP vec add, Attention 0.0 and 1.0, and MLP concat, and recorded the locations of the max activations of all neurons across all $(a,b)$ inputs to the network. We also computed the center of mass of each neuron as this doesn't always align with the max preactivation (though it tends to be close)."
+  },
+  {
+   "level": "section",
+   "title": "Torus distance metric",
+   "text": "\\label{app:torus-dist}\n\n\n\n\nWe introduce and study the \\textit{torus distance} metric.\n\n\nFigure~\\ref{fig:histograms-torus-distance}. We trained 703 models of each architecture with 512 neurons in its hidden layer (MLP vec add, Attention 0.0 and 1.0, and MLP concat), and recorded the $a,b$ value of where the max activation of a neuron takes place across all $(a,b)$ inputs to the network and all neurons. We also computed the $(a,b)$ values for the location of the center of mass of each neuron as this doesn't always align with the max preactivation (though it tends to be close). Then we compute the shortest torus distance from the point of the max activation or the center of mass, to the line $a=b$."
+  },
+  {
+   "level": "section",
+   "title": "Previous interpretability metrics \\citep{zhong2023the}",
+   "text": "\\label{app:prev-metrics}"
+  },
+  {
+   "level": "subsection",
+   "title": "Definitions of gradient symmetricity and distance irrelevance",
+   "text": "\\textbf{Gradient symmetricity} measures, over some subset of input-output triples $(a,b,c)$, the average cosine similarity between the gradient of the output logit $Q_{(a,b,c)}$ with respect to the input embeddings of $a$ and $b$. For a network with embedding layer $\\mathbf{E}$ and a set $S\\subseteq \\mathbb{Z}_p^3$ of input-output triples:\n\\[\n    s_g = \\frac{1}{|S|} \\sum_{(a,b,c)\\in S}\\operatorname{sim}\\left(\\frac{\\partial Q_{abc}}{\\partial \\mathbf{E}_a}, \\frac{\\partial Q_{abc}}{\\partial\\mathbf{E}_b}\\right)\n\\]\nwhere $\\operatorname{sim}(u,v)=\\frac{u\\cdot v}{\\| u \\| \\| v \\|}$ is the cosine similarity. It is evident that $s_g\\in [-1, 1]$. \n\n\\textbf{Distance irrelevance} quantifies how much the model’s outputs depend on the distance between $a$ and $b$. For each distance $d$, we compute the standard deviation of correct logits over all $(a,b)$ pairs where $a-b=d$ and average over all distances. It's normalized by the standard deviation over all data.\n\nFormally, let $L_{i,j}=Q_{ij, i+j}$ be the correct logit matrix. The distance irrelevance $q$ is defined as:\n\\[\n    q= \\frac{\\frac{1}{p}\\sum_{d\\in \\mathbb{Z}_p}\\operatorname{std}(\\{L_{i, i+d}|i\\in \\mathbb{Z}_p\\})}{\\operatorname{std}(\\{L_{i, j}|i, j\\in \\mathbb{Z}_p\\})}\n\\]\nwhere $q\\in [0,1]$, with higher values indicating greater irrelevance to input distance."
+  },
+  {
+   "level": "subsection",
+   "title": "Evaluating gradient symmetricity and distance irrelevance metrics",
+   "text": "\\label{app:prev-metrics-eval}\n\nFigure~\\ref{fig:interp-metrics} shows the mean and standard deviation of the gradient symmetricity and distance irrelevance metrics from \\cite{zhong2023the}. Unlike \\cite{zhong2023the}, who report gradient symmetricity results over a randomly selected subset of 100 input-output triples $(a,b,c)\\in \\mathbb{Z}_p^3$, we compute the metric exhaustively across \\textbf{all} $59^3=205,370$ triples to add accuracy. See Appendix~\\ref{app:gpu} for the GPU-optimized procedure.\n\nMLP-Add and MLP-Concat cluster on opposite extremes, implying the metrics just identify whether neurons have phases $\\phi^L\\not=\\phi^R$.\nMLP-Add models have high gradient symmetricity and low distance irrelevance and MLP-Concat models have low gradient symmetricity and high distance irrelevance.\nAttention 1.0 models span a wide range between these extremes depending on two factors: 1) how well the frequencies they learned intersect and 2) how well neurons are able to get their activation center of mass away from the $\\phi^L=\\phi^R$ line.\nAttention 0.0 is closer to MLP-Add than Attention 1.0 because it's harder for this architecture to learn $\\phi^L\\not=\\phi^R$. Notably, failure cases exist using both: \\textbf{neither metric distinguishes between Attention 1.0 and 0.0 models.}\n\n\n\n\n\n\n\n\n\n\nMMD results for these two metrics are reported below, again showing that the distance between attention 0.0 and attention 1.0 models is small. This is the case even those these metrics were chosen to differentiate between the two architectures. \n\n\n\n\nUsing just the x-axis (since the y-axis on those plots is the std dev) MMD results are presented next.\n\n\n\nWe can conclude that the attention transformers are far from vector addition, and very close to each other under all metrics. \n\n\n\n\n\n\n\n\n\\FloatBarrier\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\\newpage"
+  },
+  {
+   "level": "section",
+   "title": "Additional commentary on the results",
+   "text": ""
+  },
+  {
+   "level": "subsection",
+   "title": "The Attention 1.0 model is using attention as a weak non-linearity.",
+   "text": "It's noteworthy that some neurons in the first MLP layer of transformers have learned one frequency $f$, and a sum of two different sinusoidal features (\\textit{i.e. a superposition via linear combination)}. These are of one first-order sinusoidal feature (the simple neuron model) $\\sin(\\frac{2\\pi fa}{n}) + \\sin(\\frac{2\\pi fb }{n})$ and also a second term, being second order and $\\cos(\\frac{f(a+b-c)}{n})$, with both terms having the same $f$ value.\n\nThis is why the sum of neuron-cluster post-activations plot (Figure \\ref{fig:sum-postactivations}) has a bit of ``off diagonal patchy-spread'' that runs from the top left to the bottom right at 45 degrees in only the attention 1.0 model. These small cloudy patches are caused by a few neurons activating on $\\cos(\\frac{f(a+b-c)}{n})$. \n\nThus, it's the case that for modular addition, the attention layer and its sigmoidal non-linearity is being used like a weak non-linear layer. Sigmoidal attention isn't a strong enough non-linearity for the network to have all neurons with frequency $f$ learn the second order $\\cos(\\frac{f(a+b-c)}{n})$ that's typically seen in the second and third layers. Indeed, a past work, \\cite{mccracken2025uncoveringuniversalabstractalgorithm}, utilized a rigorous empirical framework to inspect this over layers, learning rates, and l2 weight decay hyperparameters. They showed that across these settings, the best fit in the first layer in all neurons in transformers still comes from the simple neuron model."
+  },
+  {
+   "level": "section",
+   "title": "GPU-optimized computations",
+   "text": "\\label{app:gpu}"
+  },
+  {
+   "level": "subsection",
+   "title": "GPU-optimized center-of-mass in circular coordinates",
+   "text": "Let \\(p\\) be the grid size and for each neuron \\(n=1,\\dots,N\\) we have a pre‑activation map\n\\[\nx^{(n)}_{i,j},\n\\quad\n(i,j=0,\\dots,p-1).\n\\]\nDefine nonnegative weights\n\\[\nw^{(n)}_{i,j}\n=\\bigl|\\,x^{(n)}_{i,j}\\bigr|.\n\\]\n\nLet \\(f_n\\in\\{1,\\dots,\\lfloor p/2\\rfloor\\}\\) be the dominant frequency for neuron \\(n\\), and let\n\\[\nf_n^{-1}\\text{ be the modular inverse of }f_n\\text{ modulo }p,\n\\qquad\nf_n\\,f_n^{-1}\\equiv1\\pmod p.\n\\]\nConvert the row index \\(i\\) and column index \\(j\\) into angles (``un‑wrapping’’ by \\(f_n^{-1}\\)):\n\\[\n\\theta_i^{(n)} = \\frac{2\\pi}{p}\\,f_n^{-1}\\,i,\n\\qquad\n\\phi_j^{(n)}   = \\frac{2\\pi}{p}\\,f_n^{-1}\\,j.\n\\]\nForm the two complex phasor sums\n\\begin{align*}\nS_a^{(n)}\n&=\n\\sum_{i=0}^{p-1}\\sum_{j=0}^{p-1}\nw^{(n)}_{i,j}\\,\\exp\\!\\bigl(i\\,\\theta_i^{(n)}\\bigr),\n\\\\\nS_b^{(n)}\n&=\n\\sum_{i=0}^{p-1}\\sum_{j=0}^{p-1}\nw^{(n)}_{i,j}\\,\\exp\\!\\bigl(i\\,\\phi_j^{(n)}\\bigr).\n\\end{align*}\nThe arguments of these sums give the circular means of each axis:\n\\[\n\\mu_a^{(n)} = \\arg\\bigl(S_a^{(n)}\\bigr),\n\\quad\n\\mu_b^{(n)} = \\arg\\bigl(S_b^{(n)}\\bigr),\n\\]\nwhere \\(\\arg\\) returns an angle in \\((-\\pi,\\pi]\\).  To ensure a nonnegative result, normalize into \\([0,2\\pi)\\):\n\\[\n\\mu^+ = \\bigl(\\mu + 2\\pi\\bigr)\\bmod 2\\pi.\n\\]\nFinally, map back from the angular domain to grid coordinates:\n\\[\n\\mathrm{CoM}_a^{(n)}\n= \\frac{p}{2\\pi}\\,\\mu_a^{(n)+},\n\\qquad\n\\mathrm{CoM}_b^{(n)}\n= \\frac{p}{2\\pi}\\,\\mu_b^{(n)+}.\n\\]\nThis handles wrap‑around at the boundaries automatically and weights each location \\((i,j)\\) by \\(\\lvert x^{(n)}_{i,j}\\rvert\\), producing a smooth, circularly‑aware center of mass. All tensor operations—angle computation, complex exponentials, and weighted sums—are expressed as parallel array primitives that JAX can JIT‑compile and fuse into a single GPU kernel launch, eliminating Python‐level overhead. By precomputing the angle grids and performing the phasor sums inside one jitted function, this implementation fully exploits GPU parallelism and memory coalescing for maximal throughput."
+  },
+  {
+   "level": "subsection",
+   "title": "GPU-vectorized distance irrelevance over all $n^2$ input pairs $(a,b)$",
+   "text": "Let\n\\[\n\\mathcal{I} \\;=\\;\\bigl\\{(a,b)\\mid a,b\\in\\{0,\\dots,n-1\\}\\bigr\\},\n\\]\nand order its elements lexicographically:\n\\[\nX = \\bigl[(a_0,b_0),\\,(a_1,b_1),\\;\\dots,\\;(a_{n^2-1},b_{n^2-1})\\bigr]\n\\;\\in\\;\\mathbb{Z}^{\\,n^2\\times2}.\n\\]\nA $n^2$ single batched forward pass on the GPU computes\n\\[\n\\mathrm{Logits}\n\\;=\\;\n\\mathrm{Transformer}\\bigl(X\\bigr)\n\\;\\in\\;\\mathbb{R}^{\\,n^2\\times n},\n\\]\nproducing all \\(n^2\\cdot n\\) output logits in parallel.  We then extract the “correct‐class” logit for each input:\n\\[\ny_k\n\\;=\\;\n\\mathrm{Logits}_{\\,k,\\,(a_k + b_k)\\bmod n},\n\\qquad\nk = 0,\\dots,n^2-1.\n\\]\nNext we reshape \\(y\\) into an \\(n\\times n\\) matrix \\(L\\) by\n\\[\nL_{\\,i,j}\n\\;=\\;\ny_k\n\\quad\\text{where}\\quad\ni = (a_k + b_k)\\bmod n,\n\\;\\;\nj = (a_k - b_k)\\bmod n.\n\\]\nAll of the above: embedding lookup, attention, MLP, softmax and the advanced indexing is implemented as two large vectorized kernels (the batched forward pass and the gather), so each of the \\(n^2\\) inputs is handled in \\(O(1)\\) time but fully in parallel on the GPU.\n\nFinally, define\n\\[\n\\sigma_{\\rm global}\n=\\sqrt{\\frac{1}{n^2}\\sum_{i,j}\\Bigl(L_{i,j}-\\mu\\Bigr)^2},\n\\quad\n\\mu=\\frac{1}{n^2}\\sum_{i,j}L_{i,j},\n\\]\nand for each “distance” \\(j\\)\n\\[\n\\sigma_j\n=\\sqrt{\\frac{1}{n}\\sum_{i}\\Bigl(L_{i,j}-\\bar L_{\\cdot j}\\Bigr)^2},\n\\quad\n\\bar L_{\\cdot j}=\\frac{1}{n}\\sum_{i}L_{i,j},\n\\quad\nq_j=\\frac{\\sigma_j}{\\sigma_{\\rm global}}.\n\\]\nWe report\n\\[\n\\overline{q}\n=\\frac{1}{n}\\sum_{j=0}^{n-1}q_j,\n\\qquad\n\\mathrm{std}(q)\n=\\sqrt{\\frac{1}{n}\\sum_{j=0}^{n-1}\\bigl(q_j-\\overline{q}\\bigr)^2}.\n\\]"
+  },
+  {
+   "level": "subsection",
+   "title": "GPU-optimized gradient symmetricity over all $n^3$ triplets $(a,b,c)$",
+   "text": "Let\n\\[\nE \\;\\in\\;\\mathbb{R}^{\\,n\\times d}\n\\quad\\text{with}\\quad d=128\n\\]\nbe the learned embedding matrix, and denote by\n\\[\nQ\\bigl(E_a,\\,E_b\\bigr)_c\n\\]\nthe scalar logit for class \\(c\\) obtained by feeding the pair of embeddings\n\\((E_a,E_b)\\) into the model.  We define the per‑triplet gradient cosine‑similarity\nas\n\\[\nS(a,b,c)\n\\;=\\;\n\\frac{\\bigl\\langle \\nabla_{E_a}\\,Q(E_a,E_b)_c,\\;\\nabla_{E_b}\\,Q(E_a,E_b)_c\\bigr\\rangle}\n     {\\bigl\\|\\nabla_{E_a}Q(E_a,E_b)_c\\bigr\\|\\;\\bigl\\|\\nabla_{E_b}Q(E_a,E_b)_c\\bigr\\|}\\,,\n\\]\nfor all \n\\(\\,(a,b,c)\\in\\{0,\\dots,n-1\\}^3\\).\n\nTo compute \\(\\{S(a,b,c)\\}\\) over the full \\(n^3\\) grid in one fused GPU kernel, we\nfirst form three index tensors\n\\[\nA_{i,j,k}=i,\\quad B_{i,j,k}=j,\\quad C_{i,j,k}=k,\n\\quad i,j,k=0,\\dots,n-1,\n\\]\nthen flatten to vectors\n\\(\\displaystyle\na=\\mathrm{vec}(A),\\,\nb=\\mathrm{vec}(B),\\,\nc=\\mathrm{vec}(C)\n\\in\\{0,\\dots,n-1\\}^{n^3}.\n\\)\nWe gather the embeddings\n\\[\n\\mathsf{emb}_a = E[a]\\in\\mathbb{R}^{n^3\\times d},\n\\quad\n\\mathsf{emb}_b = E[b]\\in\\mathbb{R}^{n^3\\times d},\n\\]\nand in JAX compute\n\\[\n\\mathbf{g}_a \\;=\\;\\mathrm{vmap}\\!\\bigl(\\,(e_a,e_b,c)\\mapsto \\nabla_{E_a}Q(e_a,e_b)_c\\bigr)\n                   (\\mathsf{emb}_a,\\,\\mathsf{emb}_b,\\,c),\n\\]\n\\[\n\\mathbf{g}_b \\;=\\;\\mathrm{vmap}\\!\\bigl(\\,(e_a,e_b,c)\\mapsto \\nabla_{E_b}Q(e_a,e_b)_c\\bigr)\n                   (\\mathsf{emb}_a,\\,\\mathsf{emb}_b,\\,c),\n\\]\neach producing an \\(\\,(n^3\\times d)\\)-shaped array.  Finally the similarity vector is\n\\[\n\\mathbf{S}\n=\\;\\frac{\\mathbf{g}_a \\odot \\mathbf{g}_b}\n        {\\,\\|\\mathbf{g}_a\\|\\,\\|\\mathbf{g}_b\\|\\,}\n\\;\\in\\;\\mathbb{R}^{n^3},\n\\]\nand we report\n\\[\n\\overline{S}\n=\\frac{1}{n^3}\\sum_{i=1}^{n^3}S_i,\n\\qquad\n\\sigma_S\n=\\sqrt{\\frac{1}{n^3}\\sum_{i=1}^{n^3}\\bigl(S_i-\\overline{S}\\bigr)^2}\\,. \n\\]\n\n\\paragraph{Runtime.}\nBecause we express \\(\\mathbf{g}_a,\\mathbf{g}_b\\) and the subsequent\ndot‑and‑norm entirely inside a single\n\\texttt{@jax.jit}+\\;\\texttt{vmap} invocation, XLA lowers it to one GPU kernel\nthat processes all \\(n^3\\) triplets in parallel.  The kernel dispatch cost\nis therefore \\(O(1)\\), and each triplet’s gradient and cosine computations\nare fused into vectorized instructions with constant per‑element overhead.\nAlthough the total arithmetic work is \\(O(n^3)\\), the full data‑parallel\nexecution means the wall‑clock latency grows sub‑linearly in \\(n^3\\)\nand the per‑triplet overhead remains effectively constant."
+  },
+  {
+   "level": "section",
+   "title": "Hypothesis: modular addition as a factored map from the torus to the circle",
+   "text": "\\label{app:hypothesis}\n\n\n\n\nModular addition is the function $\\mathbb{Z}_n\\times \\mathbb{Z}_n\\to \\mathbb{Z}_n$ sending the pair $(a,b)$ to $c=a+b\\mod n$.\nGeometrically, we may embed $a\\in \\mathbb{Z}_n$ on the unit circle $\\mathbb{R}^2$ via $\\mathbf{E}_a=(\\cos(2\\pi a/n), \\sin(2\\pi a/n))$.\n\nSo the product space $\\mathbb{Z}_n\\times \\mathbb{Z}_n$ embeds into $\\mathbb{R}^4$ as a discretized torus, parameterized by\n\\begin{align*}\n    (a, b)\\mapsto(\\cos u, \\sin u, \\cos v, \\sin v), \\quad u= 2\\pi a /n, \\ v=2\\pi b/n.\n\\end{align*}\nIn this embedding, modular addition corresponds to the following map from the torus to the circle:\n\\begin{align*}\n    (x_1, x_2, x_3, x_4) \\mapsto (x_1 x_3 - x_2 x_4, x_1 x_4 + x_2 x_3).\n\\end{align*}\nParameterizing by angles, this becomes the familiar trigonometric identity\n\\begin{align*}\n    (\\cos u, \\sin u, \\cos v, \\sin v) \\mapsto (\\cos(u+v), \\sin(u+v)).\n\\end{align*}\n\nWe claim that networks we study are approximating this specific geometric map from a torus in $\\mathbb{R}^4$ to a circle in $\\mathbb{R}^2$.\nIn Section~\\ref{sec:prev-interps} we saw that the ``clock'' and ``pizza'' interpretations included learned embeddings of the form of $\\mathbf{E}_a$. \nTaken together, these embeddings define a torus $\\mathbf{T}^2$ as the input representation space.\n\\textbf{Our hypothesis} is that architectures (MLP-Add, Attention 0.0 and 1.0, MLP-Concat) do not learn fundamentally different solutions; rather they factor the same torus-to-circle map via different intermediate representations. Fig.~\\ref{fig:topology-mapping} shows factorizations of this map."
+  }
+ ],
+ "figures": [
+  {
+   "caption": "Clock and Pizza's analytical forms visualized, with frequency assumed to be $f=1$ for simplicity. Each point corresponds to a pair $(a,b)$ after being transformed by the corresponding analytical form and is colored by its sum $(a+b)\\mod 59$.",
+   "label": "fig:wrapped",
+   "images": [
+    "figures/vertical_two_panel_horizontal_cbar_chunkier20_tighterlegend_biggerfonts_v2.pdf"
+   ]
+  },
+  {
+   "caption": "PCA of neuron pre-activations for a single frequency cluster across architectures: MLP-Add ($f=27$), Pizza ($f=17$), Clock ($f=21$), MLP-Concat ($f=22$). Each point is an input $(a,b)$, colored by $(d\\cdot a + d\\cdot b)\\bmod 59$ corresponding to the network's output (see Section~\\ref{sec:prev-interps}). Pizza and Clock are nearly identical to each other and to MLP-Add, but differ strongly from MLP-Concat. Note that the trained pizza and clock models being PCA'd are downloaded directly from \\cite{zhong2023the}'s Github: model\\_p99zdpze5l.pt and model\\_l8k1hzciux.pt.",
+   "label": "fig:pca-representations",
+   "images": [
+    "figures/pca-all-big.png"
+   ]
+  },
+  {
+   "caption": "MLP-Add(f=27), Pizza(f=17), Clock(f=21), MLP-Concat(f=22). Normalized sum of post-activations in clusters in each architecture over all $(a,b)$. Clusters in MLP vector add, Attention 0.0 and 1.0 activate strongest on $(a,b)$ with $a$ close to $b$: the activation strength decreases with distance from $a=b$. Clusters in MLP-Concat activate almost equivariantly.",
+   "label": "fig:sum-postactivations",
+   "images": [
+    "figures/test_summed.pdf"
+   ]
+  },
+  {
+   "caption": "Different factorizations of the torus-to-circle map. We find first-layer intermediate representations to be either a torus or a disc (resembling vector addition on the circle). Later layers can construct a circle, and the logits approximate a circle. See Appendix~\\ref{app:hypothesis} regarding the torus-to-circle factorization.",
+   "label": "fig:topology-mapping",
+   "images": [
+    "figures/diagram_final.pdf"
+   ]
+  },
+  {
+   "caption": "Log-density heatmaps for the distribution of neuron maximum activations (top) and activation center of mass (bottom) across 703 trained models. Attention 0.0 and 1.0 architectures exhibit modest off-diagonal spread compared to MLP-Add, but remain constrained by architectural bias toward diagonal alignment. The maximum mean discrepancy scores between Attention 0.0 and 1.0 are 0.0237 and 0.0181 in rows 1 and 2 respectively, indicating they are very similar distributions.",
+   "label": "fig:heatmaps-maxpre-com",
+   "images": [
+    "figures/heatmaps_maxpre_com.pdf"
+   ]
+  },
+  {
+   "caption": "Betti number distributions across layers for 1-, 2-, and 3-layer models (100 seeds for each model). In layer 1, MLP-Add, Attention 0.0, and Attention 1.0 mostly yield disc-like representations, while MLP-Concat produces a torus. From the second layer onward, MLP-Add and both Attention variants converge to either a disc or a circle: the circle reflects the logits topology (correct answer), while the disc is an  intermediate that can persist in later layers. MLP-Concat instead transitions directly to the circle. Across depth, Attention 0.0 and 1.0 are nearly identical with the latter having fewer transient discs.",
+   "label": "fig:homology-piecharts",
+   "images": [
+    "figures/combined_pies_final.pdf"
+   ]
+  },
+  {
+   "caption": "Histograms of torus-distance from each neuron's phase to the diagonal \\(a = b\\), across 703 trained models. MLP-Add neurons align perfectly with the diagonal, Attention 0.0 and 1.0 show increasing off-diagonal spread, and MLP-Concat exhibits broadly distributed activations on the torus.",
+   "label": "fig:histograms-torus-distance",
+   "images": [
+    "figures/histograms_torus_distance_final.pdf"
+   ]
+  },
+  {
+   "caption": "Evaluation of gradient symmetricity (left) and distance irrelevance (right). Each point shows the average (avg) and standard deviation (std) of one trained network. MLP-Add and MLP-Concat lie at nearly opposite extremes, while attention 0.0 and 1.0 overlap substantially. Gradient symmetricity separates Attention 1.0 better, but neither metric \\textbf{always} distinguishes between Attention 1.0 and 0.0.",
+   "label": "fig:interp-metrics",
+   "images": [
+    "figures/gradient_distance_irrelevance.pdf"
+   ]
+  }
+ ],
+ "tables": [
+  {
+   "caption": "Row 1: Max activation",
+   "label": "tab:mmd_results",
+   "latex": "\\begin{tabular}{lrrl}\n\\toprule\nDescription & MMD & p-value & Interpretation \\\\\n\\midrule\nMLP vec add vs Attention 0.0 & 0.0968 & 0.0000 & Moderate difference; highly significant \\\\\nMLP vec add vs Attention 1.0 & 0.1239 & 0.0000 & Clear difference; highly significant \\\\\nMLP vec add vs MLP concat    & 0.2889 & 0.0000 & Very strong difference; highly significant \\\\\nAttention 0.0 vs Attention 1.0 & 0.0338 & 0.0000 & Subtle difference; highly significant \\\\\nAttention 0.0 vs MLP concat    & 0.1987 & 0.0000 & Strong difference; highly significant \\\\\nAttention 1.0 vs MLP concat    & 0.1723 & 0.0000 & Strong difference; highly significant \\\\\n\\bottomrule\n\\end{tabular}"
+  },
+  {
+   "caption": "Gaussian-kernel Maximum Mean Discrepancies (MMD) \\cite{gretton2012kernel} and permutation p-values between the empirical distributions shown in Figure~\\ref{fig:histograms-torus-distance}. For each architecture comparison, we sampled 2000 points from each empirical distribution (derived from histogram-based neuron statistics), then computed the unbiased Gaussian-kernel MMD with a bandwidth chosen via the pooled median heuristic. Significance was assessed using 5000 permutation tests per comparison.",
+   "label": "tab:mmd_results",
+   "latex": "\\begin{tabular}{lrrl}\n\\toprule\nDescription & MMD & p-value & Interpretation \\\\\n\\midrule\nMLP vec add vs Attention 0.0 & 0.3032 & 0.0000 & Strong difference; highly significant \\\\\nMLP vec add vs Attention 1.0 & 0.3888 & 0.0000 & Very strong difference; highly significant \\\\\nMLP vec add vs MLP concat    & 0.9508 & 0.0000 & Extremely strong difference; highly significant \\\\\nAttention 0.0 vs Attention 1.0 & 0.0705 & 0.0000 & Moderate difference; highly significant \\\\\nAttention 0.0 vs MLP concat    & 0.6323 & 0.0000 & Very strong difference; highly significant \\\\\nAttention 1.0 vs MLP concat    & 0.5695 & 0.0000 & Very strong difference; highly significant \\\\\n\\bottomrule\n\\end{tabular}"
+  },
+  {
+   "caption": "Permutation–test MMDs on the empirical gradient symmetricity and distance irrelevance distributions across all architectures.  \nAll p-values are $\\le 10^{-6}$ (reported as 0.0000).",
+   "label": "",
+   "latex": "\\begin{tabular}{lrrl}\n\\toprule\nDescription & MMD & p-value & Interpretation \\\\\n\\midrule\nMLP vec add vs Attention 0.0 & 1.2725 & 0.0000 & Extremely strong difference; highly significant \\\\\nMLP vec add vs Attention 1.0 & 0.9688 & 0.0000 & Extremely strong difference; highly significant \\\\\nMLP vec add vs MLP concat    & 1.3471 & 0.0000 & Extremely strong difference; highly significant \\\\\nAttention 0.0 vs Attention 1.0 & 0.7750 & 0.0000 & Very strong difference; highly significant \\\\\nAttention 0.0 vs MLP concat    & 1.3503 & 0.0000 & Extremely strong difference; highly significant \\\\\nAttention 1.0 vs MLP concat    & 1.2360 & 0.0000 & Extremely strong difference; highly significant \\\\\n\\bottomrule\n\\end{tabular}"
+  },
+  {
+   "caption": "Permutation-test MMDs on scatter-plot  averages only (1-D).  \nAll $p$–values are $\\le 10^{-6}$, so every difference is ``highly significant.'' Note that the distance between attention 0.0, attention 1.0, and MLP vec add is large, implying they are not performing vector addition.",
+   "label": "tab:grad-dirrel-mmd",
+   "latex": "\\begin{tabular}{lrrl}\n\\toprule\nDescription & MMD & $p$-value & Interpretation \\\\\n\\midrule\nMLP vec add vs Attention 0.0   & 1.2755 & 0.0000 & Extremely strong difference; highly significant \\\\\nMLP vec add vs Attention 1.0   & 0.9842 & 0.0000 & Extremely strong difference; highly significant \\\\\nMLP vec add vs MLP concat      & 1.3833 & 0.0000 & Extremely strong difference; highly significant \\\\\nAttention 0.0 vs Attention 1.0 & 0.7726 & 0.0000 & Extremely strong difference; highly significant \\\\\nAttention 0.0 vs MLP concat    & 1.3802 & 0.0000 & Extremely strong difference; highly significant \\\\\nAttention 1.0 vs MLP concat    & 1.2559 & 0.0000 & Extremely strong difference; highly significant \\\\\n\\bottomrule\n\\end{tabular}"
+  }
+ ],
+ "equations": [
+  {
+   "env": "align",
+   "latex": "\\mathbf{E}_a=[\\cos(2\\pi fa/n), \\sin(2\\pi f a/n)], \\quad \\mathbf{E}_b=[\\cos(2\\pi fb/n), \\sin(2\\pi fb/n)]. \\label{eq:circle-embedding}"
+  },
+  {
+   "env": "align",
+   "latex": "\\mathbf{E}_{ab}= [\\cos(2\\pi f(a+b)/n), \\sin(2\\pi f(a+b)/n)], \\label{eq:angle-sum}"
+  },
+  {
+   "env": "align",
+   "latex": "\\mathbf{E}_{ab} = [\\cos(2\\pi fa/n)+\\cos(2\\pi f b/n), \\sin(2\\pi fa/n)+\\sin(2\\pi fb/n)],"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:simple-neuron-model}\n    N(a,b)=\\cos(2\\pi f a/n + \\phi^L) + \\cos(2\\pi f b/n + \\phi^R),"
+  },
+  {
+   "env": "align*",
+   "latex": "\\preactivationmanifold{\\ell} &:= \\left\\{\\preactivationmap{\\ell}(a, b) : (a, b)\\in\\mathbb{Z}_n^2\\right\\} \\subset \\mathbb{R}^{d_{\\ell,f}};\\quad\\mathrm{and}\\quad\n    \\logitmanifold := \\left\\{\\logitmap(a, b) : (a, b)\\in\\mathbb{Z}_n^2\\right\\}\\subset\\mathbb{R}^n,"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:factorization:disc}\n            V^{\\rm disc}_{(a, b)} = (\\cos\\theta_a + \\cos\\theta_b, \\sin\\theta_a + \\sin\\theta_b)^\\top."
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq:factorization:torus}\n            V^{\\rm torus}_{(a, b)} = (\\cos\\theta_a, \\sin\\theta_a, \\cos\\theta_b, \\sin\\theta_b)^\\top."
+  },
+  {
+   "env": "align",
+   "latex": "(a,b)\\mapsto (a\\cdot d,b\\cdot d),  \\quad\\quad \\text{where }\n    d:= \\left(\\frac{f}{\\gcd(f,n)}\\right)^{-1} \\mod \\frac{n}{\\gcd(f,n)} .\\label{eq:remapping}"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq: X factorisation2}\nX_{(a,b),i} = \\cos(\\theta_a)\\cos(\\Phi^{L, a}_i) - \\sin(\\theta_a)\\sin(\\Phi^{L, a}_i) + \\cos(\\theta_b)\\cos(\\Phi^{R, b}_i) - \\sin(\\theta_b)\\sin(\\Phi^{R, b}_i)"
+  },
+  {
+   "env": "equation",
+   "latex": "\\label{eq: X factorisation}\nX_{(a,b),i} = (\\cos\\theta_a + \\cos\\theta_b)\\cos\\phi_i - (\\sin\\theta_a + \\sin\\theta_b)\\sin\\phi_i"
+  },
+  {
+   "env": "align",
+   "latex": "V_{(a,b),:}&:=[\\cos(\\theta_a)+\\cos(\\theta_b), \\sin(\\theta_a)+\\sin(\\theta_b)] \\\\\n  W_{:, i}&:=\\begin{bmatrix}\\cos(\\phi_i)\\\\\n  -\\sin(\\phi_i)\\end{bmatrix}."
+  },
+  {
+   "env": "equation",
+   "latex": "V_{(a,b), :} = [\\cos(\\theta_a), \\sin(\\theta_a), \\cos(\\theta_b), \\sin(\\theta_b)]"
+  },
+  {
+   "env": "equation",
+   "latex": "W_{:, i} =\\begin{bmatrix}\n    \\cos(\\Phi^{L, a}_i) \\\\\n    -\\sin(\\Phi^{L, a}_i) \\\\\n    \\cos(\\Phi^{R, b}_i) \\\\\n    -\\sin(\\Phi^{R, b}_i) \\\\\n    \\end{bmatrix}."
+  },
+  {
+   "env": "align*",
+   "latex": "S_a^{(n)}\n&=\n\\sum_{i=0}^{p-1}\\sum_{j=0}^{p-1}\nw^{(n)}_{i,j}\\,\\exp\\!\\bigl(i\\,\\theta_i^{(n)}\\bigr),\n\\\\\nS_b^{(n)}\n&=\n\\sum_{i=0}^{p-1}\\sum_{j=0}^{p-1}\nw^{(n)}_{i,j}\\,\\exp\\!\\bigl(i\\,\\phi_j^{(n)}\\bigr)."
+  },
+  {
+   "env": "align*",
+   "latex": "(a, b)\\mapsto(\\cos u, \\sin u, \\cos v, \\sin v), \\quad u= 2\\pi a /n, \\ v=2\\pi b/n."
+  },
+  {
+   "env": "align*",
+   "latex": "(x_1, x_2, x_3, x_4) \\mapsto (x_1 x_3 - x_2 x_4, x_1 x_4 + x_2 x_3)."
+  },
+  {
+   "env": "align*",
+   "latex": "(\\cos u, \\sin u, \\cos v, \\sin v) \\mapsto (\\cos(u+v), \\sin(u+v))."
+  },
+  {
+   "env": "display",
+   "latex": "X_{(a,b),i} = \\cos(\\theta_a+\\Phi^{L, a}_i)+\\cos(\\theta_b+\\Phi^{R, b}_i),\\qquad\n  \\theta_t:=\\frac{2\\pi t}{p},\\;(a,b)\\in\\{0,\\dots ,p-1\\}^{2}."
+  },
+  {
+   "env": "display",
+   "latex": "s_g = \\frac{1}{|S|} \\sum_{(a,b,c)\\in S}\\operatorname{sim}\\left(\\frac{\\partial Q_{abc}}{\\partial \\mathbf{E}_a}, \\frac{\\partial Q_{abc}}{\\partial\\mathbf{E}_b}\\right)"
+  },
+  {
+   "env": "display",
+   "latex": "q= \\frac{\\frac{1}{p}\\sum_{d\\in \\mathbb{Z}_p}\\operatorname{std}(\\{L_{i, i+d}|i\\in \\mathbb{Z}_p\\})}{\\operatorname{std}(\\{L_{i, j}|i, j\\in \\mathbb{Z}_p\\})}"
+  },
+  {
+   "env": "display",
+   "latex": "x^{(n)}_{i,j},\n\\quad\n(i,j=0,\\dots,p-1)."
+  },
+  {
+   "env": "display",
+   "latex": "w^{(n)}_{i,j}\n=\\bigl|\\,x^{(n)}_{i,j}\\bigr|."
+  },
+  {
+   "env": "display",
+   "latex": "f_n^{-1}\\text{ be the modular inverse of }f_n\\text{ modulo }p,\n\\qquad\nf_n\\,f_n^{-1}\\equiv1\\pmod p."
+  },
+  {
+   "env": "display",
+   "latex": "\\theta_i^{(n)} = \\frac{2\\pi}{p}\\,f_n^{-1}\\,i,\n\\qquad\n\\phi_j^{(n)}   = \\frac{2\\pi}{p}\\,f_n^{-1}\\,j."
+  },
+  {
+   "env": "display",
+   "latex": "\\mu_a^{(n)} = \\arg\\bigl(S_a^{(n)}\\bigr),\n\\quad\n\\mu_b^{(n)} = \\arg\\bigl(S_b^{(n)}\\bigr),"
+  },
+  {
+   "env": "display",
+   "latex": "\\mu^+ = \\bigl(\\mu + 2\\pi\\bigr)\\bmod 2\\pi."
+  },
+  {
+   "env": "display",
+   "latex": "\\mathrm{CoM}_a^{(n)}\n= \\frac{p}{2\\pi}\\,\\mu_a^{(n)+},\n\\qquad\n\\mathrm{CoM}_b^{(n)}\n= \\frac{p}{2\\pi}\\,\\mu_b^{(n)+}."
+  },
+  {
+   "env": "display",
+   "latex": "\\mathcal{I} \\;=\\;\\bigl\\{(a,b)\\mid a,b\\in\\{0,\\dots,n-1\\}\\bigr\\},"
+  },
+  {
+   "env": "display",
+   "latex": "X = \\bigl[(a_0,b_0),\\,(a_1,b_1),\\;\\dots,\\;(a_{n^2-1},b_{n^2-1})\\bigr]\n\\;\\in\\;\\mathbb{Z}^{\\,n^2\\times2}."
+  },
+  {
+   "env": "display",
+   "latex": "\\mathrm{Logits}\n\\;=\\;\n\\mathrm{Transformer}\\bigl(X\\bigr)\n\\;\\in\\;\\mathbb{R}^{\\,n^2\\times n},"
+  },
+  {
+   "env": "display",
+   "latex": "y_k\n\\;=\\;\n\\mathrm{Logits}_{\\,k,\\,(a_k + b_k)\\bmod n},\n\\qquad\nk = 0,\\dots,n^2-1."
+  },
+  {
+   "env": "display",
+   "latex": "L_{\\,i,j}\n\\;=\\;\ny_k\n\\quad\\text{where}\\quad\ni = (a_k + b_k)\\bmod n,\n\\;\\;\nj = (a_k - b_k)\\bmod n."
+  },
+  {
+   "env": "display",
+   "latex": "\\sigma_{\\rm global}\n=\\sqrt{\\frac{1}{n^2}\\sum_{i,j}\\Bigl(L_{i,j}-\\mu\\Bigr)^2},\n\\quad\n\\mu=\\frac{1}{n^2}\\sum_{i,j}L_{i,j},"
+  },
+  {
+   "env": "display",
+   "latex": "\\sigma_j\n=\\sqrt{\\frac{1}{n}\\sum_{i}\\Bigl(L_{i,j}-\\bar L_{\\cdot j}\\Bigr)^2},\n\\quad\n\\bar L_{\\cdot j}=\\frac{1}{n}\\sum_{i}L_{i,j},\n\\quad\nq_j=\\frac{\\sigma_j}{\\sigma_{\\rm global}}."
+  },
+  {
+   "env": "display",
+   "latex": "\\overline{q}\n=\\frac{1}{n}\\sum_{j=0}^{n-1}q_j,\n\\qquad\n\\mathrm{std}(q)\n=\\sqrt{\\frac{1}{n}\\sum_{j=0}^{n-1}\\bigl(q_j-\\overline{q}\\bigr)^2}."
+  },
+  {
+   "env": "display",
+   "latex": "E \\;\\in\\;\\mathbb{R}^{\\,n\\times d}\n\\quad\\text{with}\\quad d=128"
+  },
+  {
+   "env": "display",
+   "latex": "Q\\bigl(E_a,\\,E_b\\bigr)_c"
+  },
+  {
+   "env": "display",
+   "latex": "S(a,b,c)\n\\;=\\;\n\\frac{\\bigl\\langle \\nabla_{E_a}\\,Q(E_a,E_b)_c,\\;\\nabla_{E_b}\\,Q(E_a,E_b)_c\\bigr\\rangle}\n     {\\bigl\\|\\nabla_{E_a}Q(E_a,E_b)_c\\bigr\\|\\;\\bigl\\|\\nabla_{E_b}Q(E_a,E_b)_c\\bigr\\|}\\,,"
+  },
+  {
+   "env": "display",
+   "latex": "A_{i,j,k}=i,\\quad B_{i,j,k}=j,\\quad C_{i,j,k}=k,\n\\quad i,j,k=0,\\dots,n-1,"
+  },
+  {
+   "env": "display",
+   "latex": "\\mathsf{emb}_a = E[a]\\in\\mathbb{R}^{n^3\\times d},\n\\quad\n\\mathsf{emb}_b = E[b]\\in\\mathbb{R}^{n^3\\times d},"
+  },
+  {
+   "env": "display",
+   "latex": "\\mathbf{g}_a \\;=\\;\\mathrm{vmap}\\!\\bigl(\\,(e_a,e_b,c)\\mapsto \\nabla_{E_a}Q(e_a,e_b)_c\\bigr)\n                   (\\mathsf{emb}_a,\\,\\mathsf{emb}_b,\\,c),"
+  },
+  {
+   "env": "display",
+   "latex": "\\mathbf{g}_b \\;=\\;\\mathrm{vmap}\\!\\bigl(\\,(e_a,e_b,c)\\mapsto \\nabla_{E_b}Q(e_a,e_b)_c\\bigr)\n                   (\\mathsf{emb}_a,\\,\\mathsf{emb}_b,\\,c),"
+  },
+  {
+   "env": "display",
+   "latex": "\\mathbf{S}\n=\\;\\frac{\\mathbf{g}_a \\odot \\mathbf{g}_b}\n        {\\,\\|\\mathbf{g}_a\\|\\,\\|\\mathbf{g}_b\\|\\,}\n\\;\\in\\;\\mathbb{R}^{n^3},"
+  },
+  {
+   "env": "display",
+   "latex": "\\overline{S}\n=\\frac{1}{n^3}\\sum_{i=1}^{n^3}S_i,\n\\qquad\n\\sigma_S\n=\\sqrt{\\frac{1}{n^3}\\sum_{i=1}^{n^3}\\bigl(S_i-\\overline{S}\\bigr)^2}\\,."
+  }
+ ],
+ "stats": {
+  "n_sections": 31,
+  "n_figures": 8,
+  "n_tables": 4,
+  "n_equations": 44,
+  "n_chars": 66514
+ }
+}

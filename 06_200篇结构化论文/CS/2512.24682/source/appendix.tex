@@ -1,0 +1,451 @@
+\appendix
+
+\clearpage
+
+
+
+\input{appendix-attack-v1}
+
+\vspace{-5pt}
+
+\section{Related Work}
+\label{append:Related_Work}
+Table \ref{tab:spec-compare} summarizes and contrasts representative 3GPP specification analysis systems in terms of their primary objectives, protocol modeling capabilities, security analysis scope, and key methodological characteristics.
+
+
+
+\section{\textit{\lm}}
+\label{append:prompt_algorithm}
+This appendix provides implementation-level details of the prompts and algorithms used by \lm. It covers \textit{SpecAdaptation}, the \textit{SCA Representation Extractor}, the \textit{Function Chain Builder}, \textit{SecOracle}, and \textit{VulnTestGenerator}. The Function Chain Builder is formalized through Algorithm~\ref{alg:temporal_connection}, Algorithm~\ref{alg:semantic_connection}, Algorithm~\ref{alg:causal_connection}, and Algorithm~\ref{alg:reference_connection}, which respectively define Temporal, Semantic, Causal, and Reference Guided Connection.
+
+\subsection{SpecAdaptation}
+
+\vspace{-5pt}
+
+\begin{algorithm}[ht]
+\caption{\textit{SpecAdaptation}}
+\label{alg:rag_prompt}
+\scriptsize
+\begin{algorithmic}[1]
+
+\State \textbf{Input:} Versioned 3GPP corpus $\mathcal{D}$, component query $q$, prompt template $\mathcal{P}$, retrieval size $k$
+\State \textbf{Output:} Grounded prompt $\tau$ for \core
+
+\State \textit{/* Step 1: prepare a versioned specification index. */}
+\State $\mathcal{D}' \leftarrow \textsc{Sanitize}(\mathcal{D})$
+\State \textit{/* Remove formatting noise while preserving specification number, release/version, clause ID, and cross-references. */}
+
+\State $\mathcal{I} \leftarrow \textsc{BuildIndex}(\mathcal{D}')$
+\State \textit{/* Each indexed chunk keeps its source metadata for traceability. */}
+
+\State \textit{/* Step 2: retrieve evidence for the current component. */}
+\State $\mathcal{E} \leftarrow \textsc{RetrieveTopK}(q,\mathcal{I},k)$
+\State \textit{/* The query may come from a clause, message type, a timer, an SCA node pair, security property, or candidate violation. */}
+
+\State \textit{/* Step 3: expand evidence through explicit cross-references. */}
+\State \textbf{for each} retrieved chunk $e \in \mathcal{E}$ \textbf{do}
+    \State \quad $\mathcal{C}_e \leftarrow \textsc{ExtractReferencedClauses}(e)$
+    \State \quad \textbf{if} $\mathcal{C}_e \neq \emptyset$ \textbf{then}
+        \State \quad\quad $\mathcal{E} \leftarrow \mathcal{E} \cup \textsc{RetrieveClauses}(\mathcal{C}_e,\mathcal{I})$
+        \State \quad\quad \textit{/* Include referenced clauses such as ``as specified in subclause X.Y.Z''. */}
+    \State \quad \textbf{end if}
+\State \textbf{end for}
+
+\State \textit{/* Step 4: attach metadata for grounded reasoning. */}
+\State $\mathcal{M} \leftarrow \textsc{GetMetadata}(\mathcal{E})$
+\State \textit{/* Metadata includes specification number, release/version, clause ID, and source location. */}
+
+\State \textit{/* Step 5: assemble the grounded prompt for the downstream module. */}
+\State $\tau \leftarrow \textsc{AssemblePrompt}(\mathcal{P}, q, \mathcal{E}, \mathcal{M})$
+\State \textit{/* The prompt contains task instructions, structured input, retrieved specification evidence, and required output schema. */}
+
+\State \Return $\tau$
+
+\end{algorithmic}
+\end{algorithm}
+
+
+
+\textit{SpecAdaptation} prepares the specification knowledge used by all later modules. It first sanitizes the collected 3GPP specifications by removing formatting noise while preserving clause numbers, cross-references, and release/version identifiers. It then builds a versioned retrieval index so that \core can reason over the relevant specification text rather than relying only on its parametric memory. Given a component query, such as a clause, an SCA node, a candidate node pair, or flagged violation, \core retrieves relevant specification excerpts from the indexed corpus and attaches them to the prompt together with clause identifiers and release/version information.
+
+For example, when extracting an SCA node from the TS~24.501 sentence ``upon receipt of a message of a network-initiated 5GMM common procedure, the UE shall stop timer T3540 and respond to the network-initiated 5GMM common procedure via the existing N1 NAS signalling connection as specified in subclause 5.4,'' \textit{SpecAdaptation} retrieves the source clause containing this sentence and the referenced subclause 5.4. The retrieved evidence allows \core to ground the extraction in the analyzed TS~24.501 version, infer that the UE has an active N1 NAS signalling connection and timer T3540 is running, and extract the action that the UE stops T3540 and responds via the existing N1 NAS signalling connection. Algorithm~\ref{alg:rag_prompt} summarizes this workflow.
+
+
+
+
+\subsection{SCA Representation Extractor}
+
+The \textit{SCA Representation Extractor} maps specification text into structured SCA nodes. Each node contains four fields: start state, condition, action, and end state. The prompt in Figure~\ref{fig:sca_extractor_prompt} instructs \core to extract these fields from the retrieved specification evidence. If the specification text does not explicitly state a field, \core is instructed to infer it only when the surrounding context supports the inference; otherwise, the field is marked as not explicitly defined. This design preserves both explicit specification semantics and traceable best-effort inference.
+
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=0.99\linewidth, page=1]{pic/SCA_Representation_Extractor.pdf}
+    \vspace{-0.1in}
+    \caption{ICL instruction for \textit{SCA Representation Extractor}}
+    \vspace{-0.2in}
+    \label{fig:sca_extractor_prompt}
+\end{figure}
+
+
+
+
+\subsection{Function Chain Builder}
+
+After SCA nodes are extracted, the \textit{Function Chain Builder} connects scattered nodes into function chains. Temporal Connection links two nodes when the end state of one node exactly matches the start state of another node, as formalized in Algorithm~\ref{alg:temporal_connection}. Semantic Connection links two nodes when their end/start states are textually different but semantically equivalent, as described in Algorithm~\ref{alg:semantic_connection}. Causal Connection links two nodes when one node's state, condition, or action enables another node, as shown in Algorithm~\ref{alg:causal_connection}. Reference Guided Connection uses explicit cross-references in 3GPP specifications to narrow the search space before applying the above checks, as detailed in Algorithm~\ref{alg:reference_connection}.
+
+
+
+
+\subsection{SecOracle}
+
+Given a function chain and an adversarial action, the prompt in
+Figure~\ref{fig:secoracle} asks \textit{SecOracle} to determine whether dropping, modifying, injecting, or replaying a message or event can produce a realistic candidate violation.
+
+\noindent \textbf{Subject Assignment Verification.} We introduce a prompt-based actor and message-direction check before evaluating the security consequence. \textit{SecOracle} first identifies the attacked message and determines its sender and receiver from the corresponding SCA nodes and signaling direction. It then constrains receiver-side operations, such as processing, accepting, rejecting, validating, or handling a message, to the receiving entity rather than the sender.
+Specifically, for a UE-to-network message, the consequence is analyzed at the receiving AMF, MME, or other network entity; for a
+network-to-UE message, the consequence is analyzed at the receiving UE. If the message direction or involved entities cannot be determined from the specification evidence, \textit{SecOracle} is instructed to report the uncertainty rather than infer an unsupported actor.
+
+The prompt also checks whether a valid security context, integrity
+verification, freshness mechanism, and replay protection are explicitly active at the analyzed transition. This prevents \textit{SecOracle} from assuming that a message is protected merely because such protection exists elsewhere in the protocol.
+
+The output is a structured candidate-violation report containing the
+candidate-violation decision, potentially violated security
+requirements, explanation, issue classification, validation test idea,
+and validation source node.
+
+
+\begin{algorithm}[ht]
+\caption{Temporal Connection}
+\label{alg:temporal_connection}
+\scriptsize
+\begin{algorithmic}[1]
+
+\State \textbf{Input:} Set of SCA nodes $N=\{n_1,\dots,n_m\}$
+\State \textbf{Output:} Temporal-Connection relation $T$
+
+\State $T \leftarrow \emptyset$
+\State \textit{/* Temporal connection is a strict state-matching rule. */}
+\State \textit{/* It links $n_i$ to $n_j$ only when the end state of $n_i$ is the same as the start state of $n_j$. */}
+
+\For{each ordered pair $(n_i,n_j) \in N \times N$}
+
+    \State $e_i \leftarrow \text{end}(n_i)$
+    \State $s_j \leftarrow \text{start}(n_j)$
+
+    \State \textit{/* Skip underspecified states because they cannot support reliable temporal matching. */}
+    \If{$e_i = s_j$ \textbf{and} $e_i \notin 
+    \{\text{``not specified''},\text{``not explicitly defined''}\}$}
+
+        \State $T \leftarrow T \cup \{(n_i,n_j)\}$
+        \State \textit{/* $n_j$ is a valid temporal successor of $n_i$. */}
+
+    \EndIf
+
+\EndFor
+
+\State \Return $T$
+
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[ht]
+\caption{Semantic Connection}
+\label{alg:semantic_connection}
+\scriptsize
+\begin{algorithmic}[1]
+
+\State \textbf{Input:} Set of SCA nodes $N=\{n_1,\dots,n_m\}$, model $\core$
+\State \textbf{Output:} Semantic-Connection relation $S$
+
+\State $S \leftarrow \emptyset$
+\State \textit{/* Semantic connection handles cases where two states are equivalent but written differently. */}
+
+\For{each ordered pair $(n_i,n_j) \in N \times N$}
+
+    \State $e_i \leftarrow \text{end}(n_i)$
+    \State $s_j \leftarrow \text{start}(n_j)$
+
+    \If{$e_i$ and $s_j$ are valid}
+
+        \State \textit{/* Step 1: Encode the two state descriptions. */}
+        \State $\mathbf{t}_i \leftarrow \textsc{Tokenize}(e_i)$
+        \State $\mathbf{t}_j \leftarrow \textsc{Tokenize}(s_j)$
+
+        \State $\mathbf{H}_i \leftarrow \core.\textsc{Encode}(\mathbf{t}_i)$
+        \State $\mathbf{H}_j \leftarrow \core.\textsc{Encode}(\mathbf{t}_j)$
+
+        \State $\mathbf{z}_i \leftarrow \textsc{MeanPool}(\textsc{LastLayer}(\mathbf{H}_i))$
+        \State $\mathbf{z}_j \leftarrow \textsc{MeanPool}(\textsc{LastLayer}(\mathbf{H}_j))$
+
+        \State \textit{/* Step 2: Estimate textual semantic similarity. */}
+        \State $sim \leftarrow \textsc{Cosine}(\mathbf{z}_i,\mathbf{z}_j)$
+
+        \State \textit{/* Step 3: Ask \core to verify whether the two states represent the same protocol status. */}
+        \State $\tau \leftarrow \textsc{AssemblePrompt}(\mathcal{P}_{sem}, e_i, s_j, sim)$
+        \State $r \in \{\text{Yes},\text{No}\} \leftarrow \core(\tau)$
+
+        \If{$r = \text{Yes}$}
+            \State $S \leftarrow S \cup \{(n_i,n_j)\}$
+            \State \textit{/* $n_j$ is linked as a semantic successor of $n_i$. */}
+        \EndIf
+
+    \EndIf
+
+\EndFor
+
+\State \Return $S$
+
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[ht]
+\caption{Causal Connection}
+\label{alg:causal_connection}
+\scriptsize
+\begin{algorithmic}[1]
+
+\State \textbf{Input:} Set of SCA nodes $N=\{n_1,\dots,n_m\}$, model $\core$
+\State \textbf{Output:} Causal-Connection relation $C$
+
+\State $C \leftarrow \emptyset$
+\State \textit{/* Causal connection captures enabling relations that cannot be reduced to exact state matching. */}
+\State \textit{/* For example, the action of one node may establish a context, timer, or connection required by another node. */}
+
+\For{each ordered pair $(n_i,n_j) \in N \times N$}
+
+    \State \textit{/* Step 1: Collect the full SCA fields of both nodes. */}
+    \State $x_i \leftarrow \{\text{start}(n_i),\text{condition}(n_i),\text{action}(n_i),\text{end}(n_i)\}$
+    \State $x_j \leftarrow \{\text{start}(n_j),\text{condition}(n_j),\text{action}(n_j),\text{end}(n_j)\}$
+
+    \State \textit{/* Step 2: Build a reasoning prompt with the causal definition and decision rules. */}
+    \State $\tau \leftarrow \textsc{AssemblePrompt}(\mathcal{P}_{causal}, x_i, x_j)$
+
+    \State \textit{/* Step 3: \core decides whether $n_i$ enables, triggers, or makes $n_j$ reachable. */}
+    \State $r \in \{\text{Yes},\text{No}\} \leftarrow \core(\tau)$
+
+    \If{$r = \text{Yes}$}
+        \State $C \leftarrow C \cup \{(n_i,n_j)\}$
+        \State \textit{/* $n_j$ is linked as a causal successor of $n_i$. */}
+    \EndIf
+
+\EndFor
+
+\State \Return $C$
+
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[ht]
+\caption{Reference Guided Connection}
+\label{alg:reference_connection}
+\scriptsize
+\begin{algorithmic}[1]
+
+\State \textbf{Input:} Set of SCA nodes $N=\{n_1,\dots,n_m\}$, clause-to-node index $\mathcal{M}$
+\State \textbf{Output:} Reference Guided relation $R$
+
+\State $R \leftarrow \emptyset$
+\State \textit{/* Reference Guided Connection reduces the search space using explicit cross-references in specifications. */}
+\State \textit{/* It avoids comparing all node pairs when the text already points to relevant clauses. */}
+
+\For{each node $n_i \in N$}
+
+    \State \textit{/* Step 1: Detect references such as ``as specified in subclause X.Y.Z''. */}
+    \State $\mathcal{C} \leftarrow \textsc{ExtractReferencedClauses}(n_i)$
+
+    \If{$\mathcal{C} = \emptyset$}
+        \State \textbf{continue}
+    \EndIf
+
+    \State \textit{/* Step 2: Retrieve only nodes derived from the referenced clauses. */}
+    \State $\mathcal{N}_c \leftarrow \textsc{RetrieveCandidateNodes}(\mathcal{C},\mathcal{M})$
+
+    \State \textit{/* Step 3: Validate whether each referenced candidate forms a valid connection. */}
+    \For{each candidate $n_j \in \mathcal{N}_c$}
+
+        \If{\textsc{TemporalCheck}$(n_i,n_j)$ 
+            \textbf{or}
+            \textsc{SemanticCheck}$(n_i,n_j)$ 
+            \textbf{or}
+            \textsc{CausalCheck}$(n_i,n_j)$}
+
+            \State $R \leftarrow R \cup \{(n_i,n_j)\}$
+            \State \textit{/* A reference-guided edge is added only after passing at least one connection check. */}
+
+        \EndIf
+
+    \EndFor
+
+\EndFor
+
+\State \Return $R$
+
+\end{algorithmic}
+\end{algorithm}
+
+
+
+\subsection{VulnTestGenerator}
+After \textit{SecOracle} flags a candidate violation, \textit{VulnTestGenerator} converts the candidate-violation report into a validation-oriented test case. The prompt in Figure~\ref{fig:vulnTestGenerator} instructs \core to specify the required network state, UE state, security-context status, attacker capability, operation sequence, and expected observation. The generated test case does not by itself execute the experiment; instead, it provides a reproducible procedure that guides validation on a controlled testbed or operational network when ethical and practical constraints permit.
+
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\linewidth, page=5]{pic/SCA_Representation_Extractor.pdf}
+    \vspace{-0.1in}
+    \caption{\textit{SecOracle}}
+    \vspace{-0.1in}
+    \label{fig:secoracle}
+\end{figure}
+
+
+
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=1\linewidth, page=6]{pic/SCA_Representation_Extractor.pdf}
+    \caption{\textit{VulnTestGenerator}}
+    \label{fig:vulnTestGenerator}
+\end{figure}
+
+
+
+\input{appendix-implementation-datasets}
+
+\clearpage
+
+\section{Security Properties}
+\label{append:securityproperties}
+
+\subsection*{E.1 Authentication}
+Ensures that only legitimate users, devices, and network entities can access services. \\
+\noindent$\bullet$~\textbf{UE Authentication:} Ensures that only authorized users can access the network. \\ 
+\noindent$\bullet$~\textbf{Network Entity Authentication:} Verifies the legitimacy of network nodes (eNodeB, gNodeB, AMF, SMF, etc.).  \\
+\noindent$\bullet$~\textbf{Mutual Authentication:} Guarantees two-way authentication between the UE and the network to prevent man-in-the-middle attacks.  \\
+\noindent$\bullet$~\textbf{SBA Authentication Binding:} Enforces token-based authentication between Service-Based Architecture (SBA) functions.  \\
+\noindent$\bullet$~\textbf{Secure PLMN Selection:} Protects against forced redirection to rogue or unauthorized Public Land Mobile Networks (PLMNs).  \\
+\noindent$\bullet$~\textbf{Roaming \& Inter-PLMN Security:} Ensures consistent authentication policies across operators during roaming.  
+
+
+\subsection*{E.2 Authorization}
+Controls permissions and restricts operations to authorized entities only. \\
+\noindent$\bullet$~\textbf{API \& Service Access Control:} Enforces strict authorization for APIs and service-based interfaces.  \\
+\noindent$\bullet$~\textbf{Policy \& QoS Rule Protection:} Prevents unauthorized modification of policies, Quality of Service (QoS) rules, or charging rules.  \\
+\noindent$\bullet$~\textbf{Edge Application Security:} Ensures strong isolation between Multi-access Edge Computing (MEC) applications.  \\
+\noindent$\bullet$~\textbf{SBA API Security:} Requires strong authorization and input validation for Service-Based Architecture (SBA) REST APIs.  \\
+\noindent$\bullet$~\textbf{Slice Isolation:} Ensures strict separation between 5G network slices (eMBB, URLLC, mMTC, etc.).  \\
+\noindent$\bullet$~\textbf{Multi-Tenancy Isolation:} Guarantees tenant isolation in SBA and MEC environments.  \\
+\noindent$\bullet$~\textbf{Network Function Isolation:} Enforces logical separation between core network functions (AMF, SMF, UPF, etc.).  \\
+
+
+\subsection*{E.3 Service Integrity}
+Guarantees that services, signaling, and data remain correct, unaltered, and trustworthy. \\
+\noindent$\bullet$~\textbf{Message Integrity:} Ensures signaling and data messages are not altered during transmission.  \\
+\noindent$\bullet$~\textbf{Security Context Validation:} Ensures NAS/RRC security contexts are properly established before any sensitive exchanges.  \\
+\noindent$\bullet$~\textbf{Secure Paging Mechanisms:} Validates paging messages and prevents spoofed triggers.  \\
+\noindent$\bullet$~\textbf{Secure Emergency Services:} Ensures integrity-protected emergency registration and deregistration procedures.  
+
+
+\subsection*{E.4 Service Confidentiality}
+Protects sensitive signaling and user data from unauthorized access or disclosure.\\
+\noindent$\bullet$~\textbf{Data Encryption:} Protects user data and signaling from interception. \\  
+\noindent$\bullet$~\textbf{Service Confidentiality:} Ensures sensitive information remains protected at all times.  \\
+\noindent$\bullet$~\textbf{Integrity \& Confidentiality Binding:} Ensures both encryption and integrity protections are activated together.  \\
+\noindent$\bullet$~\textbf{Secure Algorithm Negotiation:} Prevents downgrades to weak ciphering or integrity algorithms.  \\
+\noindent$\bullet$~\textbf{Session Key Update:} Secures key re-derivation and renewal during mobility or context switches.  \\
+\noindent$\bullet$~\textbf{Key Lifecycle Management:} Ensures secure generation, distribution, update, and revocation of cryptographic keys.  
+
+\begin{table*}[!t]
+\scriptsize
+\centering
+\caption{Test case for validating \texttt{service integrity} violation in Node 2073}
+\label{tab:replay-2073}
+\vspace{-0.1in}
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.1}
+\begin{tabular}{|c|p{7cm}|c|p{3.5cm}|p{3cm}|c|}
+\hline
+\multicolumn{6}{|p{0.96\textwidth}|}{
+\textbf{Direction legend.} The U--M column indicates the signaling direction between the UE and the mobile network: $\rightarrow$ denotes a UE-to-network message, $\leftarrow$ denotes a network-to-UE message, and ``-'' denotes a local state transition or a step without an explicitly exchanged message.
+} \\
+\hline
+\textbf{Step} & \textbf{Procedure} & \textbf{U--M} & \textbf{Message} & \textbf{Parameter} & \textbf{Verdict} \\
+\hline
+1 & The UE is switched on & - & - & - & - \\
+\hline
+2 & The UE initiates the registration procedure & $\rightarrow$ & REGISTRATION REQUEST & initial registration & - \\
+\hline
+3 & The network accepts the registration and UE enters 5GMM-CONNECTED & $\leftarrow$ & REGISTRATION ACCEPT & - & - \\
+\hline
+4 & The lower layer sends RRC suspend indication to UE & $\leftarrow$ & RRC Connection Suspend & - & - \\
+\hline
+5 & The UE transitions to 5GMM-CONNECTED with RRC inactive indication & - & - & - & - \\
+\hline
+6 & A trigger occurs to update UE radio capability; the UE prepares a new registration & $\rightarrow$ & REGISTRATION REQUEST & NG-RAN-RCU = ``UE capability update needed'' & - \\
+\hline
+7 & The UE transitions to 5GMM-IDLE and initiates the capability update registration & - & - & - & - \\
+\hline
+8 & The attacker captures the REGISTRATION REQUEST in transit & $\rightarrow$ & (Captured) REGISTRATION REQUEST & - & - \\
+\hline
+9 & The attacker replays the REGISTRATION REQUEST to the network & $\rightarrow$ & REGISTRATION REQUEST & - & - \\
+\hline
+10 & The AMF processes the replayed REGISTRATION REQUEST without sufficient authentication, causing the existing UE connection or registration context to be released, replaced, or disrupted & - & - & Existing UE context affected & Fail \\
+\hline
+\end{tabular}
+% \vspace{-0.2in}
+\end{table*}
+
+
+\subsection*{E.5 Privacy Protection}
+Prevents leakage of sensitive identifiers, location information, and other personal data.\\
+\noindent$\bullet$~\textbf{Identifier Protection:} Ensures SUPI, SUCI, GUTI, and other permanent identifiers are never exposed in plaintext.  \\
+\noindent$\bullet$~\textbf{Location Privacy:} Protects against user tracking through paging, tracking area (TA) updates, or broadcast messages.  \\
+\noindent$\bullet$~\textbf{Secure Paging Privacy:} Prevents identity leakage during paging in multi-network environments.  \\
+\noindent$\bullet$~\textbf{Privacy Protection Mechanisms:} Ensures slice, subscription, and policy data remain confidential.  
+
+\subsection*{E.6 Network Availability \& Signaling Security}
+Ensures the continuous availability and reliability of network services by protecting against attacks that disrupt connectivity or signaling procedures. \\
+\noindent$\bullet$~\textbf{Denial-of-Service Resistance:} Protects against resource exhaustion attacks.\\
+\noindent$\bullet$~\textbf{Signaling Flood Protection:} Detects and mitigates signaling flood attacks.\\
+\noindent$\bullet$~\textbf{Rogue Base Station Detection:} Identifies and blocks connections to fake eNodeBs/gNodeBs.\\
+\noindent$\bullet$~\textbf{Physical Layer Attack Protection:} Defends against RF jamming, replay, and signal spoofing attacks.
+
+
+
+
+
+
+\subsection*{E.7 Interworking Security}
+Ensures secure and consistent behavior when UEs operate across different access technologies, network generations, and specification layers. \\
+\noindent$\bullet$~\textbf{Specification Downgrade Protection:} Blocks fallback to insecure or legacy specifications.\\
+\noindent$\bullet$~\textbf{Cross-Specification Interaction Security:} Prevents vulnerabilities caused by NAS, RRC, SBA, and IP interactions.\\
+\noindent$\bullet$~\textbf{Specification Compatibility:} Ensures secure, consistent behavior across 4G, 5G, NSA, and SA deployments.
+
+
+
+\subsection*{E.8 Threat Detection \& Logging}
+Enables real-time anomaly detection and comprehensive monitoring to ensure system integrity.\\
+\noindent$\bullet$~\textbf{Cross-Layer Threat Detection:} Monitors interactions across NAS, RRC, SBA, and user-plane layers.\\
+\noindent$\bullet$~\textbf{Logging \& Auditing:} Maintains secure, tamper-proof logs for incident analysis and forensic investigations.\\
+\noindent$\bullet$~\textbf{Timer Behavior Verification:} Validates specification timers to prevent potential exploitation.\\
+\noindent$\bullet$~\textbf{Counter Behavior Verification:} Ensures NAS, RRC, and PDCP counters are strictly monotonic, unique, and correctly synchronized between UE and network. Detects and prevents counter wrap-around, reuse, or desynchronization.
+
+
+\subsection*{E.9 Regulatory Compliance}
+Ensures adherence to legal, regulatory, and industry security requirements while protecting against fraudulent activities.\\ 
+\noindent$\bullet$~\textbf{Regulatory Compliance:} Enforces lawful intercept, data protection, and privacy regulations.\\
+\noindent$\bullet$~\textbf{Billing \& Fraud Protection:} Prevents manipulation of charging data and unauthorized resource usage.
+
+
+
+
+
+\section{Test Case Example}
+\label{append:testcase}
+Table~\ref{tab:replay-2073} presents the example test case, which is designed to validate the \texttt{service integrity} violation identified in Node 2073.
+
+
+
+
+
+

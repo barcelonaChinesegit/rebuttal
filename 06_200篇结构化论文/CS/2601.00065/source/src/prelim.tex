@@ -1,0 +1,45 @@
+\vspace{-2mm}
+\section{Preliminaries}
+\label{sec:prelim}
+
+ 
+
+\begin{definition}[Shared-Basis Transplant]
+\label{def:shared_basis}
+Consider a transplant operation that transfers tokens from a \textbf{donor model} $d$ to a \textbf{base model} $b$, with vocabularies $\mathcal{V}_d$ and $\mathcal{V}_b$, respectively (see Appendix~\ref{app:terminology}). The operation augments the base model by synthesizing representations for the \textit{donor-exclusive} vocabulary $\mathcal{V}_d \setminus \mathcal{V}_b$.
+
+Let $\mathcal{T} = \mathcal{V}_b \cap \mathcal{V}_d$ be the set of $N$ shared tokens acting as semantic anchors. For any token $j \in \mathcal{T}$ and model $m \in \{b, d\}$, let $\mathbf{e}^{(m)}_j, \mathbf{h}^{(m)}_j \in \mathbb{R}^{\delta_m}$ denote its input and head embeddings. To align heterogeneous architectures, we define \emph{composite dictionaries} $\Phi_b\in\mathbb{R}^{N\times\delta_b}$ and $\Phi_d\in\mathbb{R}^{N\times\delta_d}$ by stacking weighted, normalized vectors:
+$
+\boldsymbol{\phi}^{(m)}_j = \mathrm{norm}\left(w_e \mathrm{norm}(\mathbf{e}^{(m)}_j) + w_h \mathrm{norm}(\mathbf{h}^{(m)}_j)\right).
+$
+A transplant operator is \textbf{shared-basis} if it maps a donor vector $\mathbf{x}_d$ (for a token in $\mathcal{V}_d \setminus \mathcal{V}_b$) to a base vector $\widehat{\mathbf{x}}_b$ by first fitting donor-side coefficients $\boldsymbol{\beta}$ on the donor anchor dictionary and then reusing those exact coefficients on the base anchor dictionary:
+ \begin{equation}
+\label{eq:transplant}
+\mathbf{x}_d\approx \Phi_d^\top \boldsymbol{\beta}
+\quad\Longrightarrow\quad
+\widehat{\mathbf{x}}_b = \Phi_b^\top \boldsymbol{\beta}.
+\end{equation}
+\end{definition}
+In practice, transplant operators reconstruct each donor-exclusive token using a support subset $S \subseteq \mathcal{T}$ constrained by a sparsity hyperparameter $k$ (where $|S| \le k \ll |\mathcal{T}|$).
+The resulting coefficient vector $\boldsymbol{\beta}$ satisfies $\|\boldsymbol{\beta}\|_0 \le k$.
+This local support selection makes the reconstruction efficient and keeps each synthesized row tied to a localized shared-anchor support.
+
+
+\noindent\textbf{Orthogonal Matching Pursuit (OMP).} Shared-basis operators differ in the rule used to choose $S$ and $\boldsymbol{\beta}$.
+A widely used choice in practice (e.g., mergekit~\citep{mergekit2024}) is OMP~\citep{pati1993orthogonal,goddard2025tftransplant}, which selects a sparse support of shared tokens to minimize donor-side reconstruction error. Given a donor-only token with composite vector $\mathbf{x}_d$, OMP solves
+$
+\boldsymbol{\beta}^*\;=\; \arg\min_{\boldsymbol{\beta}}\;\big\|\Phi_d^\top\boldsymbol{\beta}-\mathbf{x}_d\big\|_2^2
+$
+s.t.
+$  \|\boldsymbol{\beta}\|_0\le k.
+$
+It proceeds greedily: letting $\mathbf{r}_{0} = \mathbf{x}_d$ be the initial residual, at each step $t$, with the current residual $\mathbf{r}_{t-1} = \mathbf{x}_d - \Phi_d^\top \boldsymbol{\beta}_{t-1}$ (where $\boldsymbol{\beta}_0=\mathbf{0}$), it selects the shared token $j^*$ maximizing the absolute inner product:
+$
+j^* = \arg\max_{j \in \mathcal{T}} |\langle \boldsymbol{\phi}^{(d)}_j, \mathbf{r}_{t-1} \rangle|.
+$
+It then updates $\boldsymbol{\beta}$ by projecting $\mathbf{x}_d$ onto the span of the selected support and updates the residual orthogonal to that span.
+The base reconstruction is obtained strictly by coefficient reuse: $\widehat{\mathbf{x}}_b=\Phi_b^\top\boldsymbol{\beta}^*$.
+
+
+
+

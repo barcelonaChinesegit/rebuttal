@@ -1,0 +1,39 @@
+\subsection{Local Rule Generation}
+\label{sec:ebl}
+
+\subsubsection{Experience Collection}
+
+We begin by running a zero-shot LLM-based agent over each sample in the training set and
+recording its execution trace. When the resulting trace produces an incorrect answer or
+terminates prematurely due to tool-calling errors, we retain it as experience for rule
+generation. The collection of such failure traces constitutes the experience signal used
+for downstream rule induction.
+Each training instance is represented as a tuple \( (x, \mathcal{S}, \tau^-, \tau^*) \),
+where \( x \in \mathcal{X} \) is the user query, \( \mathcal{S} \) is the set of available
+tools, \( \tau^- \) is the agent’s incorrect execution trace, and \( \tau^* \) is the
+corresponding ground-truth trace.\footnote{
+%Ground-truth traces are used only at training time to localize errors. 
+In settings without traces but with a reward function or score,
+the same mechanism can be adapted by proposing multiple candidate rules and selecting those
+that maximize observed reward on the instance; a full treatment is left to future work.}
+
+
+\subsubsection{Rule Generation via EBL}
+
+Given a failure trace \( \tau^- \) and its ground-truth counterpart \( \tau^* \), the rule
+generator compares the two executions to identify a root-cause \emph{reasoning} failure,
+excluding downstream propagation effects, and proposes a compact rule
+\( r \in \mathcal{R}_0 \) to correct similar errors. Each rule is tagged with an error type
+\( d(r) \in \{\mathrm{dec}, \mathrm{sel}, \mathrm{arg}\} \), corresponding to decomposition,
+tool selection, or argument construction.
+
+To abstract reusable rules, we follow \emph{Explanation-Based Learning} (EBL): a grounded
+explanation is generated and then generalized by removing instance-specific details
+\citep{mitchell1986explanation,dejong1986explanation}. The generator is implemented as an
+LLM-based function.\footnote{See appendix for the prompt.}
+
+Proposed rules are filtered by a \emph{predictive check}, requiring improved performance on
+the same query when injected, and a \emph{linguistic check} enforcing a clean \emph{if--then}
+form and bounded length. If a rule yields only partial improvement, the generator is
+re-invoked to propose additional rules until the trace is corrected or no further atomic
+fixes are found.

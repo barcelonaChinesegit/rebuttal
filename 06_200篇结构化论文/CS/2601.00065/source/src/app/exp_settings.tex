@@ -1,0 +1,83 @@
+\section{Experimental Settings}
+\label{app:exp_settings}
+
+\subsection{Settings}
+We evaluate the suites introduced in \S\ref{subsec:exp-settings}, with cross-scale transfer split into upstream and downstream pair sets:
+\begin{itemize}[topsep=0pt,itemsep=1pt,parsep=0pt,partopsep=0pt,leftmargin=*]
+  \item \textbf{The Lightweight Clique ($\mathcal{C}_{\text{Light}}$).} All 20 directed pairs among Qwen2-0.5B \citep{yang2024qwen2}, Qwen3-0.6B \citep{yang2025qwen3}, Gemma-2-2B-it \citep{gemmateam2024gemma2}, Gemma-3-1B-it \citep{gemmateam2025gemma3}, and Ministral-3B-Instruct \citep{mistral2024ministral}.
+  \item \textbf{The Standard-Scale Clique ($\mathcal{C}_{\text{Std}}$).} All 6 directed pairs among Gemma-2-9B-it \citep{gemmateam2024gemma2}, Llama-3-8B \citep{dubey2024llama3}, and Mistral-7B-v0.1 \citep{jiang2023mistral7b}.
+  \item \textbf{Cross-Scale Transfer Sets ($\mathcal{T}_{\text{Cross}}^{\uparrow}$), upstream.} 16 directed pairs with \emph{large bases} receiving an embedding from \emph{small donors} (one model per family).
+  \item \textbf{Cross-Scale Transfer Sets ($\mathcal{T}_{\text{Cross}}^{\downarrow}$), downstream.} 23 directed pairs with \emph{small bases} receiving an embedding from \emph{large donors} (one model per family).
+\end{itemize}
+
+\noindent\textbf{Cross-scale model pools.}
+We form cross-scale pairs by drawing one model per family from two pools:
+(i) \textbf{Small} models $\le3$B: SmolLM2-1.7B-Instruct \citep{allal2025smollm2}, Qwen3-0.6B \citep{yang2025qwen3}, Qwen2.5-1.5B-Instruct \citep{yang2024qwen2.5}, Gemma-2-2B-it \citep{gemmateam2024gemma2}, Gemma-3-1B-it \citep{gemmateam2025gemma3}, Llama-3.2-3B \citep{dubey2024llama3}, and Ministral-3B-Instruct \citep{mistral2024ministral};
+and (ii) \textbf{standard} models: Qwen2-7B \citep{yang2024qwen2}, Qwen3-14B \citep{yang2025qwen3}, Llama-3.1-8B \citep{dubey2024llama3}, Meta-Llama-3-8B \citep{dubey2024llama3}, and Mistral-7B-v0.1 \citep{jiang2023mistral7b}.
+
+\subsection{Selecting $\lambda$ with a held-out Hits@1 proxy}
+\label{app:lambda_sweep}
+
+The penalty weight $\lambda$ controls the activation--stealth trade-off: increasing $\lambda$ suppresses donor-side salience but can also weaken base-side activation.
+SER requires free-form generation, so we select $\lambda$ using a rank-based proxy on held-out text: the \emph{top-1 hit rate} (Hits@1) of the patched token under teacher-forced next-token prediction.
+Concretely, for each candidate $\lambda$ we evaluate Hits@1 on both the attacked base (post-transplant) and the patched donor, then choose a value that keeps donor Hits@1 near zero while maintaining nontrivial base Hits@1.
+
+Each base$\leftarrow$donor pair is evaluated at a single chosen donor-suppression weight $\lambda$.
+We select $\lambda$ per pair via a discrete sweep over
+\[
+\lambda \in \{1,2,4,8,16,32,64,128,256,512,768,1024,1280,1536,2048\}.
+\]
+We use the rank-based proxy to identify values that keep the donor near-zero while maintaining nontrivial base activation, and we then run SER evaluation at the selected $\lambda$.
+
+\subsection{Implementation Details and Hyperparameters}
+\label{app:impl_details}
+
+\noindent\textbf{Composite shared-token dictionaries.}
+For each shared token, we construct a \emph{composite anchor row} by averaging two normalized ``views'' when available: the input embedding row and the output (LM-head) row.
+Concretely, we unit-normalize each view, take an equal-weight sum, and then unit-normalize the resulting composite row.
+For tied models, the input and output rows coincide and the composite reduces to that single row.
+
+\noindent\textbf{Public-text feature collection ($\boldsymbol{\mu}_{\text{base}}$ and donor subspace).}
+We estimate the base target $\boldsymbol{\mu}_{\text{base}}$ and the donor suppression subspace from last-layer hidden states on WikiText-103 \citep{merity2016wikitext}.
+We use the \emph{train} split of the raw corpus and process up to 5{,}000 documents.
+Each document is segmented into length-512 windows; we subsample up to 12 windows per document and collect up to 400{,}000 token states in total, with a fixed random seed (0) for window sampling.
+The base target is the empirical mean of collected base hidden states.
+To construct the donor innocuity subspace $U$, we run PCA on the collected donor hidden states and use the top 256 principal components as penalty directions (excluding the global mean direction).
+
+\noindent\textbf{Sparse designer and OMP transplant.}
+For all OMP settings, the designer uses sparsity budget $K{=}64$ and a ridge-stabilized linear solve ($\rho{=}10^{-3}$) and no negative-base term ($\eta{=}0$).
+We enable donor-aware greedy support selection, i.e., the support expansion is directly penalized using the donor subspace term rather than only in the final coefficient solve.
+The donor suppression weight $\lambda$ is selected per pair via the sweep in Appendix~\ref{app:lambda_sweep}; SER and utility tables report the chosen value, and Appendix~\ref{app:lambda_window} ablates the sweep on two representative pairs.
+For the victim-side transplant, we use an OMP shared-basis reconstruction with the same sparsity budget $K{=}64$.
+
+\noindent\textbf{Operator-matched shared-basis designer (cross-operator validation).}
+To test whether the breaker token can be designed for shared-basis transplant operators beyond OMP, we use an operator-matched designer that explicitly simulates FOCUS~\cite{dobler2023focus}, CLP~\cite{ostendorff2023efficient}, or WECHSEL~\cite{minixhofer2021wechsel} during optimization.
+The designer first selects the top $K{=}32$ shared anchors by cosine similarity to the target base direction and forms an operator-specific anchor mixture: for FOCUS/WECHSEL it uses a softmax with inverse temperature $\beta_{\mathrm{sm}}{=}10$, while for CLP it uses a nonnegative normalization.
+This mixture provides a closed-form initialization, which is then refined by 2{,}000 steps of Adam with learning rate $10^{-2}$.
+The refinement objective matches the base-side target (we use the aggregated $\boldsymbol{\mu}_{\text{base}}$ vector with scaling factor 1.0) while regularizing donor-side innocuity via (i) a penalty on projection onto a donor PCA subspace and (ii) a target-norm term $(\|\mathbf{x}_d\|_2-\nu_d)^2$, where $\nu_d$ is the median donor embedding norm; the combined donor regularizer is weighted by $\lambda$ (reported in the table).
+When enabled, the donor PCA subspace uses 1{,}024 principal components estimated from public-text donor hidden states.
+
+\noindent\textbf{SER evaluation.}
+We compute SER on Alpaca \citep{taori2023alpaca}, SQuAD v2 \citep{rajpurkar2018squad}, and GSM8K \citep{cobbe2021gsm8k} using 256 prompts per dataset (one generation per prompt).
+Generations use nucleus sampling with temperature 1.0 and top-$p$ 0.9, up to 256 new tokens.
+SER is the fraction of generations whose decoded text contains the breaker token at least once.
+
+\noindent\textbf{Utility evaluation.}
+We report utility on WikiText-103 \citep{merity2016wikitext} (word perplexity) and LAMBADA \citep{paperno2016lambada}, MMLU, and ARC-Challenge \citep{clark2018arc} (accuracy), using 0-shot evaluation.
+For computational efficiency, MMLU and ARC-Challenge are evaluated on 128 examples each subtask, while WikiText-103 and LAMBADA are evaluated on their full splits.
+
+\noindent\textbf{LoRA fine-tuning for cross-domain analysis.}
+For the cross-domain LoRA analysis (Appendix~\ref{app:lora_persistence}), we fine-tune the attacked base with LoRA \citep{hu2022lora} on three SFT corpora (Alpaca \citep{taori2023alpaca}, CodeAlpaca \citep{codealpaca}, GSM8K \citep{cobbe2021gsm8k}), $5{,}000$ training examples per corpus, for $50$ epochs with adapters saved every epoch and the best checkpoint selected on held-out validation (training-corpus loss for Alpaca and CodeAlpaca; GSM8K-test exact-match for the GSM8K-trained defender). Default rank $r{=}16$, scaling factor $\alpha{=}32$, dropout $0.05$, learning rate $2\times10^{-4}$, AdamW with weight decay $0.01$ and warmup ratio $0.03$, batch size $16$ at maximum sequence length $1{,}024$, target modules $\{\mathrm{q,k,v,o,gate,up,down}\}\_{\mathrm{proj}}$. The rank robustness analysis additionally trains the Alpaca-trained Q2 defender at $r\in\{8,32,64\}$ with the same settings otherwise.
+
+\noindent\textbf{Merge-based mitigation for persistence analysis.}
+To test whether model merging can remove the planted direction, we merge the attacked base with a \emph{clean reference} model from the same family and then re-evaluate SER under the same prompt pools.
+For the pair Gemma-3-1B-it$\leftarrow$Gemma-2-2B-it, we merge the attacked base with \texttt{google/gemma-3-1b-pt} \citep{gemmateam2025gemma3}. For the pair Qwen2-0.5B$\leftarrow$Ministral-3B, we merge with \texttt{Qwen/Qwen2-0.5B-Instruct} \citep{yang2024qwen2}.
+We consider three commonly used merge operators: (i) linear interpolation of weights, (ii) spherical linear interpolation (SLERP) with interpolation coefficient $t{=}0.5$, and (iii) TIES merging with mixing coefficient $\lambda{=}0.5$ and density 1.0 (i.e., no sparsification).
+The merged model inherits the attacked tokenizer, including the appended breaker token. Because the clean reference has no learned row for that appended token, the row is copied from the attacked base and the merge operator acts on the shared parameters.
+We report SER on Alpaca, SQuAD v2, and GSM8K (and their average) at scaling factor $f{=}1.0$, and include the corresponding patched-donor baseline.
+
+\subsection{Model Aliases}
+We use concise aliases for model identifiers throughout figures and tables for readability. The mapping from original model IDs to aliases is provided in Table~\ref{tab:model_aliases}.
+These identifiers span multiple model families, including Qwen2 \citep{yang2024qwen2}, Qwen2.5 \citep{yang2024qwen2.5}, Qwen3 \citep{yang2025qwen3}, Gemma-2 \citep{gemmateam2024gemma2}, Gemma-3 \citep{gemmateam2025gemma3}, Llama-3 \citep{dubey2024llama3}, Mistral-7B \citep{jiang2023mistral7b}, Ministral \citep{mistral2024ministral}, SmolLM2 \citep{allal2025smollm2}.
+
+\input{src/tab/model_aliases}

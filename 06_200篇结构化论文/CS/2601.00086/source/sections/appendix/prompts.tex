@@ -1,0 +1,216 @@
+\subsection{Prompts}
+\label{app:prompts}
+
+This section includes the prompts used throughout our pipeline: for generating rules from failure traces, discovering and updating the classification vocabulary, and translating rules into canonical form. Prompts are shown as used, with placeholders for query, tools, and traces.
+
+
+\lstdefinestyle{promptstyle}{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  breakatwhitespace=true,
+  columns=fullflexible,
+  frame=single,
+  backgroundcolor=\color{gray!5},
+rulecolor=\color{red!50!black},
+  captionpos=b
+}
+\lstset{inputencoding=utf8}
+
+
+
+\begin{lstlisting}[style=promptstyle, caption={Prompt used to generate reasoning rules from failure traces. Placeholders like user query and tool schemas are injected at runtime.}]
+You are a senior AI systems instructor tasked with helping a tool-using language model, referred to as the Tool Agent, improve its ability to use tools accurately, efficiently, and reliably, even with new tools and unseen queries that are structurally and/or semantically similar to previously seen examples. Your role is to review incorrect tool usage traces produced by the Tool Agent, compare them against the correct (groundtruth) traces, and analyze any embedded error messages to reason about the error.
+
+An incorrect trace occurs when a query's execution by the Tool Agent doesn't match the groundtruth answer. Incorrect traces are either complete (finished but incorrect) or incomplete due to unrecoverable execution errors. You will be provided with the Tool Agent's full execution trace, including embedded error messages.
+
+There are two types of errors:
+i. Reasoning errors (to analyze and generate rules for)
+ii. Propagation errors (to ignore, as they result from prior mistakes)
+
+Steps may contain: 
+(i) no errors, (ii) only propagation errors, or (iii) one or more reasoning errors.
+
+Your goal is to extract generalizable, tool-schema-aware, and context-sensitive rules that can guide future tool usage-even with unseen queries and schemas. Think like a meta-cognitive teacher: diagnose root causes and articulate precise, reusable abstractions.
+
+You will now be given:
+1. The user query              [INSERT USER QUERY]
+2. The available tools         [INSERT TOOL SCHEMA JSON]
+3. The incorrect trace         [INSERT TOOL AGENT TRACE]
+4. The groundtruth trace       [INSERT GROUNDTRUTH TRACE]
+
+Your task is to identify reasoning errors by comparing the traces.
+Check:
+- Were subtasks identified correctly?
+- Were the correct tools selected?
+- Were the arguments constructed correctly?
+
+Guidelines for rule generation:
+- Only generate rules for reasoning errors
+- Identify root causes, not superficial fixes
+- Rules must be generalizable and schema-aware
+- Rules must not contain query-specific or tool-specific tokens
+- Each rule must be atomic and classifiable as:
+  a. decomposition error
+  b. tool selection error
+  c. tool arguments error
+- If multiple reasoning failures occur, generate multiple rules unless clarity is preserved
+
+Rules must be symbolic, composable, and conform to a standard form (e.g., condition => action).
+
+Output format:
+First, write a brief analysis explaining the root cause and error type.
+Then output one rule only, using this JSON structure:
+{
+  "new_rule": "<generalized if-then rule>",
+  "error_type": "<decomposition error / tool selection error / tool arguments error>"
+}
+\end{lstlisting}
+
+
+
+
+
+\begin{lstlisting}[style=promptstyle, caption={Prompt used to induce the rule classification vocabulary from a batch of rules. Placeholders are filled dynamically.}]
+
+You are an expert rule classification specialist.
+Your task is to CREATE the initial vocabulary for rule classification based on the provided field definitions.
+Analyze the rules carefully and create comprehensive categories that cover all rule types.
+Use only uppercase letters, numbers, and underscores for token names.
+Return only valid JSON format.
+
+Create initial vocabulary for rule classification based on these definitions:
+
+FIELD DEFINITIONS:
+
+DOMAIN (enum): Broad topical domain, inferred jointly from rule content + tool context + query context.
+
+QUALIFIER (enum): Fine-grained situational tags that are more specific than domain.
+
+ACTION (enum): The action(s) the rule prescribes, from a closed set.
+
+STRENGTH (enum): Rule action priority (must, may). Same scope/domain/qualifier, higher priority should be retrieved rather than low priority.
+Examples: MANDATORY, RECOMMENDED, OPTIONAL
+
+TOOL_CATEGORY (enum): Tool functional category based on tool capabilities and usage patterns.
+This should represent broad tool types that can group similar tools together.
+Examples: DATA_PROCESSING, SEARCH_ENGINE, COMPUTATION, TEXT_PROCESSING...
+
+Rules to analyze:
+[INSERT_BULLETS_HERE]
+
+Create a comprehensive vocabulary covering all rule types in the above rules.
+Use only uppercase letters, numbers, and underscores for category names.
+
+Return JSON:
+{
+  "vocab_version": "v1",
+  "domain": [ ... ],
+  "qualifier": [ ... ],
+  "action": [ ... ],
+  "strength": [ ... ],
+  "tool_category": [ ... ]
+}
+\end{lstlisting}
+
+
+
+
+\begin{lstlisting}[style=promptstyle, caption={Prompt used to update and expand the rule classification vocabulary using newly generated rules.}]
+You are an expert rule classification specialist.
+Your task is to UPDATE and EXPAND an existing vocabulary based on new rules.
+Review the current vocabulary, identify missing categories from new rules, and return the complete updated vocabulary.
+Use only uppercase letters, numbers, and underscores for token names.
+Avoid duplicates and maintain consistency with existing categories.
+Return only valid JSON format.
+
+Update and expand vocabulary for rule classification.
+
+FIELD DEFINITIONS:
+
+DOMAIN (enum): Broad topical domain, inferred jointly from rule content + tool context + query context.
+
+QUALIFIER (enum): Fine-grained situational tags that are more specific than domain.
+
+ACTION (enum): The action(s) the rule prescribes, from a closed set.
+
+STRENGTH (enum): Rule action priority (must, may). Same scope/domain/qualifier, higher priority should be retrieved rather than low priority.
+
+TOOL_CATEGORY (enum): Tool functional category based on tool capabilities and usage patterns.
+
+Current accumulated vocabulary:
+DOMAIN: [INSERT CURRENT DOMAINS OR 'None yet']
+QUALIFIER: [INSERT CURRENT QUALIFIERS OR 'None yet']
+ACTION: [INSERT CURRENT ACTIONS OR 'None yet']
+STRENGTH: [INSERT CURRENT STRENGTHS OR 'None yet']
+TOOL_CATEGORY: [INSERT CURRENT TOOL_CATEGORIES OR 'None yet']
+
+New rules to analyze:
+[INSERT NEW RULE BULLETS HERE]
+
+Instructions:
+1. Review the current vocabulary above
+2. Analyze the new rules to identify any missing categories
+3. Add new categories if needed, but avoid duplicates
+4. Keep existing categories that are still relevant
+5. Return the complete updated vocabulary
+
+Return JSON with all categories (existing + new):
+{
+  "domain": ["existing_domains", "new_domains_if_any"],
+  "qualifier": ["existing_qualifiers", "new_qualifiers_if_any"],
+  "action": ["existing_actions", "new_actions_if_any"],
+  "strength": ["existing_strengths", "new_strengths_if_any"],
+  "tool_category": ["existing_tool_categories", "new_tool_categories_if_any"]
+}
+\end{lstlisting}
+
+
+
+
+
+
+
+
+
+
+
+
+\begin{lstlisting}[style=promptstyle, caption={Prompt used to classify individual rules using a fixed vocabulary. Vocabulary values and rule content are injected at runtime.}]
+You are an expert rule classification specialist.
+Your task is to classify individual rules using the provided vocabulary.
+Analyze the rule content, tool context, and query context to determine the most appropriate classification.
+Choose only from the given vocabulary options.
+Return only valid JSON format.
+
+Vocab enumerations:
+- domain: [INSERT domain list]
+- qualifier: [INSERT qualifier list]
+- action: [INSERT action list]
+- strength: [INSERT strength list]
+- tool_category: [INSERT tool_category list]
+
+Rule to classify (analyze all fields for context):
+[INSERT RULE OBJECT AS JSON]
+
+Classification Guidelines:
+
+DOMAIN: Infer from rule content + tool context + query context. Choose the broadest applicable domain that covers the rule's topic.
+
+QUALIFIER: Select fine-grained situational tags that are more specific than domain. You can select multiple qualifiers if the rule applies to multiple situations. Focus on conditions, constraints, or specific contexts mentioned in the rule.
+
+ACTION: Identify the specific action(s) the rule prescribes. Choose from the closed set of available actions. You can select multiple actions if the rule prescribes multiple steps.
+
+STRENGTH: Determine rule priority (must, may). MANDATORY = must follow, RECOMMENDED = should follow, OPTIONAL = may follow. Consider the rule's language and context to determine priority.
+
+TOOL_CATEGORY: Identify the functional category of the tool(s) used in this rule. Choose from the available tool categories based on the tool's capabilities and usage pattern. This should represent the broad functional type of the tool (e.g., DATA_PROCESSING, SEARCH_ENGINE, COMPUTATION).
+
+Return ONLY valid JSON matching this schema:
+{
+  "_id": 0,
+  "domain": "FAMILIAL_RELATIONSHIPS",
+  "qualifier": ["SEQUENTIAL", "MULTI_STEP"],
+  "action": ["DECOMPOSE", "VALIDATE"],
+  "strength": "MANDATORY",
+  "tool_category": "DATA_PROCESSING"
+}
+\end{lstlisting}

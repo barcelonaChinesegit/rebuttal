@@ -1,0 +1,406 @@
+\clearpage
+\section{Prompts}
+\label{sec:prompts}
+
+\subsection{Prompt Templates}
+\label{sec:prompt_templates}
+
+\subsubsection{Question Creation Pipeline}
+
+\begin{tcblisting}{title={\textbf{Stage 1 --- Question Generation (Requires:  self.num\_questions\_per\_article > 1)}},colframe=black!70,colback=black!2,boxrule=0.5pt,breakable,listing only}
+**Task:** Based on the provided news article, generate {self.num_questions_per_article} high-quality, DIVERSE forecasting questions which have a short answer (1 - 3 words), using the XML format specified below.
+Each forecasting question should be posed in a way to predict future events. Here, the predictor will have a knowledge cutoff before the article is published and no access to the article, so a forecasting question has to be posed about information explicitly stated in the article. The question should be stated in a forward-looking manner (towards the future).
+The correct answer should be a specific, short text response. The answer should be a WELL DEFINED, SPECIFIC term which the answerer can come up with on its own, without access to the news article. 
+
+**Example Format**:
+<q1>
+<question_id>0</question_id>
+<question_title>Who will win the Nobel Prize in Literature in 2016?</question_title>
+<background>Question Start Date: 10th January 2016. The Nobel Prize in Literature is awarded annually by the Swedish Academy to authors for their outstanding contributions to literature.</background>
+<resolution_criteria> 
+<ul>
+    <li>
+      <b>Source of Truth</b>: The question will resolve when the Swedish Academy publicly announces the official 2016 Nobel Prize in Literature laureate(s)---typically via a press release on NobelPrize.org (expected on or about October 13, 2016).  
+    </li>
+    <li>
+      <b>Resolution Date</b>: The resolution occurs on the calendar date when the 2016 laureate(s) are formally named
+      (typically mid-October 2016). 
+    </li>
+    <li>
+      <b>Accepted Answer Format</b>: The full name of the laureate exactly as given in the announcement should be provided. If more than one person shares the prize, all names must be listed in the same order as the official communiqu{\'e}.
+    </li>
+</ul>
+</resolution_criteria>
+<answer>Bob Dylan</answer>
+<answer_type>String (Name)</answer_type>
+</q1>
+
+The question should follow the structured guidelines below.
+
+### **Guidelines for Creating Short Answer Forecasting Questions**
+
+**Title Question Guidelines**
+- **Quality**: The question should be of HIGH QUALITY and hard to answer without access to the article. It should not be about any minute details in the article. THE QUESTION SHOULD BE SUCH THAT ITS ANSWER REVEALS A KEY PIECE OF INFORMATION, FROM THE ARTICLE, WHICH HAS MAXIMAL IMPACT.
+- **Specific and Answerable**: The question to be created SHOULD BE FREE-FORM and have a unique, specific answer (a single word, or short phrase) without access to the article. The answer to the question should be definite, well-defined and NOT NUMERIC. IT SHOULD ALSO NOT BE UNCERTAIN like "above XYZ" OR A RANGE LIKE "between XYZ and ABC". Avoid creating binary questions (yes/no, either/or) or questions with a list of specific options (multiple choice).
+- **Answerable based on article**: Each question must have a CLEAR AND DEFINITE answer based on information stated in the article. Given the question, the content of the article should be able to resolve the answer to the question INDISPUTABLY WITHOUT ANY AMBIGUITY OR UNCERTAINTY. THE ARTICLE SHOULD NOT STATE THAT THE ANSWER IS TENTATIVE OR AN ESTIMATE OR LIKELY. The answer SHOULD HAVE HAPPENED BY NOW.
+- **Temporal Information**: The question should not be about recall of (past) facts or events known before the article publish date. Include any temporal information necessary to answer the question (like by which month, year, etc.) in the question. The question should always be posed in a forward-looking manner. 
+- **Direct and Precise**: Titles must be straightforward and unambiguous, avoiding vague terms. Use future tense when appropriate.
+- **Resolution Criteria**: ALWAYS INCLUDE A BRIEF RESOLUTION CRITERIA in the question title. This is often the date by which the question will be resolved. For example, resolution dates such as "by {{month_name}}, {{year}}?" or "in {{month_name}}, {{year}}?". THE RESOLUTION DATE SHOULD BE BASED ON (AND FAITHFUL TO) THE CONTENT OR PUBLICATION DATE OF THE ARTICLE.
+- **No references to article or future information**: DO NOT refer to the specific article, such as by saying "in the article". The forecaster does not have access to the article, its metadata or any information beyond the article publish date.
+- **Question Types**: Focus on "Who", "What", "When", "Where" questions that have concrete answers.
+- **Understandability**: The question title should have ALL the information to be understandable by a 10 year old. It should be independently understandable without the article.
+- **Tense**. ALWAYS POSE THE QUESTION IN A FORWARD-LOOKING MANNER. THE QUESTION SHOULD BE IN FUTURE TENSE. Try to use phrases like "What will", "Who will", "When will", "Where will", "How much/many will" etc. It should appear as a forecasting question and not past prediction. 
+
+**Answer Guidelines**
+- **Faithfulness to Article**: The answer should be based on information explicitly stated in the article, and not implications or your own knowledge. IT SHOULD BE STATED VERBATIM IN THE ARTICLE.
+- **Non-Numeric**: The answer should not be a number or a percentage. It can be a word, phrase, date, location, etc BUT NOT MORE THAN 3 WORDS.
+- **Definite** - Given the question and the article, the answer should be CLEAR, CONCRETE, CERTAIN AND DERIVABLE from the article. It should be short, WELL-DEFINED TERM and not uncertain or vague. It SHOULD NOT BE A RANGE like "between XYZ and ABC" or "above XYZ" or "below PQR".
+- **Resolved** - The answer MUST be something that has already happened or is happening now. It should be resolved given today's date and not be something that will happen in the future.
+- **Specificity**: The answer should be specific enough to be unambiguous. Avoid overly general answers.
+- **Conciseness**: Keep answers short - typically 1-3 words, occasionally a short phrase if necessary.
+- **Exactness**: For names, use the exact names mentioned (full name, if possible).
+- **Uniqueness**: The answer should be unique and THE ONLY CORRECT ANSWER to the question. 
+- **No Ambiguity**: The answer should be indisputable and not be open to multiple interpretations. IT SHOULD BE PRECISE AND NOT A RANGE OR UNCERTAIN ESTIMATE.
+
+**Background Guidelines**
+- **Mention Question Opening Date**: ALWAYS INCLUDE THE START DATE OF THE QUESTION IN THE BACKGROUND. IT SHOULD BE AT LEAST A FEW DAYS (OR WEEKS IF THE QUESTION IS ABOUT A LONG-TERM EVENT) BEFORE THE ARTICLE'S PUBLISH DATE AND ALSO BEFORE THE RESOLUTION DATE OF THE QUESTION. CONSEQUENTLY, THE BACKGROUND SHOULD NOT CONTAIN ANY INFORMATION WHICH HAS HAPPENED AFTER THE START DATE OF THE QUESTION.
+- **Necessary Context**: The answerer does not have access to the article, so include MINIMAL CONTEXT required to understand the question keeping in mind the question opening date. Do not give (extra) details of the event from the article as background. If required, EITHER pose the event as a hypothetical scenario as if it were to happen in the future OR describe it as happening (unfolding) in real time. Describe any unfamiliar terms or concepts in the question title. 
+- **SHOULD NOT HELP ANSWER**: WHILE PROVIDING THE CONTEXT, DO NOT REFER OR MENTION OR LEAK THE ACTUAL ANSWER. The background must not help answer the forecasting question. DO NOT INCLUDE ANY INFORMATION from the article or elsewhere that either directly or indirectly (even partially) reveals the answer.
+- **No Additional Knowledge**: Do not add any knowledge beyond what is required to understand the question. Only include information necessary to understand the question and its context. 
+- **Tense**. ALWAYS POSE THE BACKGROUND INFORMATION IN CURRENT TENSE. Only provide minimal information which is known until the question opening date.
+
+**Resolution Criteria**
+- **Necessary Criteria**: State the EXACT conditions by which the outcome will be judged. Include the criteria which determines how the question will be resolved. state the conditions by which the outcome will be judged. 
+- **Date and Source of Resolution**: Always state the date and the source by which the question will be resolved. For example, resolution dates such as "by {{month_name}}, {{year}}?" or "in {{month_name}}, {{year}}?", and potential source(s) of resolution such as "based on {{news source}}", "reports from {{official name}}", etc. THE RESOLUTION DATE SHOULD BE CHOSEN THOUGHTFULLY AS THE ANSWER'S VALIDITY AND SOUNDNESS DEPENDS ON IT. THE RESOLUTION DATE SHOULD BE SUCH THAT THE ANSWER CAN BE RESOLVED DEFINITELY AND INDISPUTABLY FROM THE CONTENT OR PUBLICATION DATE OF THE ARTICLE. IT SHOULD MENTION BY WHEN IS THE OUTCOME OF THE QUESTION EXPECTED TO HAPPEN. HOWEVER, IT SHOULD NOT LEAK OR MENTION ANYTHING ABOUT THE ARTICLE. 
+- **Details**: Be as detailed as possible in creating the resolution criteria for resolving the question as cleanly as possible. There should be no ambiguity in the resolution criteria.
+- **Expectation and Format of Answer**: Based on the actual answer, the resolution criteria should state how precise the expected answer should be and in what format it should be. For example, if the actual answer is a date, the resolution criteria should specify how detailed the expected date should be -- only year, or both month and year, or day, month, and year all together. DO NOT GIVE THE ACTUAL DATE (ANSWER). If the actual answer is a percentage, then the criteria should state the expected answer should be a percentage. DO NOT GIVE THE ACTUAL PERCENTAGE.  If the actual answer is in certain unit, then the criteria should specify that. THE RESOLUTION CRITERIA SHOULD MAKE IT EXACTLY CLEAR AND PRECISE WHAT IS EXPECTED FROM THE ANSWERER AND IN WHAT FORMAT AND HOW IT WILL BE CHECKED LATER. IF GIVING AN EXAMPLE, IT SHOULD BE VERY GENERIC AND AS FAR AWAY FROM THE ACTUAL ANSWER AS POSSIBLE.
+- **SHOULD NOT HELP ANSWER**: The resolution criteria must not directly help answer the forecasting question. DO NOT INCLUDE ANY INFORMATION from the article or elsewhere that either directly or indirectly (even partially) reveals the answer. DO NOT REFER OR MENTION OR LEAK THE ACTUAL ANSWER HERE.
+
+**Answer Type Guidelines**
+- **Expected Format**: The answer type should be either "numeric (XYZ)" if the answer is a number (of any kind) or "string (XYZ)" in all other cases. In numeric cases, XYZ should be the exact type of number expected. For example, "numeric (integer)", "numeric (decimal)", "numeric (percentage)", "numeric (whole number)", etc. In string cases, XYZ should broadly be the category of string expected. For example, "string (name)", "string (date)", "string (location)", etc. If the category is not clear, use "string (any)". HOWEVER, ALWAYS TRY TO CREATE QUESTIONS WHERE THE ANSWER CATEGORY IS CLEAR AND PRECISE.
+
+**Question Quality Criteria**
+- **Forecastable**: The question should be something that could reasonably be predicted or forecasted before the article's publication.
+- **Towards the future**: THE QUESTION SHOULD BE POSED IN A FORWARD-LOOKING MANNER.
+- **Interesting**: The question should be about a meaningful event or outcome, not trivial details.
+- **Impactful**: The question should be such that if its answer is forecasted ahead of time, it should have significant (downstream) impact (relevant to high number of people).
+- **Difficulty**: While the question should be hard to answer without access to the article, it should also not be unreasonably difficult.
+- **Verifiable**: The answer should be something that can be EXACTLY verified from the article itself.
+- **Time-bound**: Include clear timeframes or deadlines when relevant.
+- **Free-form**: If possible, avoid creating binary questions (yes/no, either/or) or questions with a list of specific options (multiple choice).
+
+Generate {self.num_questions_per_article} high-quality, DIVERSE short answer forecasting questions based on the provided article. Use the XML format with question_id value "0", "1", "2", etc. DO NOT INCLUDE ANY ANALYSIS, RANKING, OR ADDITIONAL COMMENTARY.
+
+Article:
+{source_article}
+
+**Required Output Format**:
+<q1>
+<question_id>0</question_id>
+<question_title>[Question 1]</question_title>
+<background>[Background 1]</background>
+<resolution_criteria>[Resolution Criteria 1]</resolution_criteria>
+<answer>[Answer 1]</answer>
+<answer_type>[Answer Type 1]</answer_type>
+</q1>
+..
+<q{self.num_questions_per_article}>
+<question_id>{self.num_questions_per_article - 1}</question_id>
+<question_title>[Question {self.num_questions_per_article}]</question_title>
+<background>[Background {self.num_questions_per_article}]</background>
+<resolution_criteria>[Resolution Criteria {self.num_questions_per_article}]</resolution_criteria>
+<answer>[Answer {self.num_questions_per_article}]</answer>
+<answer_type>[Answer Type {self.num_questions_per_article}]</answer_type>
+</q{self.num_questions_per_article}>
+\end{tcblisting}
+
+
+
+\begin{tcblisting}{title={\textbf{Stage 2 --- Individual Validation}},colframe=black!70,colback=black!2,boxrule=0.5pt,breakable,listing only}
+**Task:** You will be provided with a news article and a question WHOSE ANSWER IS SUPPOSED TO BE BASED ON THE ARTICLE. Your job is to validate whether the answer to the question is valid by being faithful to the article (content, title, or description).
+
+GO THROUGH EACH SEGMENT OF THE QUESTION ONE BY ONE (TITLE, BACKGROUND, RESOLUTION CRITERIA, ANSWER) TO UNDERSTAND THE WHOLE QUESTION. THEN CHECK EACH OF THE FOLLOWING CRITERIA: 
+
+1. **Tense and Details**: FIRST CHECK WHETHER THE QUESTION IS NOT UNDER SPECIFIED OR STATED IN PAST TENSE. IT IS FINE IF THE QUESTION IS STATED IN CURRENT OR FUTURE TENSE. 
+2. **Definite resolution of the answer by the article**: CHECK WHETHER THE ANSWER TO THE QUESTION IS SOUND, CLEAR AND PRESENT IN OR CAN BE DERIVED FROM THE ARTICLE. THE ARTICLE SHOULD RESOLVE THE ANSWER DEFINITELY AND IN AN INDISPUTABLE MANNER (WITHOUT ANY AMBIGUITY). THIS IS THE MOST IMPORTANT CRITERIA.
+3. **Well-defined Answer**: The answer to the question should be short (NOT MORE THAN 3 WORDS). IT SHOULD NOT BE A PHRASE AND SHOULD BE SOMETHING WHICH IS CONCRETE, SPECIFIC AND WELL-DEFINED.
+4. **Non-Numeric**: THE *ANSWER TYPE* SHOULD NOT BE NUMERIC LIKE A PERCENTAGE, INTEGER, DECIMAL, OR A RANGE.
+5. **Single Correct Answer**: ANALYZE WHETHER THE QUESTION CAN HAVE MULTIPLE OUTCOMES OR RIGHT ANSWERS. IF SO, THE QUESTION FAILS THIS CRITERIA. OTHERWISE, ENSURE THAT THE PROVIDED ANSWER IS THE SOLE CORRECT ANSWER TO THE QUESTION. IT SHOULD NOT BE THE CASE THAT THE QUESTION CAN HAVE MULTIPLE (DISTINCT) CORRECT ANSWERS.
+
+If ALL the above criteria pass (question is stated as required, answer to the whole question is valid, well-defined, and it is the only correct answer to the question), ONLY THEN return <answer>1</answer>. Otherwise, return <answer>0</answer>. ALWAYS END YOUR RESPONSE IN <answer> </answer> tags.
+
+**Article:**
+{source_article}
+
+**Question:**
+{questions_text}
+
+**Output Format:**
+<answer>0/1</answer>
+\end{tcblisting}
+
+
+
+\begin{tcblisting}{title={\textbf{Stage 3 --- Choose Best}},colframe=black!70,colback=black!2,boxrule=0.5pt,breakable,listing only}
+**Task:** You will be provided with a list of questions (possibly with size 1). Your job is to choose the best question from the list based on the following criteria or end your response with "NO GOOD QUESTION" if none of the questions meet the criteria.
+
+**Instructions:**
+GO THROUGH EACH QUESTION ONE BY ONE AND ANALYZE IT FOR THE FOLLOWING:
+1. **Valid for forecasting**: Check if the WHOLE QUESTION is stated in a forward-looking manner. FROM THE PERSPECTIVE OF THE START DATE TO THE RESOLUTION DATE MENTIONED IN THE QUESTION, CHECK IF IT IS A VALID FORECASTING QUESTION. IF THE TIME HORIZON (START DATE TO RESOLUTION DATE) IN THE QUESTION IS AT LEAST A SINGLE DAY, THEN THE QUESTION SHOULD BE CONSIDERED VALID FOR FORECASTING. Go through each segment of the question (question title, background, resolution criteria) and check if each of them is valid and forward-looking.
+2. **Tense**: The question SHOULD NOT BE STATED IN PAST TENSE. If the question covers an event, it should not imply as if the outcome of the event has already happened or occurred.
+3. **Single Correct Answer**: ANALYZE WHETHER THE QUESTION CAN HAVE MULTIPLE OUTCOMES OR RIGHT ANSWERS. IF SO, THE QUESTION FAILS THIS CRITERIA. OTHERWISE, ENSURE THAT THE PROVIDED ANSWER IS THE SOLE CORRECT ANSWER TO THE QUESTION. IT SHOULD NOT BE THE CASE THAT THE QUESTION CAN HAVE MULTIPLE (DISTINCT) CORRECT ANSWERS.
+4. **Impact**: How many people will the outcome of the question be relevant or interesting to? Consider on the basis of significant downstream impact or enabling meaningful action.
+5. **Not Binary/Multiple Choice**: Question SHOULD NOT BE BINARY (yes/no, either ABC or XYZ, etc.) OR MULTIPLE CHOICE (SELECT FROM A LIST OF OPTIONS). It should be free-form (string -- name, date, place, etc.) or numerical (number, percentage, etc.). 
+6. **Understandable**: The question as a whole (title, background, resolution criteria) should have sufficient details to understand the premise of the question. Every detail should be crystal clear and the question should not be under or over specified. 
+7. **Definite Answer**: EXTRACT THE ACTUAL ANSWER TO THE QUESTION PROVIDED IN ITS <answer> </answer> TAG. The extracted answer should be short, definite, well-defined and not uncertain or vague. It SHOULD NOT BE A PHRASE OR A RANGE like "between XYZ and ABC" or "above XYZ" or "below PQR". 
+
+
+
+ANALYZE EACH QUESTION BASED ON THE ABOVE CRITERIA ONE BY ONE AND CHOOSE THE ONE WHICH PASSES ALL THE ABOVE CRITERIA. IF MULTIPLE QUESTIONS SATISFY THE CRITERIA, CHOOSE THE ONE WHICH WILL HAVE THE HIGHEST IMPACT (AFFECTS OR IS RELEVANT TO THE MOST NUMBER OF PEOPLE). IF NO QUESTION MEETS THE CRITERIA, RETURN "NO GOOD QUESTION FOUND". OTHERWISE, RETURN THE BEST QUESTION IN THE SAME FORMAT AS THE INPUT. 
+
+**Generated Questions:**
+{questions_text}
+
+**Output Format:**
+<q1>
+<question_id>0</question_id>
+<question_title>[ORIGINAL Title of the best question]</question_title>
+<background>[ORIGINAL Background of the best question]</background>
+<resolution_criteria>
+<ul>
+    <li> <b>Source of Truth</b>: [ORIGINAL Source of Truth of the best question] </li>
+    <li> <b>Resolution Date</b>: [ORIGINAL Date of the best question] </li>
+    <li> <b>Accepted Answer Format</b>: [ORIGINAL Accepted Answer Format of the best question] </li>
+</ul>
+</resolution_criteria>
+<answer>[ORIGINAL Answer of the best question]</answer>
+<answer_type>[ORIGINAL Answer Type of the best question]</answer_type>
+</q1>
+\end{tcblisting}
+
+
+
+\begin{tcblisting}{title={\textbf{Stage 4 --- Leakage Removal}},colframe=black!70,colback=black!2,boxrule=0.5pt,breakable,listing only}
+**Task:** You will be provided with a forecasting question. Your job is to ANALYZE whether the question's answer has obviously leaked in the content of the question. The question will have multiple segments -- question title, background, resolution criteria. EXCEPT THE QUESTION TITLE, GO THROUGH EACH SEGMENT STEP BY STEP and check if any part DIRECTLY leaks the actual answer. If leakage is found, ONLY THEN rephrase the problematic parts appropriately to remove the answer while maintaining the question's integrity and focus. DO NOT CHANGE ANY PART OF THE QUESTION UNNECESSARILY. 
+
+USE THE SAME XML FORMAT IN YOUR RESPONSE AS IS IN THE INPUT.
+
+**Generated Question:**
+{questions_text}
+
+**Instructions:**
+1. **Keep the title unchanged**: DO NOT MAKE ANY CHANGE TO THE QUESTION TITLE.
+2. **Keep the start date in the background unchanged**: DO NOT MAKE ANY CHANGE TO THE QUESTION'S START DATE IN THE BACKGROUND.
+3. **Identify the answer**: First, extract the actual answer from the XML tags for the current question being processed.
+4. **Identify Leakage**: Keeping the extracted answer in mind, check if the  background, or resolution criteria (each of them -- source of truth, resolution date, accepted answer format) contain information that reveals the answer.
+5. **Types of leakage which can be ignored**: The following types of leakage are fine and don't need to be rephrased:
+   - If the outcome (actual answer) of the question is binary (yes/no, either ABC or XYZ, etc.), then NO NEED TO CHANGE ANYTHING ANYWHERE.
+   - If the resolution criteria is based on a list of specific options, then NO NEED TO CHANGE ANYTHING IN ANY SEGMENT (BACKGROUND, RESOLUTION CRITERIA, etc.). For example, if the accepted answer format states "answer must be either .." OR "answer must be one of the following terms..", then NO NEED TO CHANGE ANYTHING ANYWHERE.
+6. **Types of Leakage to Check:** ONLY CONSIDER THE FOLLOWING KIND OF LEAKAGE:
+   - DIRECT MENTIONS of the answer (either in word or number form) or part of the answer in the question/background/resolution
+   - References to specific outcomes that ARE CLOSE TO (OR REVEAL)THE ACTUAL ANSWER
+7. **Rephrase Strategy**: If leakage is found, rephrase the problematic part while:
+   - Keeping the question's core intent
+   - Maintaining forecasting nature
+   - Preserving necessary context
+   - Making the answer UNOBVIOUS by replacing with a FAKE ANSWER (FAKE NAME, DATE, NUMBER, PERCENTAGE, etc.) WHICH IS GENERIC AND NOT CLOSE TO THE ACTUAL ANSWER.
+   - The rephrased part should not contain any information that is part of the actual answer. Neither should it indirectly hint or reveal the answer. 
+8. **Check Accepted Answer Format**: IF THERE IS ANY EXAMPLE MENTIONED IN ACCEPTED ANSWER FORMAT ("e.g..."), MAKE SURE THE EXAMPLE IS GENERIC AND AS FAR AWAY FROM THE ACTUAL ANSWER AS POSSIBLE. DO NOT INCLUDE AN EXAMPLE IF NOT MENTIONED ALREADY. 
+9. **Do not change the answer**: Do not change the actual answer to the question. 
+10. **Do not change the answer_type**: DO NOT MAKE ANY CHANGE TO the answer_type.
+11. **Each segment should be checked independently**: Go through each segment of the whole question one by one. Everything from the title of the question to the background information to the resolution criteria should be checked independently with reference to the answer of the question. In the resolution criteria, go through each <li> step by step. Do not change the other segments when rephrasing a problematic segment.
+12. **Do not change anything unless leakage is found**: DO NOT UNNECESSARILY CHANGE ANY PART OF THE QUESTION UNLESS LEAKAGE IS FOUND.
+
+IT IS ALSO POSSIBLE THAT MULTIPLE PARTS OF THE QUESTION HAVE LEAKAGE. YOU SHOULD CHECK EACH OF THEM INDEPENDENTLY AND ONLY IF LEAKAGE IS FOUND, REPHRASE THE PROBLEMATIC PARTS. DO NOT OVER-ANALYZE.
+
+During your analysis, you should:
+- Go through EACH SEGMENT OF THE QUESTION STEP BY STEP INDEPENDENTLY. First <background> and then inside <resolution_criteria>. Under the resolution criteria, go through the source of truth, resolution date, accepted answer format (each of them is a <li> tag) one by one. For each such segment, do the following:
+    - Compare the content in the current segment with the actual answer. If ANY PART OF THE ANSWER is mentioned in the current segment, then consider that as a leakage UNLESS THE ACCEPTED ANSWER FORMAT IS BINARY (yes/no, either ABC or XYZ, etc.) OR A LIST OF SPECIFIC OPTIONS.
+    - IF THE CURRENT SEGMENT IS BACKGROUND, DO NOT CHANGE THE QUESTION START DATE.
+    - If the current segment is accepted answer format and there is a SPECIFIC EXAMPLE MENTIONED in it ("e.g. XYZ") which is close to the actual answer, then consider that as a leakage.
+    - If leakage is found in the current segment, mention "Leakage found -- {{reason for leakage}}". Form the segment with the problematic parts rephrased and mention it as "Replacement -- {{rephrased_text}}." THE REPHRASED TEXT SHOULD BE AS FAR AWAY FROM THE ACTUAL ANSWER AS POSSIBLE. It should now be present in the final output (instead of the original text).
+    - Otherwise, mention "No leakage found". In your final output after you finish the analysis, return this segment UNCHANGED.
+    - These outputs should be in the same format as the original input. 
+- Return the actual answer unchanged in the <answer> tag in your final output.
+- Skip any other segments (question title, answer_type, etc.) in your analysis and output them unchanged (verbatim) in the final output.
+
+Output your analysis step by step, and then end your response with the CORRECTED question in THE SAME XML FORMAT AS THE ORIGINAL. 
+
+**Output Format**:
+{{ analysis }}
+
+<q1>
+<question_id>0</question_id>
+<question_title>[UNCHANGED Question Title]</question_title>
+<background>[Corrected Background]</background>
+<resolution_criteria>
+<ul>
+    <li> [UNCHANGED Question Start Date] [Corrected Source of Truth] </li>
+    <li> [UNCHANGED Resolution Date] </li>
+    <li> [Corrected Accepted Answer Format] </li>
+</ul>
+</resolution_criteria>
+<answer>[UNCHANGED Answer]</answer>
+<answer_type>[UNCHANGED Answer Type]</answer_type>
+</q1>
+\end{tcblisting}
+
+
+\subsubsection{Evaluation Prompts}
+
+\begin{tcblisting}{title={\textbf{Model Evaluation Prompt (Uses retrieved news summaries)}},colframe=black!70,colback=black!2,boxrule=0.5pt,breakable,listing only}
+You will be asked a forecasting question (which might be from the past). You have to come up with the best guess for the final answer.
+You will also be provided with a list of retrieved news articles summaries which you may refer to when coming up with your answer.
+
+Please provide your reasoning before stating your final answer and also express how likely you think your answer is to be correct (your confidence in your answer).
+
+Question Title: {question_title}
+
+Question Background:{question_background}
+
+Resolution Criteria: {resolution_criteria}
+
+Expected Answer Type: {expected_answer_type}
+
+Relevant passages from retrieved news articles:
+{retrieved_news_articles_text}
+
+Think step by step about the information provided, reason about uncertainty and put your final answer (in the format asked) in <answer> </answer> tags.
+You should also specify your confidence in your answer in <probability> </probability> tags.
+The probability should be a number between 0 and 1.
+
+You will be rewarded based on the probability (p) you assign to your answer.
+Your answer will be evaluated using the BRIER SCORING RULE which is basically (- (1 - p)\^{2}) if your answer is correct and (- 1 - p\^{2}) if your answer is incorrect.
+
+For example, if p = 0.5, and your answer is incorrect, then your score will be (-1 - 0.5\^{}2) = (-1 - 0.25) = -1.25
+whereas if the answer was correct, then your score would be (- (1 - 0.5)\^{2}) = (- (0.5)\^{2}) = -0.25.
+
+Thus, the range of the score is [-2, 0] where your score lies between [-2, -1] if the answer is incorrect and [-1, 0] if your answer is correct.
+
+If your answer is correct, you will be REWARDED more if your probability is higher whereas if your answer is incorrect, you will be PENALIZED more if your probability is higher.
+YOU HAVE TO MAXIMIZE YOUR SCORE.
+
+Your final answer should be concise (NOT MORE THAN A FEW WORDS LONG) and your response SHOULD STRICTLY END with <answer> </answer> tags and <probability> </probability> tags.
+\end{tcblisting}
+
+
+\begin{tcblisting}{title={\textbf{Example Prompt from Test Set (Without Retrieval)}},colframe=black!70,colback=black!2,boxrule=0.5pt,breakable,listing only}
+
+You will be asked a forecasting question (which might be from the past).
+You have to come up with the best guess for the final answer.
+Please provide your reasoning before stating your final answer and also express how likely you think your answer is to be correct (your confidence in your answer).
+
+Question Title:
+Which country in the Americas will report the highest number of chikungunya cases by July 15, 2025?
+
+Question Background:
+Public health agencies in the Americas are compiling chikungunya case counts for individual countries as the outbreak spreads in the region.
+
+Resolution Criteria:
+<ul>
+  <li><b>Source of Truth</b>: Cumulative case figures published by the Pan American Health Organization or the European Centre for Disease Prevention and Control.</li>
+  <li><b>Resolution Date</b>: July 15, 2025, when the mid-July regional report is issued.</li>
+  <li><b>Accepted Answer Format</b>: The name of the country in the Americas with the highest total reported chikungunya cases.</li>
+</ul>
+
+Expected Answer Type:
+string (location)
+
+Think step by step about the information provided, reason about uncertainty and put your final answer (in the format asked) in <answer> </answer> tags.
+You should also specify your confidence in your answer in <probability> </probability> tags.
+The probability should be a number between 0 and 1.
+
+You will be rewarded based on the probability (p) you assign to your answer.
+Your answer will be evaluated using the BRIER SCORING RULE which is basically (- (1 - p)^2) if your answer is correct and (- 1 - p^2) if your answer is incorrect.
+
+For example, if p = 0.5, and your answer is incorrect, then your score will be (-1 - 0.5^2) = (-1 - 0.25) = -1.25
+whereas if the answer was correct, then your score would be (- (1 - 0.5)^2) = (- (0.5)^2) = -0.25.
+
+Thus, the range of the score is [-2, 0] where your score lies between [-2, -1] if the answer is incorrect and [-1, 0] if the answer is correct.
+
+If your answer is correct, you will be REWARDED more if your probability is higher whereas if your answer is incorrect, you will be PENALIZED more if your probability is higher.
+YOU HAVE TO MAXIMIZE YOUR SCORE.
+
+Your final answer should be concise (NOT MORE THAN A FEW WORDS LONG) and your response SHOULD STRICTLY END with <answer> </answer> tags and <probability> </probability> tags.
+
+
+\end{tcblisting}
+
+
+
+\begin{tcblisting}{title={\textbf{Example Prompt from Test Set (With Retrieval)}},colframe=black!70,colback=black!2,boxrule=0.5pt,breakable,listing only}
+
+You will be asked a forecasting question (which might be from the past).
+You have to come up with the best guess for the final answer.
+You will also be provided with a list of retrieved news articles summaries which you may refer to when coming up with your answer.
+Please provide your reasoning before stating your final answer and also express how likely you think your answer is to be correct (your confidence in your answer).
+
+Question Title:
+Which country in the Americas will report the highest number of chikungunya cases by July 15, 2025?
+
+Question Background:
+Public health agencies in the Americas are compiling chikungunya case counts for individual countries as the outbreak spreads in the region.
+
+Resolution Criteria:
+<ul>
+  <li><b>Source of Truth</b>: Cumulative case figures published by the Pan American Health Organization or the European Centre for Disease Prevention and Control.</li>
+  <li><b>Resolution Date</b>: July 15, 2025, when the mid-July regional report is issued.</li>
+  <li><b>Accepted Answer Format</b>: The name of the country in the Americas with the highest total reported chikungunya cases.</li>
+</ul>
+
+Expected Answer Type:
+string (location)
+
+Relevant passages from retrieved news articles:
+
+Article 1:
+Title: CDC warns US travellers of growing Dengue threat. Here's what you need to know
+Source: www.hindustantimes.com
+Article Publish Date: March 21, 2025
+Relevant Passage: CDC warns of rising dengue fever cases among U.S. travellers, reporting 3,484 cases in 2024, an 84% increase from last year. CDC cited a "record number" of cases reported among travellers in 2024, totalling 3,484 cases. This marked an 84 percent surge compared to the previous year. "This trend is expected to continue with increased dengue activity in endemic areas in 2025," the CDC stated in its warning. Dengue remains prevalent in certain regions of the States. The virus is being actively transmitted in U.S. territories, including Puerto Rico and the U.S. Virgin Islands, where outbreaks have been declared. Warmer temperatures during the spring and summer months create favourable conditions for the spread of the disease. Over the past five years, dengue cases have surged worldwide, with the Americas being notably affected. Data from the World Health Organization (WHO) reveals that in 2024 alone, there were 7.6 million reported cases. Among these, 3.4 million were confirmed, over 16,000 were classified as severe, and more than 3,000 resulted in fatalities. Puerto Rico has been grappling with a sustained dengue outbreak since early 2024. The island surpassed the outbreak threshold in February of that year, leading to the declaration of a public health emergency in March 2024, which remains in effect. Puerto Rico recorded 6,291 dengue cases in 2024, with more than half of the patients requiring hospitalization. Thirteen individuals lost their lives to the virus, according to the CDC data. Similarly, the U.S. Virgin Islands declared an outbreak in August 2024, which also remains ongoing. Health authorities reported 208 cases in 2024 and an additional 30 cases in early 2025. The highest numbers of travel-related dengue infections in 2024 were reported in Florida, California, and New York.
+
+Article 2:
+Title: Vaccine Against Chikungunya Approved By The FDA. Should You Get It?
+Source: www.forbes.com
+Article Publish Date: November 20, 2023
+Relevant Passage: efficient vector was Aedes aegypti; however, an interesting phenomenon occurred in 2005. There was a slight alteration of the virus genome, which allowed it to spread more efficiently with a more common mosquito, Aedes albopictus. That facilitated a massive pandemic in 2005 on La Reunion island and neighboring areas around the Indian Ocean. In 2013, chikungunya arrived in the Americas for the first time and it subsequently tore through the Caribbean islands. Is The United States At Risk? Yes. Before 2006, chikungunya rarely occurred in U.S. travelers. Then between 2006-2013, we had about 28 cases per year, but those cases were infected outside the U.S. The situation changed after the Caribbean outbreak and chikungunya arrived at our shores in 2014, with affected areas in Florida, the U.S. Virgin Islands and more severely in Puerto Rico (over 30,000 suspected cases). The continental U.S. dodged a bullet, though, with fewer cases than feared. It probably helps that we have widespread air conditioning and window screens in our southern states, which reduces contact with mosquitoes. We remain vulnerable, though, since we still have the mosquito vectors, primarily in the central and southeast parts of the United States. How Can I Reduce My Risk? Minimizing risk focuses on avoiding mosquito bites when living in or visiting an area with active spread of chikungunya, including staying indoors in screened areas during the daytime, using bed nets, using insect repellant and wearing long, loose-fitting clothing. By avoiding Aedes mosquitoes, you reduce your risk of infection from chikungunya as well as dengue and zika viruses. Do I Need The Vaccine?
+
+Article 3:
+Title: First Chikungunya Vaccine Now FDA Approved - What To Know About The `Emerging Global Health Threat'
+Source: www.forbes.com
+Article Publish Date: November 10, 2023
+Relevant Passage: severe chikungunya-like adverse reactions following administration of Ixchiq." Big Number 5 million. There have been at least that many chikungunya cases reported globally over the past 15 years, the FDA said. The agency described the virus as an ``emerging global health threat" that ``has spread to new geographical areas causing a rise in global prevalence of the disease." What We Don't Know Health officials and agencies like the World Health Organization warn official infection counts are likely to significantly underestimate the true prevalence of chikungunya. Accurate diagnosis, disease surveillance and reporting can be tricky in some parts of the world on account of funding and capacity within healthcare systems and chikungunya is also ``easy to misdiagnose" on account of causing similar symptoms to other mosquito-borne illnesses like dengue and Zika. What To Watch For Valneva said the vaccine will initially address the ``potential needs" of some 60 million Americans who it says travel to countries where mosquito-borne diseases are endemic each year. This fits in well with its other shots for cholera and Japanese encephalitis aimed at travelers, the company said. Valneva said it will work towards commercializing the shot in the U.S. early next year and work towards securing a vote of approval endorsing the shot from the Centers for Disease Control and Prevention's vaccine advisory committee at the end of February. The FDA is an influential regulator and its go-ahead will likely speed Ixchiq's passage through other regulatory processes globally, particularly in areas where chikungunya is a more pressing concern. Key Background Chikungunya is regularly identified as an emerging threat to global health on account of the debilitating and prolonged disease it can cause. Chikungunya was first identified in Tanzania in 1952 and sporadic outbreaks were later recorded in parts of Africa and Asia. The virus has since spread globally and has been identified on all continents except Antarctica. The economic and social impact of the disease can be devastating -- the Coalition for Epidemic Preparedness Innovations estimates the cost to the Americas alone to be around $185 billion -- and the warming climate, a boon to the mosquitoes that spread the disease, is likely to widen areas at risk. While the virus is more commonly reported among travelers in the U.S. and parts of Europe, local transmission has been documented, suggesting future outbreaks may be possible or that the virus could gain a permanent foothold. Further Reading First Vaccine For Chikungunya
+
+Article 4:
+Title: Dengue fever cases rising in popular spring break locations, CDC alerts
+Source: www.foxnews.com
+Article Publish Date: March 24, 2025
+Relevant Passage: is common in the Americas, Africa, the Middle East, Asia and the Pacific Islands, among other countries, according to the CDC. TRAVEL HOT SPOT SEEKS EMERGENCY DECLARATION OVER MASSIVE BUG INFESTATION In 2024, more than 13 million cases were reported in North, Central and South America, as well as in the Caribbean. Local transmission of these outbreaks was reported in California, Texas and Florida last year. Typical symptoms include aches and pains (in the eyes, muscles, joints, or bones), nausea, vomiting and rash  --  usually experienced within two weeks of being bitten. Most people experience symptoms for two to seven days before recovering. CLICK HERE TO SIGN UP FOR OUR HEALTH NEWSLETTER "It's typically a more mild illness, but can be severe, causing headaches, joint pain, fever, abdominal pain and even death," Dr. Mark Fischer, regional medical director of International SOS, a leading medical and security services company, previously told Fox News Digital. There is not currently any medication to treat dengue, according to the CDC. For more Health articles, visit www.foxnews.com/health Infected people are advised to rest, take acetaminophen for pain and fever, stay hydrated and see a doctor. There is a vaccine available for U.S. children between 9 and 16 years of age who have previously tested positive for dengue and are living in areas where the infection is common. CLICK HERE TO GET THE FOX NEWS APP
+
+Article 5:
+Title: Latin America: Key Themes To Watch In 2025
+Source: seekingalpha.com
+Article Publish Date: January 16, 2025
+Relevant Passage: Latin America: Key Themes To Watch In 2025 Latin America's aggregate growth will slightly accelerate in 2025, but this overshadows slower growth across most countries. Read more here. Markit 3.25K Follower s ( 6min ) Summary Latin America's aggregate growth will slightly accelerate in 2025, but this overshadows slower growth across most countries. The potential application of tariffs by the incoming US administration would negatively impact trade and weaken many of the region's currencies, while forced repatriation of illegal workers in the US implies a reduction of remittance flows. We expect lower price pressures based on Market Intelligence's global assumption that prices for agriculture-related commodities and oil prices will fall in 2025. In response to US President Donald Trump's proposals on tariffs and deportations, Mexico and most countries in Central America are likely to align with the requests from the new US administration. Here is how we see our key themes for 2025 shaping Latin America's operational and investment environment. Economic angst Latin America's aggregate growth will slightly accelerate in 2025, but this overshadows slower growth across most countries. We project only five This article was written by 3.25K Follower s IHS Markit (Nasdaq: INFO) is a world leader in critical information, analytics and solutions for the major industries and markets that drive economies worldwide. The company delivers next-generation information, analytics and solutions to customers in business, finance and government, improving their operational efficiency and providing deep insights that lead to well-informed, confident decisions. IHS Markit has more than 50,000 key business and government customers, including 80 percent of the Fortune Global 500 and the world's leading financial institutions. Headquartered in London, IHS Markit is committed to sustainable, profitable growth. Comments Recommended For You Related Stocks SymbolLast Price% ChgEWZ--iShares MSCI Brazil ETFILF--iShares Latin America 40 ETFBRF--VanEck Brazil Small-Cap ETFFLN--First Trust Latin America AlphaDEX Fund ETFFBZ--First Trust Brazil AlphaDEX Fund ETF Related Analysis Trending Analysis Trending News
+
+Think step by step about the information provided, reason about uncertainty and put your final answer (in the format asked) in <answer> </answer> tags.
+You should also specify your confidence in your answer in <probability> </probability> tags.
+The probability should be a number between 0 and 1.
+
+You will be rewarded based on the probability (p) you assign to your answer.
+Your answer will be evaluated using the BRIER SCORING RULE which is basically (- (1 - p)^2) if your answer is correct and (- 1 - p^2) if your answer is incorrect.
+
+For example, if p = 0.5, and your answer is incorrect, then your score will be (-1 - 0.5^2) = (-1 - 0.25) = -1.25
+whereas if the answer was correct, then your score would be (- (1 - p)^2) = (- (0.5)^2) = -0.25.
+
+Thus, the range of the score is [-2, 0] where your score lies between [-2, -1] if the answer is incorrect and [-1, 0] if your answer is correct.
+
+If your answer is correct, you will be REWARDED more if your probability is higher whereas if your answer is incorrect, you will be PENALIZED more if your probability is higher.
+YOU HAVE TO MAXIMIZE YOUR SCORE.
+
+Your final answer should be concise (NOT MORE THAN A FEW WORDS LONG) and your response SHOULD STRICTLY END with <answer> </answer> tags and <probability> </probability> tags.
+
+\end{tcblisting}
+
+
+

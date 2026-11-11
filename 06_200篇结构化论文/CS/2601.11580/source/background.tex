@@ -1,0 +1,37 @@
+\section{Background and Motivation}
+\textbf{Speculative Decoding.}
+Large language models (LLMs) generate text auto-regressively: given a prompt $(x_1, \ldots, x_n)$, they produce an output sequence $(x_{n+1}, \ldots, x_{n+S})$, 
+one token at a time. At each step, the model computes a probability distribution over the vocabulary and samples the next token. 
+% This strictly sequential decoding limits the utilization of highly parallel hardware such as GPUs~\cite{pope2023efficiently} and results in high latency. 
+However, while LLMs \emph{generate} tokens sequentially, they can also \emph{evaluate} the probabilities of a \emph{given} token sequence in parallel. That is, for candidate tokens $x_{n+1}, \ldots, x_{n+S}$, an LLM can compute $P(x_{n+1} \mid x_1, \ldots, x_n), \ldots, P(x_{n+S} \mid x_1, \ldots, x_{n+S-1})$ in a single forward pass.
+Speculative decoding~\cite{leviathan2023fast, chen2023accelerating} utilizes this property of LLMs as an evaluator on a string of candidate tokens in parallel, enabling higher hardware utilization and potentially generating multiple tokens.
+For example, a smaller model may generate $k$ candidate tokens, and our target LLM model then predicts $k+1$ probability distributions for each token position in parallel. We then accept the first $m$ tokens from the $k$ candidate tokens that satisfy the sampling method. 
+
+\textbf{SD Variations.}
+When SD was first introduced, the standard approach was to use a smaller draft model with the same vocabulary as the target model, since rejection sampling must operate on a probability distribution in the same token embedding space.
+Subsequent work has proposed various ways to construct the draft model, such as quantization~\cite{lin2023awq, frantar2023gptq, kim2024squeezellm} or distillation~\cite{zhou2023distillspec} of the target LLM.
+However, in practice, an off-the-shelf draft model is not always available, requiring quantizing or pruning the original model, or even pretraining a smaller model from scratch.
+
+To overcome the limitations of requiring a separate draft model, \emph{draft-model-free} SD methods have been proposed.
+One common approach is to add auxiliary prediction layers on top of the final transformer block ~\cite{li2024eagle, li2024eagle2fasterinferencelanguage, li2025eagle3}.
+These additional ``head'' layers take the hidden states as input and directly propose tokens.
+However, practitioners still need to fine-tune these drafting heads separately.
+% Another line of work fully eliminates the reuqirement of training. \emph{Multi-Token Prediction (MTP)}~\cite{deepseekai2025deepseekv3technicalreport, 5team2025glm45agenticreasoningcoding} co-trains the auxiliary heads jointly with the main model, rather than fine-tuning them afterwards. As a result, auxiliary heads are provided out-of-the-box with the model, while also achieving a significantly higher token acceptance rate compared to the post-training, add-on approaches.
+Recently, a new line of work has removed the need for post-hoc training. Multi-Token Prediction (MTP)~\cite{deepseekai2025deepseekv3technicalreport,5team2025glm45agenticreasoningcoding} co-trains auxiliary prediction heads jointly with the main model, rather than fine-tuning them afterward. As a result, these auxiliary heads are available out of the box and achieve substantially higher token-acceptance rates.
+% highlighting the potential of training-time co-design \alvin{what's training time co design?} for speculative decoding.
+
+Another line of draft-model-free SD methods utilize a non-LLM proposer.
+A representative example is prompt lookup decoding, or \emph{$n$-gram}~\cite{saxena2023prompt}.
+The intuition is that LLM outputs often contain recurring phrases; therefore, we can extract $n$-gram snippets from previously generated text and reuse them as token proposals.
+This approach is particularly effective in workloads such as code or passage editing, where the input and output share substantial overlap. 
+Another example is using retrieval-augmented generation (RAG) to retrieve candidate proposals from an external corpus~\cite{he2024restretrievalbasedspeculativedecoding}.
+These non-LLM approaches demonstrate the potential for lightweight or task-specific drafting mechanisms.
+% However, it remains an open problem to determine how to construct the most effective non-LLM proposers, and how to combine them optimally with standard SD pipelines.
+
+\textbf{Problems of Existing Benchmarks.}
+Most prior works evaluate SD by building proof-of-concept research prototypes, as integration into a production-grade inference system is nontrivial and requires modifications across multiple components.
+However, this makes a fair comparison between SD methods difficult and the benefits in real-world deployment impossible to predict, due to the following limitations.
+First, many prototype implementations lack key optimizations in production systems, such as the use of CUDA graphs~\cite{cudagraph} to reduce system overhead, a common feature in LLM serving systems~\cite{kwon2023efficient, zheng2024sglang}.
+Second, the implementations are typically evaluated with a batch size of one, which is unrepresentative of large-scale batched deployments of the real world.
+Finally, prior work lacks an in-depth analysis of SD speedup, as they primarily focus on high-level metrics such as average latency or dataset-level acceptance rate. \cite{li2024eagle,li2025eagle3,xia-etal-2024-unlocking}
+We believe that a deeper understanding, such as execution time breakdown and position-level acceptance behavior, is necessary to fully explain and optimize the end-to-end performance of SD.
